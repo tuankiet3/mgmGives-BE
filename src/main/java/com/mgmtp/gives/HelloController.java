@@ -1,4 +1,4 @@
-package com.miuky.backupmgmgives;
+package com.mgmtp.gives;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
