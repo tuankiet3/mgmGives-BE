@@ -1,0 +1,25 @@
+package com.mgmtp.gives.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
+@Table(name = "campaign_medias")
+public class CampaignMedia extends BaseEntity {
+
+    @ManyToOne
+    @JoinColumn(name = "campaign_id")
+    private Campaign campaign;
+
+    private String url;
+
+    @Column(name = "media_type")
+    private String mediaType;
+
+
+}
