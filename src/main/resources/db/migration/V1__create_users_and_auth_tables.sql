@@ -1,43 +1,46 @@
--- 1. Table Role
-CREATE TABLE role (
-    id   SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL UNIQUE
-);
+-- =============================================
+-- ENUM TYPES
+-- =============================================
+CREATE TYPE user_status AS ENUM ('ACTIVE', 'INACTIVE', 'BANNED');
+CREATE TYPE user_role AS ENUM ('ADMIN', 'USER');
+CREATE TYPE token_type AS ENUM('VERIFY_EMAIL', 'RESET_PASSWORD');
 
--- 2. Table User
-CREATE TABLE "user" (
-    id            SERIAL PRIMARY KEY,
-    username      VARCHAR(255),
+-- 1. Table users
+CREATE TABLE users
+(
+    id            BIGSERIAL PRIMARY KEY,
     password_hash VARCHAR(255),
-    email         VARCHAR(255),
-    full_name     VARCHAR(255),
+    email         VARCHAR(255) NOT NULL UNIQUE,
+    full_name     VARCHAR(255) NOT NULL,
     phone         VARCHAR(255),
     avatar_url    VARCHAR(255),
-    status        VARCHAR(50),  -- Enum: ACTIVE, INACTIVE, BANNED
-    role_id       INT,
+    role          user_role,
+    status        user_status,
     created_at    TIMESTAMP,
-    updated_at    TIMESTAMP,
-    CONSTRAINT fk_user_role FOREIGN KEY (role_id) REFERENCES role (id)
+    updated_at    TIMESTAMP
 );
 
--- 3. Table Refresh Token
-CREATE TABLE refresh_token (
-    id         SERIAL PRIMARY KEY,
-    user_id    INT,
+-- 2. Table refresh_tokens
+CREATE TABLE refresh_tokens
+(
+    id         BIGSERIAL PRIMARY KEY,
+    user_id    BIGINT NOT NULL,
     token_hash VARCHAR(255),
     expires_at TIMESTAMP,
-    revoked_at TIMESTAMP,
+    is_revoked BOOLEAN,
     created_at TIMESTAMP,
-    CONSTRAINT fk_rt_user FOREIGN KEY (user_id) REFERENCES "user" (id)
+    CONSTRAINT fk_rt_user FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
--- 4. Table Password Reset Token
-CREATE TABLE password_reset_token (
-    id         SERIAL PRIMARY KEY,
-    user_id    INT,
+-- 3. Table user_tokens
+CREATE TABLE user_tokens
+(
+    id         BIGSERIAL PRIMARY KEY,
+    user_id    BIGINT NOT NULL,
+    type       token_type,
     token_hash VARCHAR(255),
     expires_at TIMESTAMP,
     used_at    TIMESTAMP,
     created_at TIMESTAMP,
-    CONSTRAINT fk_prt_user FOREIGN KEY (user_id) REFERENCES "user" (id)
+    CONSTRAINT fk_prt_user FOREIGN KEY (user_id) REFERENCES users (id)
 );

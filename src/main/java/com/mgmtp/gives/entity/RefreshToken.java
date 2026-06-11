@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "refresh_tokens")
 public class RefreshToken extends BaseEntity {
+
     @ManyToOne
     @JoinColumn(name = "user_id")
     private User user;
@@ -23,7 +24,6 @@ public class RefreshToken extends BaseEntity {
     @Column(name = "expires_at")
     private LocalDateTime expiresAt;
 
-    @Column(name = "revoked_at")
-    private LocalDateTime revokedAt;
-
+    @Column(name = "is_revoked")
+    private Boolean isRevoked;
 }

@@ -1,5 +1,6 @@
 package com.mgmtp.gives.entity;
 
+import com.mgmtp.gives.enums.TokenType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -11,11 +12,15 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "password_reset_tokens")
-public class PasswordResetToken extends BaseEntity {
+@Table(name = "user_tokens")
+public class UserToken extends BaseEntity {
+
     @ManyToOne
     @JoinColumn(name = "user_id")
     private User user;
+
+    @Enumerated(EnumType.STRING)
+    private TokenType type;
 
     @Column(name = "token_hash")
     private String tokenHash;
@@ -25,6 +30,4 @@ public class PasswordResetToken extends BaseEntity {
 
     @Column(name = "used_at")
     private LocalDateTime usedAt;
-
-
 }

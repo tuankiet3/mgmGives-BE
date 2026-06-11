@@ -4,7 +4,6 @@ import com.mgmtp.gives.enums.TaskStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Getter
@@ -29,7 +28,7 @@ public class CampaignTask extends BaseEntity {
     private TaskStatus status;
 
     @Column(name = "due_date")
-    private LocalDate dueDate;
+    private LocalDateTime dueDate;
 
     @ManyToOne
     @JoinColumn(name = "created_by")
