@@ -3,6 +3,8 @@ package com.mgmtp.gives.entity;
 import com.mgmtp.gives.enums.TokenType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -20,6 +22,8 @@ public class UserToken extends BaseEntity {
     private User user;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "type", columnDefinition = "token_type")
     private TokenType type;
 
     @Column(name = "token_hash")

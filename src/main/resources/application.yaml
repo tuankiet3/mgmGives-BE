@@ -22,5 +22,27 @@ spring:
     baseline-on-migrate: true
     validate-on-migrate: true
 
+  mail:
+    host: ${MAIL_HOST:smtp-relay.brevo.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:a8a119001@smtp-brevo.com}
+    password: ${MAIL_PASSWORD:xsmtpsib-daff11283a2dabcbfe7f982e860e1ecf273b6738317b30da8ae48908c44ae5be-BL23ABkXLYu7jMNm}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:9a4f2c8d3e7b1a5f6c8d9e0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c}
+    access-token-expiration: ${JWT_ACCESS_EXPIRATION:900000}
+    refresh-token-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+  mail:
+    from-mail: ${FROM_MAIL:mgm.gives@vtk.io.vn}
+    frontend-url: ${FRONTEND_URL:http://localhost:3000}
+    verify-expiration: ${MAIL_VERIFY_EXPIRATION:864000000}
+
 server:
   port: ${SERVER_PORT:8080}

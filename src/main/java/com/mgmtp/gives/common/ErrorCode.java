@@ -1,0 +1,32 @@
+package com.mgmtp.gives.common;
+
+import lombok.Getter;
+import org.springframework.http.HttpStatus;
+
+@Getter
+public enum ErrorCode {
+    UNCATEGORIZED_ERROR(9999, "Uncategorized error", HttpStatus.INTERNAL_SERVER_ERROR),
+
+    USER_NOT_FOUND(1001, "User not found", HttpStatus.NOT_FOUND),
+    ROLE_NOT_FOUND(1005, "Role not found", HttpStatus.NOT_FOUND),
+
+    INVALID_TOKEN(1002, "Invalid Token", HttpStatus.UNAUTHORIZED),
+    EXPIRED_TOKEN(1003, "Expired Token", HttpStatus.UNAUTHORIZED),
+    INVALID_REFRESH_TOKEN(1004, "Invalid refresh token", HttpStatus.UNAUTHORIZED),
+    UNAUTHORIZED(1006, "Unauthorized", HttpStatus.UNAUTHORIZED),
+    INVALID_CREDENTIALS(1009, "Invalid email or password", HttpStatus.UNAUTHORIZED),
+
+    EMAIL_ALREADY_EXISTS(1010, "Email is already exists", HttpStatus.CONFLICT),
+    EMAIL_SENT_FAILURE(1011, "Failed to send email", HttpStatus.INTERNAL_SERVER_ERROR),
+    VALIDATION_ERROR(1012, "Validation failed", HttpStatus.BAD_REQUEST);
+
+    private final int code;
+    private final String message;
+    private final HttpStatus status;
+
+    ErrorCode(int code, String message, HttpStatus status) {
+        this.code = code;
+        this.message = message;
+        this.status = status;
+    }
+}
