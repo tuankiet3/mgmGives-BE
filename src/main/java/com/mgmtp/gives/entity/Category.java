@@ -23,6 +23,7 @@ public class Category {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Builder.Default
     @ManyToMany(mappedBy = "categories")
     private Set<Campaign> campaigns = new HashSet<>();
 }

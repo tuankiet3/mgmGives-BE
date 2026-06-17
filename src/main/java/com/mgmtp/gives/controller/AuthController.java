@@ -1,21 +1,25 @@
 package com.mgmtp.gives.controller;
-
 import com.mgmtp.gives.common.ApiResponse;
 import com.mgmtp.gives.dto.auth.RegisterRequest;
+import com.mgmtp.gives.dto.auth.LoginRequest;
+import com.mgmtp.gives.dto.auth.AuthResponse;
 import com.mgmtp.gives.service.AuthService;
+import com.mgmtp.gives.common.JwtProps;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequiredArgsConstructor
 @RequestMapping("/api/auth")
-@Tag(name = "Authentication", description = "Endpoints for user registration and email verification")
+@RequiredArgsConstructor
 public class AuthController {
     private final AuthService service;
+    private final JwtProps jwtProps;
 
     @PostMapping("/register")
     @Operation(summary = "Register a new account", description = "Creates a user profile and sends a verification email.")
@@ -23,6 +27,29 @@ public class AuthController {
         return ApiResponse.success(service.register(request), "PLEASE CHECK YOUR EMAIL TO VERIFY YOUR ACCOUNT");
     }
 
+    @PostMapping("/login")
+    public ResponseEntity<ApiResponse<?>> login(@Valid @RequestBody LoginRequest loginRequest) {
+        AuthResponse response = service.login(loginRequest);
+
+        ResponseCookie accessCookie = ResponseCookie.from("access_token", response.getAccessToken())
+                .httpOnly(true)
+                .secure(false) // in production this should be true if using HTTPS
+                .path("/")
+                .maxAge(jwtProps.getAccessTokenExpiration() / 1000)
+                .build();
+
+        ResponseCookie refreshCookie = ResponseCookie.from("refresh_token", response.getRefreshToken())
+                .httpOnly(true)
+                .secure(false)
+                .path("/")
+                .maxAge(jwtProps.getRefreshTokenExpiration() / 1000)
+                .build();
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .body(ApiResponse.success(null, "Login successful"));
+    }
     @GetMapping("/verify")
     @Operation(summary = "Verify email address", description = "Activates the user account using the token sent via email.")
     public ApiResponse<?> verify(
@@ -31,3 +58,4 @@ public class AuthController {
         return ApiResponse.success(service.verifyEmail(token), "User verified successfully");
     }
 }
+

@@ -18,7 +18,9 @@ public enum ErrorCode {
 
     EMAIL_ALREADY_EXISTS(1010, "Email is already exists", HttpStatus.CONFLICT),
     EMAIL_SENT_FAILURE(1011, "Failed to send email", HttpStatus.INTERNAL_SERVER_ERROR),
-    VALIDATION_ERROR(1012, "Validation failed", HttpStatus.BAD_REQUEST);
+    VALIDATION_ERROR(1012, "Validation failed", HttpStatus.BAD_REQUEST),
+    ACCOUNT_LOCKED(1013, "Account is locked", HttpStatus.FORBIDDEN),
+    ACCOUNT_INACTIVE(1014, "Account is inactive", HttpStatus.FORBIDDEN);
 
     private final int code;
     private final String message;
