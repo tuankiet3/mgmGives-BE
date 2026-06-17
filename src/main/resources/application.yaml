@@ -43,6 +43,6 @@ app:
     from-mail: ${FROM_MAIL:mgm.gives@vtk.io.vn}
     frontend-url: ${FRONTEND_URL:http://localhost:3000}
     verify-expiration: ${MAIL_VERIFY_EXPIRATION:864000000}
-
+    reset-expiration: ${MAIL_RESET_EXPIRATION:864000000}
 server:
   port: ${SERVER_PORT:8080}

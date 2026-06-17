@@ -3,9 +3,11 @@ package com.mgmtp.gives.service.impl;
 import static com.mgmtp.gives.common.ErrorCode.*;
 
 import com.mgmtp.gives.common.MailProps;
+import com.mgmtp.gives.dto.auth.ForgotPasswordRequest;
 import com.mgmtp.gives.dto.auth.RegisterRequest;
 import com.mgmtp.gives.dto.auth.LoginRequest;
 import com.mgmtp.gives.dto.auth.AuthResponse;
+import com.mgmtp.gives.dto.auth.ResetPasswordRequest;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.entity.UserToken;
 import com.mgmtp.gives.enums.TokenType;
@@ -13,8 +15,10 @@ import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.enums.UserStatus;
 import com.mgmtp.gives.event.UserRegisteredEvent;
 import com.mgmtp.gives.exception.AppException;
+import com.mgmtp.gives.exception.ResourceNotFoundException;
 
 import com.mgmtp.gives.mapper.AuthMapper;
+import com.mgmtp.gives.repository.RefreshTokenRepository;
 import com.mgmtp.gives.repository.UserRepository;
 import com.mgmtp.gives.repository.UserTokenRepository;
 import com.mgmtp.gives.security.JwtService;
@@ -36,10 +40,10 @@ import java.util.Locale;
 @Service @RequiredArgsConstructor @Slf4j
 public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepo;
-
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserTokenRepository userTokenRepo;
+    private final RefreshTokenRepository refreshTokenRepo;
     private final MailProps mailProps;
     private final EmailService emailService;
     private final RefreshTokenService refreshTokenService;
@@ -50,21 +54,11 @@ public class AuthServiceImpl implements AuthService {
     private static final int LOCK_TIME_DURATION_MINUTES = 15;
     @Override @Transactional
     public Void register(RegisterRequest request) {
-        String email = request.email().trim().toLowerCase(Locale.ROOT);
-
-        log.info("Register request received. email={}", email);
-
-
-        User user = userRepo.findByEmail(email).orElse(null);
+        User user = userRepo.findByEmail(request.email()).orElse(null);
         User savedUser;
 
         if (user != null) {
-            log.info("Existing user found for email={}, status={}", email, user.getStatus());
-            if (user.getStatus() == UserStatus.ACTIVE) {
-                log.warn("Register failed: email already active. email={}", email);
-                throw new AppException(EMAIL_ALREADY_EXISTS);
-            }
-
+            if (user.getStatus() == UserStatus.ACTIVE) throw new AppException(EMAIL_ALREADY_EXISTS);
             user.setPasswordHash(passwordEncoder.encode(request.password()));
             user.setFullName(request.fullName());
             savedUser = userRepo.save(user);
@@ -175,5 +169,60 @@ public class AuthServiceImpl implements AuthService {
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .build();
+    }
+    @Override @Transactional
+    public Void forgotPassword(ForgotPasswordRequest request) {
+        String email =  request.email().trim().toLowerCase(Locale.ROOT);
+        User user = userRepo.findByEmail(email).orElse(null);
+        if (user == null || user.getStatus() != UserStatus.ACTIVE) {
+            throw new ResourceNotFoundException(USER_NOT_FOUND);
+        }
+
+        String rawToken = TokenUtils.generateSecureToken();
+        String hashedToken = TokenUtils.hash(rawToken);
+
+        userTokenRepo.revokeAllByUserAndType(user, TokenType.RESET_PASSWORD);
+
+        UserToken token = UserToken.builder()
+                .user(user)
+                .type(TokenType.RESET_PASSWORD)
+                .tokenHash(hashedToken)
+                .expiresAt(LocalDateTime.now().plusHours(1))
+                .build();
+        userTokenRepo.save(token);
+
+        emailService.sendResetPasswordEmail(user.getEmail(), user.getFullName(), rawToken);
+        return null;
+
+    }
+
+    @Override
+    @Transactional
+    public Void resetPassword(ResetPasswordRequest request) {
+        if (!request.newPassword().equals(request.confirmNewPassword())) {
+            throw new AppException(PASSWORDS_DO_NOT_MATCH);
+        }
+        String hashedToken = TokenUtils.hash(request.token());
+
+        UserToken token = userTokenRepo.findByTokenHashAndType(hashedToken, TokenType.RESET_PASSWORD)
+                .orElseThrow(() -> new AppException(INVALID_TOKEN, "Invalid token. Please request a new link at " + mailProps.getFrontendUrl() + "/forgot-password"));
+
+        if (token.getUsedAt() != null) {
+            throw new AppException(INVALID_TOKEN, "This token has already been used. Please request a new link at " + mailProps.getFrontendUrl() + "/forgot-password");
+        }
+
+        if (token.getExpiresAt().isBefore(LocalDateTime.now())) {
+            userTokenRepo.revokeAllByUserAndType(token.getUser(), TokenType.RESET_PASSWORD);
+            throw new AppException(EXPIRED_TOKEN, "This token has expired. Please request a new link at " + mailProps.getFrontendUrl() + "/forgot-password");
+        }
+
+        User user = token.getUser();
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepo.save(user);
+
+        refreshTokenRepo.deleteByUserId(user.getId());
+        token.setUsedAt(LocalDateTime.now());
+        userTokenRepo.revokeAllByUserAndType(user, TokenType.RESET_PASSWORD);
+        return null;
     }
 }

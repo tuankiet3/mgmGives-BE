@@ -24,7 +24,4 @@ public interface UserTokenRepository extends JpaRepository<UserToken, Long> {
           AND ut.usedAt IS NULL
     """)
     int revokeAllByUserAndType(@Param("user") User user, @Param("type") TokenType type);
-
-    void deleteByUserAndType(User user, TokenType type);
-
 }

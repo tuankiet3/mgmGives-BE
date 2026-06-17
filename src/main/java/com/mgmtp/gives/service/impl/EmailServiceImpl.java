@@ -33,6 +33,11 @@ public class EmailServiceImpl implements EmailService {
         sendEmail(toEmail, fullName, token, TokenType.VERIFY_EMAIL);
     }
 
+    @Override
+    public void sendResetPasswordEmail(String toEmail, String fullName, String token) {
+        sendEmail(toEmail, fullName, token, TokenType.RESET_PASSWORD);
+    }
+
     public void executeSend(String toEmail, String content, TokenType type) {
         try {
             MimeMessage message = mailSender.createMimeMessage();

@@ -4,7 +4,8 @@ import lombok.Getter;
 
 @Getter
 public enum TokenType {
-    VERIFY_EMAIL("verify-email", "/verify-email", "Verify Your Email", false, true);
+    VERIFY_EMAIL("verify-email", "/verify-email", "Verify Your Email", false, true),
+    RESET_PASSWORD("reset-password", "/reset-password", "Reset Your Password", false, true);
 
     private final String template;
     private final String uri;

@@ -1,12 +1,15 @@
 package com.mgmtp.gives.controller;
 import com.mgmtp.gives.common.ApiResponse;
+import com.mgmtp.gives.dto.auth.ForgotPasswordRequest;
 import com.mgmtp.gives.dto.auth.RegisterRequest;
+import com.mgmtp.gives.dto.auth.ResetPasswordRequest;
 import com.mgmtp.gives.dto.auth.LoginRequest;
 import com.mgmtp.gives.dto.auth.AuthResponse;
 import com.mgmtp.gives.service.AuthService;
 import com.mgmtp.gives.common.JwtProps;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@Tag(name = "Authentication", description = "Endpoints for user registration and email verification")
 public class AuthController {
     private final AuthService service;
     private final JwtProps jwtProps;
@@ -57,5 +61,16 @@ public class AuthController {
             @RequestParam String token) {
         return ApiResponse.success(service.verifyEmail(token), "User verified successfully");
     }
-}
 
+    @PostMapping("/forgot-password")
+    @Operation(summary = "Request password reset", description = "Generates a password reset token and sends an email to the user if verified.")
+    public ApiResponse<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        return ApiResponse.success(service.forgotPassword(request), "Please check your email to reset your password");
+    }
+
+    @PostMapping("/reset-password")
+    @Operation(summary = "Reset password", description = "Allows password reset using the token sent in the email.")
+    public ApiResponse<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        return ApiResponse.success(service.resetPassword(request), "Password has been reset successfully");
+    }
+}
