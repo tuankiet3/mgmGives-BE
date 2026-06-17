@@ -1,7 +1,6 @@
 package com.mgmtp.gives.common;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.Builder;
 
 import java.time.Instant;
@@ -16,6 +15,14 @@ public record ApiResponse<T>(
         Instant timestamp,
         String path
 ) {
+
+    public static <T> ApiResponse<T> success(T result) {
+        return ApiResponse.<T>builder()
+                .success(true)
+                .result(result)
+                .build();
+    }
+
     public static <T> ApiResponse<T> success(T result, String message) {
         return ApiResponse.<T>builder()
                 .success(true)
