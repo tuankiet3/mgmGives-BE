@@ -4,11 +4,6 @@ import static com.mgmtp.gives.common.ErrorCode.*;
 
 import com.mgmtp.gives.common.MailProps;
 import com.mgmtp.gives.dto.auth.*;
-import com.mgmtp.gives.dto.auth.ForgotPasswordRequest;
-import com.mgmtp.gives.dto.auth.RegisterRequest;
-import com.mgmtp.gives.dto.auth.LoginRequest;
-import com.mgmtp.gives.dto.auth.AuthResponse;
-import com.mgmtp.gives.dto.auth.ResetPasswordRequest;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.entity.UserToken;
 import com.mgmtp.gives.enums.TokenType;
@@ -42,7 +37,6 @@ import java.util.Locale;
 @Slf4j
 public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepo;
-    private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserTokenRepository userTokenRepo;
     private final RefreshTokenRepository refreshTokenRepo;
@@ -140,11 +134,6 @@ public class AuthServiceImpl implements AuthService {
                 user.setFailedAttemptCount(0);
                 userRepo.save(user);
             }
-        }
-
-        if (UserStatus.INACTIVE.equals(user.getStatus())) {
-            throw new AppException(ACCOUNT_INACTIVE,
-                    "Your account is inactive. Please check your email to activate your account.");
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
@@ -267,5 +256,12 @@ public class AuthServiceImpl implements AuthService {
 
         log.info("Resend verification email successful. userId={}, email={}", user.getId(), user.getEmail());
         return null;
+    }
+
+    @Override
+    public UserInfoResponse getCurrentUser(String email) {
+        User user = userRepo.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
+        return authMapper.toUserInfoResponse(user);
     }
 }

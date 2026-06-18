@@ -19,6 +19,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import com.mgmtp.gives.dto.auth.UserInfoResponse;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -35,7 +38,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<?>> login(@Valid @RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<Void> login(@Valid @RequestBody LoginRequest loginRequest) {
         AuthResponse response = service.login(loginRequest);
 
         ResponseCookie accessCookie = ResponseCookie.from("access_token", response.getAccessToken())
@@ -55,7 +58,7 @@ public class AuthController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
-                .body(ApiResponse.success(null, "Login successful"));
+                .build();
     }
 
     @GetMapping("/verify")
@@ -82,5 +85,41 @@ public class AuthController {
     @Operation(summary = "Reset password", description = "Allows password reset using the token sent in the email.")
     public ApiResponse<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         return ApiResponse.success(service.resetPassword(request), "Password has been reset successfully");
+    }
+
+    @PostMapping("/logout")
+    @Operation(summary = "Logout user", description = "Clears access and refresh token cookies.")
+    public ResponseEntity<Void> logout() {
+        ResponseCookie deleteAccessCookie = ResponseCookie.from("access_token", "")
+                .httpOnly(true)
+                .secure(false)
+                .path("/")
+                .maxAge(0)
+                .build();
+
+        ResponseCookie deleteRefreshCookie = ResponseCookie.from("refresh_token", "")
+                .httpOnly(true)
+                .secure(false)
+                .path("/")
+                .maxAge(0)
+                .build();
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, deleteAccessCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, deleteRefreshCookie.toString())
+                .build();
+    }
+
+    @GetMapping("/me")
+    @Operation(summary = "Get current user info", description = "Retrieves user details of the logged in user based on the access token.")
+    public ResponseEntity<UserInfoResponse> getCurrentUser() {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        String email = "";
+        if (principal instanceof UserDetails) {
+            email = ((UserDetails) principal).getUsername();
+        } else {
+            email = principal.toString();
+        }
+        return ResponseEntity.ok(service.getCurrentUser(email));
     }
 }

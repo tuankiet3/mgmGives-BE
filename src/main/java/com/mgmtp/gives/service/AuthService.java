@@ -5,6 +5,7 @@ import com.mgmtp.gives.dto.auth.RegisterRequest;
 import com.mgmtp.gives.dto.auth.LoginRequest;
 import com.mgmtp.gives.dto.auth.AuthResponse;
 import com.mgmtp.gives.dto.auth.ResetPasswordRequest;
+import com.mgmtp.gives.dto.auth.UserInfoResponse;
 
 public interface AuthService {
     Void register(RegisterRequest request);
@@ -18,4 +19,5 @@ public interface AuthService {
     Void forgotPassword(ForgotPasswordRequest request);
 
     Void resetPassword(ResetPasswordRequest request);
+    UserInfoResponse getCurrentUser(String email);
 }
