@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  mgm-gives-be-development:
+    image: da-nang-internship-docker-local.dockerregistry.mgm-tp.com/com.mgmtp.da-nang-internship/com.mgmtp.gives/mgm-gives-be:develop-latest
+    container_name: mgm-gives-be-development
+    restart: always
+    ports:
+      - "8082:8080"
+    env_file:
+      - mgm-gives-env/.env.be.dev
+    profiles:
+      - development
+
+  mgm-gives-be-staging:
+    image: da-nang-internship-docker-local.dockerregistry.mgm-tp.com/com.mgmtp.da-nang-internship/com.mgmtp.gives/mgm-gives-be:staging-latest
+    container_name: mgm-gives-be-staging
+    restart: always
+    ports:
+      - "8081:8080"
+    env_file:
+      - mgm-gives-env/.env.be.stag
+    profiles:
+      - staging
+
+  mgm-gives-be-production:
+    image: da-nang-internship-docker-local.dockerregistry.mgm-tp.com/com.mgmtp.da-nang-internship/com.mgmtp.gives/mgm-gives-be:master-latest
+    container_name: mgm-gives-be-production
+    restart: always
+    ports:
+      - "8080:8080"
+    env_file:
+      - mgm-gives-env/.env.be.prod
+    profiles:
+      - production
+
+networks:
+  default:
+    name: mgm-gives-network
+    external: true

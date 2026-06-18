@@ -1,9 +1,0 @@
-spring.jpa.show-sql: true
-spring.jpa.properties.hibernate.format_sql: true
-
-spring.mail.host: smtp-relay.brevo.com
-spring.mail.port: 587
-spring.mail.username: a8a119001@smtp-brevo.com
-spring.mail.password: xsmtpsib-daff11283a2dabcbfe7f982e860e1ecf273b6738317b30da8ae48908c44ae5be-BL23ABkXLYu7jMNm
-spring.mail.properties.mail.smtp.auth: true
-spring.mail.properties.mail.smtp.starttls.enable: true
