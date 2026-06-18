@@ -39,6 +39,13 @@ public class SecurityConfig {
             "/error"
     };
 
+    private static final String[] ALLOWED_ORIGINS = {
+            "http://localhost:3000",
+            "http://mgm-gives.mgm-edv.de:3000",
+            "http://mgm-gives.mgm-edv.de:3001",
+            "http://mgm-gives.mgm-edv.de:3002"
+    };
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -58,7 +65,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000"));
+        configuration.setAllowedOrigins(List.of(ALLOWED_ORIGINS));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Content-Type"));
         configuration.setAllowCredentials(true);
