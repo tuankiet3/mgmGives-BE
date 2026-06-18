@@ -94,7 +94,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         throw new AppException(ErrorCode.UNAUTHORIZED, "Your account has been banned.");
                     } else if (UserStatus.INACTIVE.equals(status)) {
                         if (!path.equals("/api/auth/resend-activation")
-                                && !path.equals("/api/auth/me")) {
+                                && !path.equals("/api/auth/me")
+                                && !path.equals("/api/auth/logout")) {
                             throw new AppException(ErrorCode.ACCOUNT_INACTIVE, "Your account is inactive. Please activate your account to proceed.");
                         }
                     }
