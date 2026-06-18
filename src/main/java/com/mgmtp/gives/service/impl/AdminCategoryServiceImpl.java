@@ -15,7 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 
-import static com.mgmtp.gives.common.ErrorCode.*;
+import static com.mgmtp.gives.common.ErrorCode.CATEGORY_NAME_ALREADY_EXISTS;
+import static com.mgmtp.gives.common.ErrorCode.CATEGORY_NOT_FOUND;
 
 @Service
 public class AdminCategoryServiceImpl implements AdminCategoryService {

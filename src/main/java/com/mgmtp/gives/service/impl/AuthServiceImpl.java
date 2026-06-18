@@ -1,7 +1,5 @@
 package com.mgmtp.gives.service.impl;
 
-import static com.mgmtp.gives.common.ErrorCode.*;
-
 import com.mgmtp.gives.common.MailProps;
 import com.mgmtp.gives.dto.auth.*;
 import com.mgmtp.gives.entity.User;
@@ -32,6 +30,8 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 
+import static com.mgmtp.gives.common.ErrorCode.*;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -49,7 +49,8 @@ public class AuthServiceImpl implements AuthService {
     private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final int LOCK_TIME_DURATION_MINUTES = 15;
 
-    @Override @Transactional
+    @Override
+    @Transactional
     public Void register(RegisterRequest request) {
         String email = request.email().trim().toLowerCase(Locale.ROOT);
 
@@ -91,7 +92,8 @@ public class AuthServiceImpl implements AuthService {
         return null;
     }
 
-    @Override @Transactional
+    @Override
+    @Transactional
     public Void verifyEmail(String token) {
         log.info("Email verification request received");
 
@@ -120,10 +122,15 @@ public class AuthServiceImpl implements AuthService {
                 currUser.getId(), currUser.getEmail());
         return null;
     }
+
     @Override
     public AuthResponse login(LoginRequest request) {
         User user = userRepo.findByEmail(request.getEmail())
                 .orElseThrow(() -> new AppException(INVALID_CREDENTIALS));
+
+        if (UserStatus.BANNED.equals(user.getStatus())) {
+            throw new AppException(UNAUTHORIZED, "Your account has been banned.");
+        }
 
         if (user.getLockedUntil() != null) {
             if (user.getLockedUntil().isAfter(LocalDateTime.now())) {
@@ -163,9 +170,11 @@ public class AuthServiceImpl implements AuthService {
                 .refreshToken(refreshToken)
                 .build();
     }
-    @Override @Transactional
+
+    @Override
+    @Transactional
     public Void forgotPassword(ForgotPasswordRequest request) {
-        String email =  request.email().trim().toLowerCase(Locale.ROOT);
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
         User user = userRepo.findByEmail(email).orElse(null);
         if (user == null || user.getStatus() != UserStatus.ACTIVE) {
             throw new ResourceNotFoundException(USER_NOT_FOUND);
@@ -260,8 +269,9 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public UserInfoResponse getCurrentUser(String email) {
-        User user = userRepo.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
+        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+        User user = userRepo.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new AppException(UNAUTHORIZED));
         return authMapper.toUserInfoResponse(user);
     }
 }

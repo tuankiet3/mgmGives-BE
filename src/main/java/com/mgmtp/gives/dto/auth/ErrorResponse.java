@@ -19,7 +19,9 @@ public class ErrorResponse {
     private String error;
     private String message;
 
-    /** Field-level validation errors (populated only for MethodArgumentNotValidException). */
+    /**
+     * Field-level validation errors (populated only for MethodArgumentNotValidException).
+     */
     private List<FieldError> fieldErrors;
 
     @Builder.Default

@@ -1,18 +1,11 @@
 package com.mgmtp.gives.security;
 
-import static com.mgmtp.gives.common.ErrorCode.*;
 import com.mgmtp.gives.common.JwtProps;
 import com.mgmtp.gives.dto.auth.TokenGenerationRequest;
-import com.mgmtp.gives.entity.RefreshToken;
-import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.exception.AppException;
-import com.mgmtp.gives.repository.RefreshTokenRepository;
-import com.mgmtp.gives.repository.UserRepository;
-import com.mgmtp.gives.util.TokenUtils;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -20,6 +13,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.Map;
 import java.util.function.Function;
+
+import static com.mgmtp.gives.common.ErrorCode.EXPIRED_TOKEN;
+import static com.mgmtp.gives.common.ErrorCode.INVALID_TOKEN;
 
 @Service
 @RequiredArgsConstructor

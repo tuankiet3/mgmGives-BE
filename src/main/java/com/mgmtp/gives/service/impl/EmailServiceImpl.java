@@ -19,7 +19,9 @@ import org.thymeleaf.context.Context;
 
 import java.nio.charset.StandardCharsets;
 
-@Service @RequiredArgsConstructor @Slf4j
+@Service
+@RequiredArgsConstructor
+@Slf4j
 public class EmailServiceImpl implements EmailService {
     private final MailProps mailProps;
     private final JavaMailSender mailSender;

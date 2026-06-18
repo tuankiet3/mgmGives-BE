@@ -11,5 +11,6 @@ import org.mapstruct.MappingConstants;
 public interface AuthMapper {
     @Mapping(target = "userId", source = "id")
     TokenGenerationRequest toTokenGenerationRequest(User user);
+
     UserInfoResponse toUserInfoResponse(User user);
 }

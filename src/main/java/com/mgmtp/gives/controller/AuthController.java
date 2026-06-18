@@ -1,27 +1,22 @@
 package com.mgmtp.gives.controller;
 
 import com.mgmtp.gives.common.ApiResponse;
-import com.mgmtp.gives.dto.auth.ForgotPasswordRequest;
-import com.mgmtp.gives.dto.auth.RegisterRequest;
-import com.mgmtp.gives.dto.auth.ResetPasswordRequest;
-import com.mgmtp.gives.dto.auth.LoginRequest;
-import com.mgmtp.gives.dto.auth.AuthResponse;
-import com.mgmtp.gives.service.AuthService;
-import com.mgmtp.gives.security.CustomUserDetails;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.mgmtp.gives.common.JwtProps;
+import com.mgmtp.gives.dto.auth.*;
+import com.mgmtp.gives.security.CustomUserDetails;
+import com.mgmtp.gives.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-import com.mgmtp.gives.dto.auth.UserInfoResponse;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -75,6 +70,12 @@ public class AuthController {
         return ApiResponse.success(null, "PLEASE CHECK YOUR EMAIL TO VERIFY YOUR ACCOUNT");
     }
 
+    @GetMapping("/me")
+    @Operation(summary = "Get current user profile", description = "Retrieves profile details of the currently authenticated user.")
+    public ApiResponse<UserInfoResponse> getCurrentUser(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ApiResponse.success(service.getCurrentUser(userDetails.getUsername()));
+    }
+
     @PostMapping("/forgot-password")
     @Operation(summary = "Request password reset", description = "Generates a password reset token and sends an email to the user if verified.")
     public ApiResponse<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
@@ -108,18 +109,5 @@ public class AuthController {
                 .header(HttpHeaders.SET_COOKIE, deleteAccessCookie.toString())
                 .header(HttpHeaders.SET_COOKIE, deleteRefreshCookie.toString())
                 .build();
-    }
-
-    @GetMapping("/me")
-    @Operation(summary = "Get current user info", description = "Retrieves user details of the logged in user based on the access token.")
-    public ResponseEntity<UserInfoResponse> getCurrentUser() {
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        String email = "";
-        if (principal instanceof UserDetails) {
-            email = ((UserDetails) principal).getUsername();
-        } else {
-            email = principal.toString();
-        }
-        return ResponseEntity.ok(service.getCurrentUser(email));
     }
 }

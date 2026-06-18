@@ -1,6 +1,5 @@
 package com.mgmtp.gives.service.impl;
 
-import static com.mgmtp.gives.common.ErrorCode.*;
 import com.mgmtp.gives.common.JwtProps;
 import com.mgmtp.gives.dto.auth.TokenGenerationRequest;
 import com.mgmtp.gives.entity.RefreshToken;
@@ -17,15 +16,18 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
+import static com.mgmtp.gives.common.ErrorCode.INVALID_REFRESH_TOKEN;
 import static com.mgmtp.gives.common.ErrorCode.USER_NOT_FOUND;
 
-@Service @RequiredArgsConstructor
+@Service
+@RequiredArgsConstructor
 public class RefreshTokenServiceImpl implements RefreshTokenService {
     private final RefreshTokenRepository refreshTokenRepo;
     private final UserRepository userRepo;
     private final JwtProps jwtProps;
 
-    @Override @Transactional
+    @Override
+    @Transactional
     public String generate(TokenGenerationRequest request) {
         String token = TokenUtils.generateSecureToken();
 
@@ -43,7 +45,8 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     }
 
 
-    @Override @Transactional(readOnly = true)
+    @Override
+    @Transactional(readOnly = true)
     public RefreshToken validate(String rawToken) {
         if (rawToken == null || rawToken.isBlank()) {
             throw new AppException(INVALID_REFRESH_TOKEN, "Refresh token cannot be null or empty");

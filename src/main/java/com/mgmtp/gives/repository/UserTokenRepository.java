@@ -17,11 +17,11 @@ public interface UserTokenRepository extends JpaRepository<UserToken, Long> {
 
     @Modifying
     @Query("""
-        UPDATE UserToken ut
-        SET ut.usedAt = CURRENT_TIMESTAMP
-        WHERE ut.user = :user
-          AND ut.type = :type
-          AND ut.usedAt IS NULL
-    """)
+                UPDATE UserToken ut
+                SET ut.usedAt = CURRENT_TIMESTAMP
+                WHERE ut.user = :user
+                  AND ut.type = :type
+                  AND ut.usedAt IS NULL
+            """)
     int revokeAllByUserAndType(@Param("user") User user, @Param("type") TokenType type);
 }

@@ -3,13 +3,10 @@ package com.mgmtp.gives.exception;
 import com.mgmtp.gives.common.ApiResponse;
 import com.mgmtp.gives.common.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.HashMap;
@@ -20,7 +17,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ApiResponse<?>> handleAppException(AppException ex, HttpServletRequest request) {
-        ApiResponse<?> response = ApiResponse.fail(ex.getErrorCode(), request.getRequestURI());
+        String message = ex.getMessage() != null ? ex.getMessage() : ex.getErrorCode().getMessage();
+        ApiResponse<?> response = ApiResponse.fail(ex.getErrorCode(), message, request.getRequestURI());
 
         return ResponseEntity.status(ex.getErrorCode().getStatus()).body(response);
     }

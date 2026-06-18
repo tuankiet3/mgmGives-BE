@@ -1,10 +1,6 @@
 package com.mgmtp.gives.dto.auth;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 @Getter
 @Setter
@@ -16,4 +12,5 @@ public class UserInfoResponse {
     private String email;
     private String fullName;
     private String role;
+    private String status;
 }

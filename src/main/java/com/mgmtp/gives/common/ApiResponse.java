@@ -50,4 +50,14 @@ public record ApiResponse<T>(
                 .path(uriPath)
                 .build();
     }
+
+    public static <T> ApiResponse<T> fail(ErrorCode errorCode, String message, String uriPath) {
+        return ApiResponse.<T>builder()
+                .success(false)
+                .message(message)
+                .code(errorCode.getCode())
+                .timestamp(Instant.now())
+                .path(uriPath)
+                .build();
+    }
 }

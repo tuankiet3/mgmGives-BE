@@ -2,7 +2,6 @@ package com.mgmtp.gives.util;
 
 import com.mgmtp.gives.common.ErrorCode;
 import com.mgmtp.gives.exception.AppException;
-import lombok.extern.slf4j.Slf4j;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -17,7 +16,8 @@ public class TokenUtils {
     private static final int DEFAULT_TOKEN_BYTE_LENGTH = 32;
     private static final String BEARER_PREFIX = "Bearer ";
 
-    private TokenUtils() {}
+    private TokenUtils() {
+    }
 
     public static String hash(String token) {
         try {

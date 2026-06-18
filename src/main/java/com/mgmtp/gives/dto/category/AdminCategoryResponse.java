@@ -1,6 +1,5 @@
 package com.mgmtp.gives.dto.category;
 
-import com.mgmtp.gives.entity.Category;
 import com.mgmtp.gives.enums.CategoryStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 

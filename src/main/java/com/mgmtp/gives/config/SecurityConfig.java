@@ -1,7 +1,6 @@
 package com.mgmtp.gives.config;
 
 
-import com.mgmtp.gives.security.CustomUserDetailsService;
 import com.mgmtp.gives.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
