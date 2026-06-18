@@ -4,6 +4,11 @@ import static com.mgmtp.gives.common.ErrorCode.*;
 
 import com.mgmtp.gives.common.MailProps;
 import com.mgmtp.gives.dto.auth.*;
+import com.mgmtp.gives.dto.auth.ForgotPasswordRequest;
+import com.mgmtp.gives.dto.auth.RegisterRequest;
+import com.mgmtp.gives.dto.auth.LoginRequest;
+import com.mgmtp.gives.dto.auth.AuthResponse;
+import com.mgmtp.gives.dto.auth.ResetPasswordRequest;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.entity.UserToken;
 import com.mgmtp.gives.enums.TokenType;
@@ -32,9 +37,12 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 
-@Service @RequiredArgsConstructor @Slf4j
+@Service
+@RequiredArgsConstructor
+@Slf4j
 public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepo;
+    private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserTokenRepository userTokenRepo;
     private final RefreshTokenRepository refreshTokenRepo;
@@ -118,7 +126,6 @@ public class AuthServiceImpl implements AuthService {
                 currUser.getId(), currUser.getEmail());
         return null;
     }
-
     @Override
     public AuthResponse login(LoginRequest request) {
         User user = userRepo.findByEmail(request.getEmail())
@@ -136,7 +143,8 @@ public class AuthServiceImpl implements AuthService {
         }
 
         if (UserStatus.INACTIVE.equals(user.getStatus())) {
-            throw new AppException(ACCOUNT_INACTIVE, "Your account is inactive. Please check your email to activate your account.");
+            throw new AppException(ACCOUNT_INACTIVE,
+                    "Your account is inactive. Please check your email to activate your account.");
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
@@ -201,15 +209,18 @@ public class AuthServiceImpl implements AuthService {
         String hashedToken = TokenUtils.hash(request.token());
 
         UserToken token = userTokenRepo.findByTokenHashAndType(hashedToken, TokenType.RESET_PASSWORD)
-                .orElseThrow(() -> new AppException(INVALID_TOKEN, "Invalid token. Please request a new link at " + mailProps.getFrontendUrl() + "/forgot-password"));
+                .orElseThrow(() -> new AppException(INVALID_TOKEN, "Invalid token. Please request a new link at "
+                        + mailProps.getFrontendUrl() + "/forgot-password"));
 
         if (token.getUsedAt() != null) {
-            throw new AppException(INVALID_TOKEN, "This token has already been used. Please request a new link at " + mailProps.getFrontendUrl() + "/forgot-password");
+            throw new AppException(INVALID_TOKEN, "This token has already been used. Please request a new link at "
+                    + mailProps.getFrontendUrl() + "/forgot-password");
         }
 
         if (token.getExpiresAt().isBefore(LocalDateTime.now())) {
             userTokenRepo.revokeAllByUserAndType(token.getUser(), TokenType.RESET_PASSWORD);
-            throw new AppException(EXPIRED_TOKEN, "This token has expired. Please request a new link at " + mailProps.getFrontendUrl() + "/forgot-password");
+            throw new AppException(EXPIRED_TOKEN, "This token has expired. Please request a new link at "
+                    + mailProps.getFrontendUrl() + "/forgot-password");
         }
 
         User user = token.getUser();
@@ -219,6 +230,42 @@ public class AuthServiceImpl implements AuthService {
         refreshTokenRepo.deleteByUserId(user.getId());
         token.setUsedAt(LocalDateTime.now());
         userTokenRepo.revokeAllByUserAndType(user, TokenType.RESET_PASSWORD);
+        return null;
+    }
+
+    @Override
+    @Transactional
+    public Void resendActivationEmail(String email) {
+        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+        User user = userRepo.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new AppException(UNAUTHORIZED));
+
+        if (user.getStatus() == UserStatus.ACTIVE) {
+            throw new AppException(EMAIL_ALREADY_VERIFIED);
+        }
+        if (user.getStatus() == UserStatus.BANNED) {
+            throw new AppException(UNAUTHORIZED, "User has been banned");
+        }
+
+        userTokenRepo.revokeAllByUserAndType(user, TokenType.VERIFY_EMAIL);
+
+        String verificationToken = TokenUtils.generateSecureToken();
+        UserToken emailVerificationToken = UserToken.builder()
+                .user(user)
+                .tokenHash(TokenUtils.hash(verificationToken))
+                .type(TokenType.VERIFY_EMAIL)
+                .expiresAt(LocalDateTime.now().plus(mailProps.getVerifyExpiration(), ChronoUnit.MILLIS))
+                .build();
+
+        userTokenRepo.save(emailVerificationToken);
+
+        eventPublisher.publishEvent(new UserRegisteredEvent(
+                user.getEmail(),
+                user.getFullName(),
+                verificationToken
+        ));
+
+        log.info("Resend verification email successful. userId={}, email={}", user.getId(), user.getEmail());
         return null;
     }
 }

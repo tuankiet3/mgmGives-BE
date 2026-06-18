@@ -1,4 +1,5 @@
 package com.mgmtp.gives.controller;
+
 import com.mgmtp.gives.common.ApiResponse;
 import com.mgmtp.gives.dto.auth.ForgotPasswordRequest;
 import com.mgmtp.gives.dto.auth.RegisterRequest;
@@ -6,6 +7,8 @@ import com.mgmtp.gives.dto.auth.ResetPasswordRequest;
 import com.mgmtp.gives.dto.auth.LoginRequest;
 import com.mgmtp.gives.dto.auth.AuthResponse;
 import com.mgmtp.gives.service.AuthService;
+import com.mgmtp.gives.security.CustomUserDetails;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.mgmtp.gives.common.JwtProps;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -54,12 +57,19 @@ public class AuthController {
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
                 .body(ApiResponse.success(null, "Login successful"));
     }
+
     @GetMapping("/verify")
     @Operation(summary = "Verify email address", description = "Activates the user account using the token sent via email.")
     public ApiResponse<?> verify(
-            @Parameter(description = "The verification token from the email link", required = true)
-            @RequestParam String token) {
+            @Parameter(description = "The verification token from the email link", required = true) @RequestParam String token) {
         return ApiResponse.success(service.verifyEmail(token), "User verified successfully");
+    }
+
+    @PostMapping("/resend-activation")
+    @Operation(summary = "Resend verification email", description = "Resends the activation link to the user's registered email address.")
+    public ApiResponse<?> resendActivationEmail(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        service.resendActivationEmail(userDetails.getUsername());
+        return ApiResponse.success(null, "PLEASE CHECK YOUR EMAIL TO VERIFY YOUR ACCOUNT");
     }
 
     @PostMapping("/forgot-password")

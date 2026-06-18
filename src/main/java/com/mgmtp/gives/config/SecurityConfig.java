@@ -28,7 +28,11 @@ import java.util.List;
 public class SecurityConfig {
     private final JwtAuthenticationFilter jwtFilter;
     private static final String[] PUBLIC_ENDPOINTS = {
-            "/api/auth/**",
+            "/api/auth/register",
+            "/api/auth/login",
+            "/api/auth/verify",
+            "/api/auth/forgot-password",
+            "/api/auth/reset-password",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
