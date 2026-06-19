@@ -53,10 +53,12 @@ public class AdminCategoryController {
     public ApiResponse<?> getAllCategories(
             @Parameter(description = "Optional list of statuses to filter categories by", example = "APPROVED,PENDING")
             @RequestParam(required = false) List<CategoryStatus> statuses,
+            @Parameter(description = "Optional search query to filter categories by name or description", example = "relief")
+            @RequestParam(required = false) String search,
             @PageableDefault(page = 0, size = 10, sort = "id", direction = Sort.Direction.ASC) Pageable pageable) {
 
 
-        Page<Category> entityPage = adminCategoryService.getAllCategories(statuses, pageable);
+        Page<Category> entityPage = adminCategoryService.getAllCategories(statuses, search, pageable);
 
         List<AdminCategoryResponse> categoryResponses = categoryMapper.toAdminResponseList(entityPage.getContent());
 

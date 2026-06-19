@@ -10,6 +10,7 @@ import com.mgmtp.gives.repository.CategoryRepository;
 import com.mgmtp.gives.service.AdminCategoryService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +18,8 @@ import java.util.Collection;
 
 import static com.mgmtp.gives.common.ErrorCode.CATEGORY_NAME_ALREADY_EXISTS;
 import static com.mgmtp.gives.common.ErrorCode.CATEGORY_NOT_FOUND;
+import static com.mgmtp.gives.specification.CategorySpecifications.hasStatusIn;
+import static com.mgmtp.gives.specification.CategorySpecifications.matchesKeyword;
 
 @Service
 public class AdminCategoryServiceImpl implements AdminCategoryService {
@@ -50,19 +53,20 @@ public class AdminCategoryServiceImpl implements AdminCategoryService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<Category> getAllCategories(Collection<CategoryStatus> statuses, Pageable pageable) {
-        if (statuses == null || statuses.isEmpty()) {
-            return categoryRepository.findAll(pageable);
-        }
+    public Page<Category> getAllCategories(Collection<CategoryStatus> statuses, String search, Pageable pageable) {
+        Specification<Category> spec = Specification.allOf(
+                hasStatusIn(statuses),
+                matchesKeyword(search)
+        );
 
-        return categoryRepository.findAllByStatusIn(statuses, pageable);
+        return categoryRepository.findAll(spec, pageable);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<Category> getAllCategories(Pageable pageable) {
         // Delegate to the status-filtered method with null (meaning "all statuses")
-        return getAllCategories(null, pageable);
+        return getAllCategories(null, null, pageable);
     }
 
 
