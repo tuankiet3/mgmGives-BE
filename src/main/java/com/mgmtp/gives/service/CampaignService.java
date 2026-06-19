@@ -1,0 +1,28 @@
+package com.mgmtp.gives.service;
+
+import com.mgmtp.gives.dto.campaign.CampaignRequest;
+import com.mgmtp.gives.entity.Campaign;
+import com.mgmtp.gives.entity.User;
+import com.mgmtp.gives.enums.CampaignPriority;
+import com.mgmtp.gives.enums.CampaignStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
+public interface CampaignService {
+    Campaign createCampaign(CampaignRequest request, User currentUser);
+
+    Page<Campaign> getAllCampaigns(
+            CampaignStatus status,
+            CampaignPriority priority,
+            Long categoryId,
+            Long userId,
+            String keyword,
+            User currentUser,
+            Pageable pageable);
+
+    Campaign getCampaignById(Long id, User currentUser);
+
+    Campaign updateCampaign(Long id, CampaignRequest request, User currentUser);
+
+    void deleteCampaign(Long id);
+}

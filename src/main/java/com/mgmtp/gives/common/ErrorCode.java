@@ -25,7 +25,13 @@ public enum ErrorCode {
     EMAIL_ALREADY_VERIFIED(1016, "Email is already verified", HttpStatus.BAD_REQUEST),
 
     CATEGORY_NOT_FOUND(1020, "Category not found", HttpStatus.NOT_FOUND),
-    CATEGORY_NAME_ALREADY_EXISTS(1021, "Category Name Already Exists", HttpStatus.BAD_REQUEST);
+    CATEGORY_NAME_ALREADY_EXISTS(1021, "Category Name Already Exists", HttpStatus.BAD_REQUEST),
+
+    CATEGORY_NOT_AVAILABLE(1022, "Category is not available", HttpStatus.BAD_REQUEST),
+
+    CAMPAIGN_NOT_FOUND(2001, "Campaign not found", HttpStatus.NOT_FOUND),
+    UNAUTHORIZED_CAMPAIGN_UPDATE(2003, "You do not have permission to update this campaign", HttpStatus.FORBIDDEN),
+    INVALID_CAMPAIGN_STATUS_FOR_UPDATE(2004, "Cannot update campaign in current state", HttpStatus.BAD_REQUEST);
 
     private final int code;
     private final String message;

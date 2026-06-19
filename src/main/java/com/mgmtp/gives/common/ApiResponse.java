@@ -13,8 +13,7 @@ public record ApiResponse<T>(
         String message,
         T result,
         Instant timestamp,
-        String path
-) {
+        String path) {
 
     public static <T> ApiResponse<T> success(T result) {
         return ApiResponse.<T>builder()

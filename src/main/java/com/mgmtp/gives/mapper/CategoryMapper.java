@@ -1,10 +1,6 @@
 package com.mgmtp.gives.mapper;
 
-import com.mgmtp.gives.dto.category.AdminCategoryResponse;
-import com.mgmtp.gives.dto.category.AdminCreateCategoryRequest;
-import com.mgmtp.gives.dto.category.AdminUpdateCategoryRequest;
-import com.mgmtp.gives.dto.category.UserCategoryResponse;
-import com.mgmtp.gives.dto.category.UserSuggestCategoryRequest;
+import com.mgmtp.gives.dto.category.*;
 import com.mgmtp.gives.entity.Category;
 import org.mapstruct.*;
 
@@ -12,9 +8,8 @@ import java.util.List;
 
 @Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
 public interface CategoryMapper {
-
     /**
-     * Maps Category Entity to AdminCategoryResponse DTO (includes status — for admin use).
+     * Maps Category Entity to AdminCategoryResponse DTO.
      */
     AdminCategoryResponse toAdminResponse(Category category);
 
@@ -56,5 +51,6 @@ public interface CategoryMapper {
     @Mapping(target = "campaigns", ignore = true)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void updateEntityFromRequest(AdminUpdateCategoryRequest request, @MappingTarget Category category);
-}
 
+    CategoryResponse toResponse(Category category);
+}

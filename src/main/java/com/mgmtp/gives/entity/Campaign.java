@@ -5,6 +5,8 @@ import com.mgmtp.gives.enums.CampaignStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -32,6 +34,8 @@ public class Campaign extends BaseEntity {
     private User user;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "status", columnDefinition = "campaign_status")
     private CampaignStatus status;
 
     @Column(name = "start_date")
@@ -43,6 +47,8 @@ public class Campaign extends BaseEntity {
     private Long target;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "priority", columnDefinition = "campaign_priority")
     private CampaignPriority priority;
 
     @Column(name = "approved_at")
