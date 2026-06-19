@@ -3,6 +3,7 @@ package com.mgmtp.gives.mapper;
 import com.mgmtp.gives.dto.category.AdminCategoryResponse;
 import com.mgmtp.gives.dto.category.AdminCreateCategoryRequest;
 import com.mgmtp.gives.dto.category.AdminUpdateCategoryRequest;
+import com.mgmtp.gives.dto.category.UserCategoryResponse;
 import com.mgmtp.gives.dto.category.UserSuggestCategoryRequest;
 import com.mgmtp.gives.entity.Category;
 import org.mapstruct.*;
@@ -11,12 +12,23 @@ import java.util.List;
 
 @Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
 public interface CategoryMapper {
+
     /**
-     * Maps Category Entity to AdminCategoryResponse DTO.
+     * Maps Category Entity to AdminCategoryResponse DTO (includes status — for admin use).
      */
     AdminCategoryResponse toAdminResponse(Category category);
 
     List<AdminCategoryResponse> toAdminResponseList(List<Category> categories);
+
+    /**
+     * Maps Category Entity to UserCategoryResponse DTO.
+     * Status is intentionally NOT included in UserCategoryResponse — it is internal workflow data
+     * and must never leak to the public API. MapStruct automatically skips unmapped target fields
+     * that don't exist in the target record.
+     */
+    UserCategoryResponse toUserResponse(Category category);
+
+    List<UserCategoryResponse> toUserResponseList(List<Category> categories);
 
     /**
      * Maps AdminCreateCategoryRequest DTO to Category Entity.
@@ -45,3 +57,4 @@ public interface CategoryMapper {
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void updateEntityFromRequest(AdminUpdateCategoryRequest request, @MappingTarget Category category);
 }
+

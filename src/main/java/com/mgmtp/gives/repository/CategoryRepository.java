@@ -8,15 +8,14 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
+import java.util.List;
 
 @Repository
 public interface CategoryRepository extends JpaRepository<Category, Long> {
 
-    /**
-     * Checks if a category name already exists in the database, ignoring case sensitivity.
-     * This directly supports our validation requirement to prevent duplicates.
-     */
     boolean existsByNameIgnoreCase(String name);
 
     Page<Category> findAllByStatusIn(Collection<CategoryStatus> statuses, Pageable pageable);
+
+    List<Category> findAllByStatusOrderByNameAsc(CategoryStatus status);
 }
