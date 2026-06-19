@@ -176,7 +176,7 @@ public class AuthServiceImpl implements AuthService {
     public Void forgotPassword(ForgotPasswordRequest request) {
         String email = request.email().trim().toLowerCase(Locale.ROOT);
         User user = userRepo.findByEmail(email).orElse(null);
-        if (user == null || user.getStatus() != UserStatus.ACTIVE) {
+        if (user == null) {
             throw new ResourceNotFoundException(USER_NOT_FOUND);
         }
 
