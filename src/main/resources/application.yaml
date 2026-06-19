@@ -44,5 +44,10 @@ app:
     frontend-url: ${FRONTEND_URL:http://localhost:3000}
     verify-expiration: ${MAIL_VERIFY_EXPIRATION:864000000}
     reset-expiration: ${MAIL_RESET_EXPIRATION:864000000}
+  seed:
+    admin:
+      email: ${SEED_ADMIN_EMAIL}
+      password: ${SEED_ADMIN_PASSWORD}
+      full-name: ${SEED_ADMIN_FULL_NAME:Admin}
 server:
   port: ${SERVER_PORT:8080}
