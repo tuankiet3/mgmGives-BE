@@ -5,9 +5,7 @@ import com.mgmtp.gives.common.PageResponse;
 import com.mgmtp.gives.dto.category.AdminCategoryResponse;
 import com.mgmtp.gives.dto.category.AdminCreateCategoryRequest;
 import com.mgmtp.gives.dto.category.AdminUpdateCategoryRequest;
-import com.mgmtp.gives.entity.Category;
 import com.mgmtp.gives.enums.CategoryStatus;
-import com.mgmtp.gives.mapper.CategoryMapper;
 import com.mgmtp.gives.service.AdminCategoryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -26,11 +24,9 @@ import java.util.List;
 @Tag(name = "Admin Category Management", description = "Endpoints for administrator to manage categories")
 public class AdminCategoryController {
     private final AdminCategoryService adminCategoryService;
-    private final CategoryMapper categoryMapper;
 
-    public AdminCategoryController(AdminCategoryService adminCategoryService, CategoryMapper categoryMapper) {
+    public AdminCategoryController(AdminCategoryService adminCategoryService) {
         this.adminCategoryService = adminCategoryService;
-        this.categoryMapper = categoryMapper;
     }
 
     /**
@@ -40,9 +36,7 @@ public class AdminCategoryController {
     @Operation(summary = "Create a new category", description = "Creates a new category with the specified details.")
     public ApiResponse<?> createCategory(@Valid @RequestBody AdminCreateCategoryRequest request) {
 
-        Category savedCategory = adminCategoryService.createCategory(request);
-
-        AdminCategoryResponse response = categoryMapper.toAdminResponse(savedCategory);
+        AdminCategoryResponse response = adminCategoryService.createCategory(request);
 
         // Return HTTP 201 Created along with the saved data
         return ApiResponse.success(response, "Category Created Successfully");
@@ -58,11 +52,9 @@ public class AdminCategoryController {
             @PageableDefault(page = 0, size = 10, sort = "id", direction = Sort.Direction.ASC) Pageable pageable) {
 
 
-        Page<Category> entityPage = adminCategoryService.getAllCategories(statuses, search, pageable);
+        Page<AdminCategoryResponse> responsePage = adminCategoryService.getAllCategories(statuses, search, pageable);
 
-        List<AdminCategoryResponse> categoryResponses = categoryMapper.toAdminResponseList(entityPage.getContent());
-
-        PageResponse<AdminCategoryResponse> pageResponse = PageResponse.of(entityPage, categoryResponses);
+        PageResponse<AdminCategoryResponse> pageResponse = PageResponse.of(responsePage, responsePage.getContent());
         return ApiResponse.success(pageResponse);
     }
 
@@ -72,8 +64,8 @@ public class AdminCategoryController {
     public ApiResponse<?> getCategoryById(
             @Parameter(description = "The ID of the category", required = true, example = "1")
             @PathVariable Long id) {
-        Category category = adminCategoryService.getCategoryById(id);
-        return ApiResponse.success(categoryMapper.toAdminResponse(category));
+        AdminCategoryResponse response = adminCategoryService.getCategoryById(id);
+        return ApiResponse.success(response);
     }
 
     @PutMapping("/{id}")
@@ -83,8 +75,8 @@ public class AdminCategoryController {
             @PathVariable Long id,
             @Valid @RequestBody AdminUpdateCategoryRequest request) {
 
-        Category updatedCategory = adminCategoryService.updateCategory(id, request);
-        return ApiResponse.success(categoryMapper.toAdminResponse(updatedCategory));
+        AdminCategoryResponse response = adminCategoryService.updateCategory(id, request);
+        return ApiResponse.success(response);
     }
 
     @DeleteMapping("/{id}")
