@@ -29,7 +29,7 @@ public class EmailServiceImpl implements EmailService {
     private static final String TEMPLATE_VAR_LINK = "link";
     private final TemplateEngine templateEngine;
 
-    @Async
+    @Override
     public void sendVerificationEmail(String toEmail, String fullName, String token) {
         log.info("Send verification email requested. to={}", toEmail);
         sendEmail(toEmail, fullName, token, TokenType.VERIFY_EMAIL);
@@ -40,6 +40,7 @@ public class EmailServiceImpl implements EmailService {
         sendEmail(toEmail, fullName, token, TokenType.RESET_PASSWORD);
     }
 
+    @Async
     public void executeSend(String toEmail, String content, TokenType type) {
         try {
             MimeMessage message = mailSender.createMimeMessage();

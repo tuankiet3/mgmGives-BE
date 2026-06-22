@@ -1,6 +1,7 @@
 package com.mgmtp.gives.service;
 
 import com.mgmtp.gives.dto.auth.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 public interface AuthService {
     Void register(RegisterRequest request);
@@ -16,4 +17,6 @@ public interface AuthService {
     Void resetPassword(ResetPasswordRequest request);
 
     UserInfoResponse getCurrentUser(String email);
+
+    Void logout(HttpServletRequest request);
 }

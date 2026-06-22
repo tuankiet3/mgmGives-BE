@@ -3,6 +3,7 @@ package com.mgmtp.gives.security;
 import com.mgmtp.gives.common.ErrorCode;
 import com.mgmtp.gives.enums.UserStatus;
 import com.mgmtp.gives.exception.AppException;
+import com.mgmtp.gives.util.CookieUtils;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -29,7 +30,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final CustomUserDetailsService userDetailsService;
     private final HandlerExceptionResolver exceptionResolver;
-    private static final String ACCESS_TOKEN_COOKIE_NAME = "access_token";
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
     private static final String[] PUBLIC_ENDPOINTS = {
             "/api/auth/register",
@@ -37,6 +37,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/api/auth/verify",
             "/api/auth/forgot-password",
             "/api/auth/reset-password",
+            "/api/auth/refresh",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
@@ -120,16 +121,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private String getCookieValue(HttpServletRequest request) {
-        Cookie[] cookies = request.getCookies();
-
-        if (cookies == null || cookies.length == 0) {
-            return null;
-        }
-
-        return Arrays.stream(cookies)
-                .filter(cookie -> ACCESS_TOKEN_COOKIE_NAME.equals(cookie.getName()))
-                .map(Cookie::getValue)
-                .findFirst()
+        return CookieUtils
+                .getCookieValue(request, CookieUtils.ACCESS_TOKEN_COOKIE_NAME)
                 .orElse(null);
     }
 }

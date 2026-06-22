@@ -5,9 +5,13 @@ import com.mgmtp.gives.common.JwtProps;
 import com.mgmtp.gives.dto.auth.*;
 import com.mgmtp.gives.security.CustomUserDetails;
 import com.mgmtp.gives.service.AuthService;
+import com.mgmtp.gives.service.RefreshTokenService;
+import com.mgmtp.gives.util.CookieUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -25,6 +29,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
     private final AuthService service;
     private final JwtProps jwtProps;
+    private final RefreshTokenService refreshTokenService;
 
     @PostMapping("/register")
     @Operation(summary = "Register a new account", description = "Creates a user profile and sends a verification email.")
@@ -33,27 +38,13 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Void> login(@Valid @RequestBody LoginRequest loginRequest) {
-        AuthResponse response = service.login(loginRequest);
+    public ResponseEntity<Void> login(@Valid @RequestBody LoginRequest loginRequest, HttpServletResponse response) {
+        AuthResponse authResponse = service.login(loginRequest);
 
-        ResponseCookie accessCookie = ResponseCookie.from("access_token", response.getAccessToken())
-                .httpOnly(true)
-                .secure(false) // in production this should be true if using HTTPS
-                .path("/")
-                .maxAge(jwtProps.getAccessTokenExpiration() / 1000)
-                .build();
+        CookieUtils.addAccessTokenCookie(response, authResponse.getAccessToken(), jwtProps.getAccessTokenExpiration());
+        CookieUtils.addRefreshCookie(response, authResponse.getRefreshToken(), jwtProps.getRefreshTokenExpiration());
 
-        ResponseCookie refreshCookie = ResponseCookie.from("refresh_token", response.getRefreshToken())
-                .httpOnly(true)
-                .secure(false)
-                .path("/")
-                .maxAge(jwtProps.getRefreshTokenExpiration() / 1000)
-                .build();
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
-                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
-                .build();
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/verify")
@@ -90,24 +81,22 @@ public class AuthController {
 
     @PostMapping("/logout")
     @Operation(summary = "Logout user", description = "Clears access and refresh token cookies.")
-    public ResponseEntity<Void> logout() {
-        ResponseCookie deleteAccessCookie = ResponseCookie.from("access_token", "")
-                .httpOnly(true)
-                .secure(false)
-                .path("/")
-                .maxAge(0)
-                .build();
+    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
+        service.logout(request);
 
-        ResponseCookie deleteRefreshCookie = ResponseCookie.from("refresh_token", "")
-                .httpOnly(true)
-                .secure(false)
-                .path("/")
-                .maxAge(0)
-                .build();
+        CookieUtils.clearAccessTokenCookie(response);
+        CookieUtils.clearRefreshTokenCookie(response);
 
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, deleteAccessCookie.toString())
-                .header(HttpHeaders.SET_COOKIE, deleteRefreshCookie.toString())
-                .build();
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/refresh")
+    @Operation(
+            summary = "Refresh access token",
+            description = "Generates a new access token using the refresh token from the HttpOnly cookie."
+    )
+    public ResponseEntity<Void> refresh(HttpServletRequest request, HttpServletResponse response) {
+        refreshTokenService.refresh(request, response);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -18,7 +18,9 @@ import com.mgmtp.gives.security.JwtService;
 import com.mgmtp.gives.service.AuthService;
 import com.mgmtp.gives.service.EmailService;
 import com.mgmtp.gives.service.RefreshTokenService;
+import com.mgmtp.gives.util.CookieUtils;
 import com.mgmtp.gives.util.TokenUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -273,5 +275,12 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepo.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new AppException(UNAUTHORIZED));
         return authMapper.toUserInfoResponse(user);
+    }
+
+    @Override
+    public Void logout(HttpServletRequest request) {
+        CookieUtils.getCookieValue(request, CookieUtils.REFRESH_TOKEN_COOKIE_NAME)
+                .ifPresent(refreshTokenService::revoke);
+        return null;
     }
 }
