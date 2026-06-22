@@ -44,6 +44,8 @@ app:
     frontend-url: ${FRONTEND_URL:http://localhost:3000}
     verify-expiration: ${MAIL_VERIFY_EXPIRATION:864000000}
     reset-expiration: ${MAIL_RESET_EXPIRATION:864000000}
+  media:
+    upload-dir: ${APP_MEDIA_UPLOAD_DIR:/app/media}
   seed:
     admin:
       email: ${SEED_ADMIN_EMAIL}

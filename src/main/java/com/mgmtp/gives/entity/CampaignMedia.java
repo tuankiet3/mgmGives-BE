@@ -3,6 +3,8 @@ package com.mgmtp.gives.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 @Getter
 @Setter
 @Builder
@@ -21,5 +23,7 @@ public class CampaignMedia extends BaseEntity {
     @Column(name = "media_type")
     private String mediaType;
 
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 
 }
