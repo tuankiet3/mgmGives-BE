@@ -33,7 +33,7 @@ pipeline {
         SSH_HOST = "${SSH_USER}@mgm-gives.mgm-edv.de"
         SSH_OPTIONS = '-o StrictHostKeyChecking=no'
 
-        REMOTE_DIR = "/home/${SSH_USER}/mgm-gives"
+        REMOTE_DIR = "/home/${SSH_USER}"
     }
 
     stages {

@@ -9,6 +9,8 @@ services:
       - "8082:8080"
     env_file:
       - mgm-gives-env/.env.be.dev
+    volumes:
+      - /home/mgmgives/mgm-gives-logs/development:/app/logs
     profiles:
       - development
 
@@ -20,6 +22,8 @@ services:
       - "8081:8080"
     env_file:
       - mgm-gives-env/.env.be.stag
+    volumes:
+      - /home/mgmgives/mgm-gives-logs/staging:/app/logs
     profiles:
       - staging
 
@@ -31,6 +35,8 @@ services:
       - "8080:8080"
     env_file:
       - mgm-gives-env/.env.be.prod
+    volumes:
+      - /home/mgmgives/mgm-gives-logs/production:/app/logs
     profiles:
       - production
 
