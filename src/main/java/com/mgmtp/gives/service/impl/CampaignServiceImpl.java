@@ -16,6 +16,7 @@ import com.mgmtp.gives.repository.CategoryRepository;
 import com.mgmtp.gives.service.CampaignService;
 import static com.mgmtp.gives.specification.CampaignSpecifications.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -28,6 +29,7 @@ import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CampaignServiceImpl implements CampaignService {
 
     private final CampaignRepository campaignRepository;
@@ -52,7 +54,9 @@ public class CampaignServiceImpl implements CampaignService {
                 .categories(categories)
                 .build();
 
-        return campaignRepository.save(campaign);
+        Campaign saved = campaignRepository.save(campaign);
+        log.info("Campaign created: id={}, title={}, userId={}", saved.getId(), saved.getTitle(), currentUser.getId());
+        return saved;
     }
 
     @Override
@@ -71,12 +75,6 @@ public class CampaignServiceImpl implements CampaignService {
         return campaignRepository.findAll(spec, pageable);
     }
 
-    private Campaign getCampaignByIdInternal(Long id) {
-        return campaignRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CAMPAIGN_NOT_FOUND,
-                        "Campaign not found with ID: " + id));
-    }
-
     @Override
     @Transactional(readOnly = true)
     public Campaign getCampaignById(Long id, User currentUser) {
@@ -87,6 +85,8 @@ public class CampaignServiceImpl implements CampaignService {
         boolean isApproved = campaign.getStatus() == CampaignStatus.APPROVED;
 
         if (!isAdmin && !isCreator && !isApproved) {
+            log.warn("Campaign access denied (not visible to user): campaignId={}, status={}, userId={}",
+                    id, campaign.getStatus(), currentUser != null ? currentUser.getId() : null);
             throw new ResourceNotFoundException(ErrorCode.CAMPAIGN_NOT_FOUND,
                     "Campaign not found with ID: " + id);
         }
@@ -103,15 +103,19 @@ public class CampaignServiceImpl implements CampaignService {
         boolean isCreator = campaign.getUser() != null && campaign.getUser().getId().equals(currentUser.getId());
 
         if (!isAdmin && !isCreator) {
+            log.warn("Update campaign denied: not admin/creator. campaignId={}, userId={}", id, currentUser.getId());
             throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE);
         }
 
         if (!isAdmin && campaign.getStatus() != CampaignStatus.PENDING
                 && campaign.getStatus() != CampaignStatus.REJECTED) {
+            log.warn("Update campaign denied: invalid status for non-admin. campaignId={}, status={}, userId={}",
+                    id, campaign.getStatus(), currentUser.getId());
             throw new AppException(ErrorCode.INVALID_CAMPAIGN_STATUS_FOR_UPDATE);
         }
 
         if (!isAdmin && campaign.getStatus() == CampaignStatus.REJECTED) {
+            log.info("Campaign status reset to PENDING after creator edit. campaignId={}", id);
             campaign.setStatus(CampaignStatus.PENDING);
         }
 
@@ -126,7 +130,9 @@ public class CampaignServiceImpl implements CampaignService {
         campaign.setPriority(request.priority());
         campaign.setCategories(categories);
 
-        return campaignRepository.save(campaign);
+        Campaign saved = campaignRepository.save(campaign);
+        log.info("Campaign updated: id={}, status={}, userId={}", saved.getId(), saved.getStatus(), currentUser.getId());
+        return saved;
     }
 
     @Override
@@ -134,10 +140,13 @@ public class CampaignServiceImpl implements CampaignService {
     public void deleteCampaign(Long id) {
         Campaign campaign = getCampaignByIdInternal(id);
         campaignRepository.delete(campaign);
+        log.info("Campaign deleted: id={}, title={}", id, campaign.getTitle());
     }
 
     private void validateDateRange(CampaignRequest request) {
         if (!request.startDate().isBefore(request.endDate())) {
+            log.warn("Campaign date validation failed: startDate={}, endDate={}",
+                    request.startDate(), request.endDate());
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Start date must be before end date");
         }
     }
@@ -145,13 +154,26 @@ public class CampaignServiceImpl implements CampaignService {
     private Set<Category> fetchAndValidateCategories(Set<Long> categoryIds) {
         List<Category> categoryList = categoryRepository.findAllById(categoryIds);
         if (categoryList.size() != categoryIds.size()) {
+            log.warn("Invalid category IDs in campaign request: requested={}, found={}",
+                    categoryIds, categoryList.size());
             throw new AppException(ErrorCode.CATEGORY_NOT_FOUND, "One or more category IDs are invalid");
         }
         for (Category category : categoryList) {
             if (category.getStatus() == CategoryStatus.REJECTED || category.getStatus() == CategoryStatus.HIDDEN) {
+                log.warn("Category not available for campaign: categoryId={}, status={}",
+                        category.getId(), category.getStatus());
                 throw new AppException(ErrorCode.CATEGORY_NOT_AVAILABLE, "Category '" + category.getName() + "' is not available");
             }
         }
         return new HashSet<>(categoryList);
+    }
+
+    private Campaign getCampaignByIdInternal(Long id) {
+        return campaignRepository.findById(id)
+                .orElseThrow(() -> {
+                    log.warn("Campaign not found: id={}", id);
+                    return new ResourceNotFoundException(ErrorCode.CAMPAIGN_NOT_FOUND,
+                            "Campaign not found with ID: " + id);
+                });
     }
 }

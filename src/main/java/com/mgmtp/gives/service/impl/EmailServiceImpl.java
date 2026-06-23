@@ -37,6 +37,7 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void sendResetPasswordEmail(String toEmail, String fullName, String token) {
+        log.info("Send reset password email requested. to={}", toEmail);
         sendEmail(toEmail, fullName, token, TokenType.RESET_PASSWORD);
     }
 
@@ -52,6 +53,7 @@ public class EmailServiceImpl implements EmailService {
             helper.setText(content, type.isHtml());
 
             mailSender.send(message);
+            log.info("Email sent successfully. type={}, to={}", type, toEmail);
         } catch (MessagingException e) {
             log.error("Failed to send email. type={}, to={}", type, toEmail, e);
             throw new AppException(ErrorCode.EMAIL_SENT_FAILURE, e.getMessage());
@@ -64,6 +66,7 @@ public class EmailServiceImpl implements EmailService {
                 .path(type.getUri())
                 .queryParam("token", token)
                 .toUriString();
+        log.debug("Built email link. type={}, link={}", type, link);
 
         Context context = new Context();
         context.setVariable(TEMPLATE_VAR_FULL_NAME, fullName);

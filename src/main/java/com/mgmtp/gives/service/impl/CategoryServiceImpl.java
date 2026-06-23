@@ -8,6 +8,8 @@ import com.mgmtp.gives.mapper.CategoryMapper;
 import com.mgmtp.gives.repository.CategoryRepository;
 import com.mgmtp.gives.service.AdminCategoryService;
 import com.mgmtp.gives.service.UserCategoryService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -24,16 +26,11 @@ import static com.mgmtp.gives.common.ErrorCode.VALIDATION_ERROR;
 import static com.mgmtp.gives.specification.CategorySpecifications.hasStatusIn;
 import static com.mgmtp.gives.specification.CategorySpecifications.matchesKeyword;
 
-@Service
+@Service @RequiredArgsConstructor @Slf4j
 public class CategoryServiceImpl implements UserCategoryService, AdminCategoryService {
 
     private final CategoryRepository categoryRepository;
     private final CategoryMapper categoryMapper;
-
-    public CategoryServiceImpl(CategoryRepository categoryRepository, CategoryMapper categoryMapper) {
-        this.categoryRepository = categoryRepository;
-        this.categoryMapper = categoryMapper;
-    }
 
     /**
      * Common helper method to validate category name uniqueness (case-insensitive).
@@ -43,6 +40,7 @@ public class CategoryServiceImpl implements UserCategoryService, AdminCategorySe
         String normalisedName = StringNormalizeUtils.normalizeName(name);
 
         if (normalisedName == null || normalisedName.isEmpty()) {
+            log.warn("Category name validation failed: blank name");
             throw new AppException(
                     VALIDATION_ERROR,
                     "Category name must not be blank."
@@ -50,6 +48,7 @@ public class CategoryServiceImpl implements UserCategoryService, AdminCategorySe
         }
 
         if (categoryRepository.existsByNameIgnoreCase(normalisedName)) {
+            log.warn("Category name rejected: already exists. name={}", normalisedName);
             throw new AppException(
                     CATEGORY_NAME_ALREADY_EXISTS,
                     "Category with name '" + normalisedName + "' already exists."
@@ -97,6 +96,7 @@ public class CategoryServiceImpl implements UserCategoryService, AdminCategorySe
 
         // Security: status is always PENDING for user suggestions (enforced by @Mapping constant in CategoryMapper)
         Category saved = categoryRepository.save(categoryMapper.toEntity(normalizedRequest));
+        log.info("Category suggestion created: id={}, name={}, status=PENDING", saved.getId(), saved.getName());
 
         return categoryMapper.toUserResponse(saved);
     }
@@ -122,6 +122,9 @@ public class CategoryServiceImpl implements UserCategoryService, AdminCategorySe
 
         Category category = categoryMapper.toEntity(normalisedRequest);
         Category saved = categoryRepository.save(category);
+
+        log.info("Category created by admin: id={}, name={}", saved.getId(), saved.getName());
+
         return categoryMapper.toAdminResponse(saved);
     }
 
@@ -141,7 +144,10 @@ public class CategoryServiceImpl implements UserCategoryService, AdminCategorySe
     @Transactional(readOnly = true)
     public AdminCategoryResponse getCategoryById(Long id) {
         Category category = categoryRepository.findById(id)
-                .orElseThrow(() -> new AppException(CATEGORY_NOT_FOUND));
+                .orElseThrow(() -> {
+                    log.warn("Category not found: id={}", id);
+                    return new AppException(CATEGORY_NOT_FOUND);
+                });
         return categoryMapper.toAdminResponse(category);
     }
 
@@ -150,7 +156,10 @@ public class CategoryServiceImpl implements UserCategoryService, AdminCategorySe
     public AdminCategoryResponse updateCategory(Long id, AdminUpdateCategoryRequest updatedData) {
         // Blow up if not found
         Category existingCategory = categoryRepository.findById(id)
-                .orElseThrow(() -> new AppException(CATEGORY_NOT_FOUND, "Category not found with id=" + id));
+                .orElseThrow(() -> {
+                    log.warn("Update category failed: not found. id={}", id);
+                    return new AppException(CATEGORY_NOT_FOUND, "Category not found with id=" + id);
+                });
 
         // Normalise the name from request
         String normalisedName = StringNormalizeUtils.normalizeName(updatedData.name());
@@ -161,6 +170,7 @@ public class CategoryServiceImpl implements UserCategoryService, AdminCategorySe
         // Business logic: avoid duplicate when renaming
         if (!existingCategory.getName().equalsIgnoreCase(normalisedName)) {
             if (categoryRepository.existsByNameIgnoreCase(normalisedName)) {
+                log.warn("Update category rejected: new name already exists. id={}, newName={}", id, normalisedName);
                 throw new AppException(
                         CATEGORY_NAME_ALREADY_EXISTS,
                         "Category with name '" + normalisedName + "' already exists."
@@ -181,6 +191,7 @@ public class CategoryServiceImpl implements UserCategoryService, AdminCategorySe
         categoryMapper.updateEntityFromRequest(normalisedRequest, existingCategory);
 
         Category saved = categoryRepository.save(existingCategory);
+        log.info("Category updated: id={}, name={}, status={}", saved.getId(), saved.getName(), saved.getStatus());
         return categoryMapper.toAdminResponse(saved);
     }
 
@@ -188,11 +199,15 @@ public class CategoryServiceImpl implements UserCategoryService, AdminCategorySe
     @Transactional
     public void deleteCategory(Long id) {
         Category category = categoryRepository.findById(id)
-                .orElseThrow(() -> new AppException(CATEGORY_NOT_FOUND));
+                .orElseThrow(() -> {
+                    log.warn("Delete category failed: not found. id={}", id);
+                    return new AppException(CATEGORY_NOT_FOUND);
+                });
 
         // Soft delete (set status to HIDDEN)
         category.setStatus(CategoryStatus.HIDDEN);
 
         categoryRepository.save(category);
+        log.info("Category soft-deleted (HIDDEN): id={}, name={}", id, category.getName());
     }
 }

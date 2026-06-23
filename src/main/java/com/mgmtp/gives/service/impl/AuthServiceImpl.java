@@ -113,6 +113,8 @@ public class AuthServiceImpl implements AuthService {
         }
 
         if (emailVerificationToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            log.warn("Email verification failed: token expired. userId={}, email={}",
+                    currUser.getId(), currUser.getEmail());
             throw new AppException(EXPIRED_TOKEN);
         }
 
@@ -127,21 +129,30 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponse login(LoginRequest request) {
-        User user = userRepo.findByEmail(request.getEmail())
-                .orElseThrow(() -> new AppException(INVALID_CREDENTIALS));
+        String email = request.getEmail().trim().toLowerCase(Locale.ROOT);
+
+        User user = userRepo.findByEmail(email)
+                .orElseThrow(() -> {
+                    log.warn("Login failed: email not found. email={}", email);
+                    return new AppException(INVALID_CREDENTIALS);
+                });
 
         if (UserStatus.BANNED.equals(user.getStatus())) {
+            log.warn("Login failed: account banned. userId={}, email={}", user.getId(), email);
             throw new AppException(UNAUTHORIZED, "Your account has been banned.");
         }
 
         if (user.getLockedUntil() != null) {
             if (user.getLockedUntil().isAfter(LocalDateTime.now())) {
+                log.warn("Login failed: account locked until {}. userId={}, email={}",
+                        user.getLockedUntil(), user.getId(), email);
                 throw new AppException(ACCOUNT_LOCKED, "Your account has been locked. Please try again later.");
             } else {
                 // Lock period has expired – reset the counter
                 user.setLockedUntil(null);
                 user.setFailedAttemptCount(0);
                 userRepo.save(user);
+                log.info("Lock expired, failed attempt counter reset. userId={}, email={}", user.getId(), email);
             }
         }
 
@@ -152,11 +163,15 @@ public class AuthServiceImpl implements AuthService {
             if (newFailCount >= MAX_FAILED_ATTEMPTS) {
                 user.setLockedUntil(LocalDateTime.now().plusMinutes(LOCK_TIME_DURATION_MINUTES));
                 userRepo.save(user);
+                log.warn("Login failed: account locked after {} failed attempts. userId={}, email={}",
+                        newFailCount, user.getId(), email);
                 throw new AppException(ACCOUNT_LOCKED,
                         "Your account has been locked because you entered the wrong password more than 5 times. Please try again in 15 minutes.");
             }
 
             userRepo.save(user);
+            log.warn("Login failed: wrong password. attempt={}/{}, userId={}, email={}",
+                    newFailCount, MAX_FAILED_ATTEMPTS, user.getId(), email);
             throw new AppException(INVALID_CREDENTIALS);
         }
 
@@ -166,6 +181,8 @@ public class AuthServiceImpl implements AuthService {
 
         String accessToken = jwtService.generateAccessToken(authMapper.toTokenGenerationRequest(user));
         String refreshToken = refreshTokenService.generate(authMapper.toTokenGenerationRequest(user));
+
+        log.info("Login successful. userId={}, email={}", user.getId(), email);
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
@@ -179,6 +196,7 @@ public class AuthServiceImpl implements AuthService {
         String email = request.email().trim().toLowerCase(Locale.ROOT);
         User user = userRepo.findByEmail(email).orElse(null);
         if (user == null) {
+            log.warn("Forgot password failed: email not found. email={}", email);
             throw new ResourceNotFoundException(USER_NOT_FOUND);
         }
 
@@ -196,6 +214,7 @@ public class AuthServiceImpl implements AuthService {
         userTokenRepo.save(token);
 
         emailService.sendResetPasswordEmail(user.getEmail(), user.getFullName(), rawToken);
+        log.info("Forgot password email sent. userId={}, email={}", user.getId(), user.getEmail());
         return null;
 
     }
@@ -209,16 +228,21 @@ public class AuthServiceImpl implements AuthService {
         String hashedToken = TokenUtils.hash(request.token());
 
         UserToken token = userTokenRepo.findByTokenHashAndType(hashedToken, TokenType.RESET_PASSWORD)
-                .orElseThrow(() -> new AppException(INVALID_TOKEN, "Invalid token. Please request a new link at "
-                        + mailProps.getFrontendUrl() + "/forgot-password"));
+                .orElseThrow(() -> {
+                    log.warn("Reset password failed: invalid token");
+                    return new AppException(INVALID_TOKEN, "Invalid token. Please request a new link at "
+                            + mailProps.getFrontendUrl() + "/forgot-password");
+                });
 
         if (token.getUsedAt() != null) {
+            log.warn("Reset password failed: token already used. userId={}", token.getUser().getId());
             throw new AppException(INVALID_TOKEN, "This token has already been used. Please request a new link at "
                     + mailProps.getFrontendUrl() + "/forgot-password");
         }
 
         if (token.getExpiresAt().isBefore(LocalDateTime.now())) {
             userTokenRepo.revokeAllByUserAndType(token.getUser(), TokenType.RESET_PASSWORD);
+            log.warn("Reset password failed: token expired. userId={}", token.getUser().getId());
             throw new AppException(EXPIRED_TOKEN, "This token has expired. Please request a new link at "
                     + mailProps.getFrontendUrl() + "/forgot-password");
         }
@@ -230,6 +254,9 @@ public class AuthServiceImpl implements AuthService {
         refreshTokenRepo.deleteByUserId(user.getId());
         token.setUsedAt(LocalDateTime.now());
         userTokenRepo.revokeAllByUserAndType(user, TokenType.RESET_PASSWORD);
+
+        log.info("Password reset successful, all sessions revoked. userId={}, email={}",
+                user.getId(), user.getEmail());
         return null;
     }
 
@@ -273,7 +300,10 @@ public class AuthServiceImpl implements AuthService {
     public UserInfoResponse getCurrentUser(String email) {
         String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
         User user = userRepo.findByEmail(normalizedEmail)
-                .orElseThrow(() -> new AppException(UNAUTHORIZED));
+                .orElseThrow(() -> {
+                    log.warn("Get current user failed: email not found. email={}", normalizedEmail);
+                    return new AppException(UNAUTHORIZED);
+                });
         return authMapper.toUserInfoResponse(user);
     }
 
@@ -281,6 +311,7 @@ public class AuthServiceImpl implements AuthService {
     public Void logout(HttpServletRequest request) {
         CookieUtils.getCookieValue(request, CookieUtils.REFRESH_TOKEN_COOKIE_NAME)
                 .ifPresent(refreshTokenService::revoke);
+        log.info("Logout processed.");
         return null;
     }
 }
