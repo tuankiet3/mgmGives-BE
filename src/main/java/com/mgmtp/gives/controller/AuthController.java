@@ -102,4 +102,21 @@ public class AuthController {
         refreshTokenService.refresh(request, response);
         return ResponseEntity.noContent().build();
     }
+
+    @PutMapping("/profile")
+    @Operation(summary = "Update profile details", description = "Updates full name and phone of the currently authenticated user.")
+    public ApiResponse<UserInfoResponse> updateProfile(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody UpdateProfileRequest request) {
+        return ApiResponse.success(service.updateProfile(userDetails.getUsername(), request), "Profile updated successfully");
+    }
+
+    @PutMapping("/change-password")
+    @Operation(summary = "Change password", description = "Changes the password of the currently authenticated user.")
+    public ApiResponse<?> changePassword(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody ChangePasswordRequest request) {
+        service.changePassword(userDetails.getUsername(), request);
+        return ApiResponse.success(null, "Password changed successfully");
+    }
 }

@@ -23,6 +23,7 @@ public enum ErrorCode {
     ACCOUNT_INACTIVE(1014, "Account is inactive", HttpStatus.FORBIDDEN),
     PASSWORDS_DO_NOT_MATCH(1015, "Passwords do not match", HttpStatus.BAD_REQUEST),
     EMAIL_ALREADY_VERIFIED(1016, "Email is already verified", HttpStatus.BAD_REQUEST),
+    PASSWORD_INCORRECT(1017, "Current password is incorrect", HttpStatus.BAD_REQUEST),
 
     CATEGORY_NOT_FOUND(1020, "Category not found", HttpStatus.NOT_FOUND),
     CATEGORY_NAME_ALREADY_EXISTS(1021, "Category Name Already Exists", HttpStatus.BAD_REQUEST),

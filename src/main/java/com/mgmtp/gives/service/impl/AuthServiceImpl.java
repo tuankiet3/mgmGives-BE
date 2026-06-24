@@ -314,4 +314,38 @@ public class AuthServiceImpl implements AuthService {
         log.info("Logout processed.");
         return null;
     }
+
+    @Override
+    @Transactional
+    public UserInfoResponse updateProfile(String email, UpdateProfileRequest request) {
+        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+        User user = userRepo.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new AppException(UNAUTHORIZED));
+
+        user.setFullName(request.fullName());
+        user.setPhone(request.phone());
+        User savedUser = userRepo.save(user);
+
+        log.info("Profile updated successfully for userId={}, email={}", savedUser.getId(), savedUser.getEmail());
+        return authMapper.toUserInfoResponse(savedUser);
+    }
+
+    @Override
+    @Transactional
+    public Void changePassword(String email, ChangePasswordRequest request) {
+        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+        User user = userRepo.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new AppException(UNAUTHORIZED));
+
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            throw new AppException(PASSWORD_INCORRECT);
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepo.save(user);
+
+        refreshTokenRepo.deleteByUserId(user.getId());
+        log.info("Password changed and refresh tokens invalidated for userId={}, email={}", user.getId(), user.getEmail());
+        return null;
+    }
 }

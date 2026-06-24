@@ -19,4 +19,8 @@ public interface AuthService {
     UserInfoResponse getCurrentUser(String email);
 
     Void logout(HttpServletRequest request);
+
+    UserInfoResponse updateProfile(String email, UpdateProfileRequest request);
+
+    Void changePassword(String email, ChangePasswordRequest request);
 }
