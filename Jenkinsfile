@@ -114,6 +114,10 @@ pipeline {
                             // Login to Docker registry
                             sh "ssh ${SSH_OPTIONS} ${SSH_HOST} 'docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD ${HOST_NAME}'"
 
+                            // Ensure media storage directories exist on the VM
+                            sh "ssh ${SSH_OPTIONS} ${SSH_HOST} 'mkdir -p /home/mgmgives/mgm-gives-media/development /home/mgmgives/mgm-gives-media/staging /home/mgmgives/mgm-gives-media/production'"
+                            sh "ssh ${SSH_OPTIONS} ${SSH_HOST} 'chmod 755 /home/mgmgives/mgm-gives-media/development /home/mgmgives/mgm-gives-media/staging /home/mgmgives/mgm-gives-media/production'"
+
                             // Pull and deploy
                             sh """
                                 ssh ${SSH_OPTIONS} ${SSH_HOST} '

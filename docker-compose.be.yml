@@ -9,8 +9,11 @@ services:
       - "8082:8080"
     env_file:
       - mgm-gives-env/.env.be.dev
+    environment:
+      - APP_MEDIA_UPLOAD_DIR=/app/media
     volumes:
       - /home/mgmgives/mgm-gives-logs/development:/app/logs
+      - /home/mgmgives/mgm-gives-media/development:/app/media
     profiles:
       - development
 
@@ -22,8 +25,11 @@ services:
       - "8081:8080"
     env_file:
       - mgm-gives-env/.env.be.stag
+    environment:
+      - APP_MEDIA_UPLOAD_DIR=/app/media
     volumes:
       - /home/mgmgives/mgm-gives-logs/staging:/app/logs
+      - /home/mgmgives/mgm-gives-media/staging:/app/media
     profiles:
       - staging
 
@@ -35,8 +41,11 @@ services:
       - "8080:8080"
     env_file:
       - mgm-gives-env/.env.be.prod
+    environment:
+      - APP_MEDIA_UPLOAD_DIR=/app/media
     volumes:
       - /home/mgmgives/mgm-gives-logs/production:/app/logs
+      - /home/mgmgives/mgm-gives-media/production:/app/media
     profiles:
       - production
 

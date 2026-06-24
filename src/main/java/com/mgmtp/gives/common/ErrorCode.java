@@ -31,7 +31,17 @@ public enum ErrorCode {
 
     CAMPAIGN_NOT_FOUND(2001, "Campaign not found", HttpStatus.NOT_FOUND),
     UNAUTHORIZED_CAMPAIGN_UPDATE(2003, "You do not have permission to update this campaign", HttpStatus.FORBIDDEN),
-    INVALID_CAMPAIGN_STATUS_FOR_UPDATE(2004, "Cannot update campaign in current state", HttpStatus.BAD_REQUEST);
+    INVALID_CAMPAIGN_STATUS_FOR_UPDATE(2004, "Cannot update campaign in current state", HttpStatus.BAD_REQUEST),
+
+    CAMPAIGN_MEDIA_NOT_FOUND(3001, "Campaign media not found", HttpStatus.NOT_FOUND),
+    MEDIA_NOT_FOUND(3002, "Media file not found", HttpStatus.NOT_FOUND),
+    MEDIA_ALREADY_DELETED(3003, "Media has already been deleted", HttpStatus.BAD_REQUEST),
+    MEDIA_NOT_DELETED(3004, "Media is not deleted, nothing to restore", HttpStatus.BAD_REQUEST),
+    MEDIA_RESTORE_EXPIRED(3005, "Restore window has expired (14 days)", HttpStatus.BAD_REQUEST),
+    UNSUPPORTED_FILE_TYPE(3006, "Unsupported file type", HttpStatus.BAD_REQUEST),
+    FILE_SIZE_EXCEEDED(3007, "File size exceeds the allowed limit", HttpStatus.BAD_REQUEST),
+    IMAGE_ONLY(3008, "Only image files are allowed for avatar/cover", HttpStatus.BAD_REQUEST),
+    PATH_TRAVERSAL_DETECTED(3009, "Invalid file path", HttpStatus.BAD_REQUEST);
 
     private final int code;
     private final String message;
