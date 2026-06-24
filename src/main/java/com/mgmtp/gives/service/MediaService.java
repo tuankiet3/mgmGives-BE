@@ -12,8 +12,6 @@ public interface MediaService {
 
     CampaignMedia restoreCampaignMedia(Long id);
 
-    void assertFileAccessible(String filename);
-
     String uploadAvatar(MultipartFile file, User currentUser);
 
     void deleteAvatar(User currentUser);

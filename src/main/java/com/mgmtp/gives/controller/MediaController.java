@@ -1,33 +1,19 @@
 package com.mgmtp.gives.controller;
 
 import com.mgmtp.gives.common.ApiResponse;
-import com.mgmtp.gives.common.ErrorCode;
 import com.mgmtp.gives.entity.CampaignMedia;
-import com.mgmtp.gives.exception.AppException;
-import com.mgmtp.gives.exception.ResourceNotFoundException;
 import com.mgmtp.gives.security.CustomUserDetails;
 import com.mgmtp.gives.service.MediaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import static org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
 @Slf4j
 @RestController
@@ -37,9 +23,6 @@ import java.nio.file.Paths;
 public class MediaController {
 
     private final MediaService mediaService;
-
-    @Value("${app.media.upload-dir}")
-    private String uploadDir;
 
     @PostMapping(value = "/upload/campaign", consumes = MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
@@ -80,47 +63,5 @@ public class MediaController {
     public ApiResponse<CampaignMedia> restoreCampaignMedia(@PathVariable Long id) {
         CampaignMedia media = mediaService.restoreCampaignMedia(id);
         return ApiResponse.success(media, "Campaign media restored successfully");
-    }
-
-    @GetMapping("/{filename}")
-    @Operation(summary = "Serve media file", description = "Returns the raw media file (image or video). Returns 404 if the file has been soft-deleted.")
-    public ResponseEntity<Resource> serveFile(@PathVariable String filename) {
-        Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
-        Path resolvedPath = uploadPath.resolve(filename).normalize();
-
-        if (!resolvedPath.startsWith(uploadPath)) {
-            log.warn("Path traversal attempt detected: filename={}", filename);
-            throw new AppException(ErrorCode.PATH_TRAVERSAL_DETECTED);
-        }
-
-        mediaService.assertFileAccessible(filename);
-
-        Resource resource;
-        try {
-            resource = new UrlResource(resolvedPath.toUri());
-        } catch (IOException e) {
-            throw new AppException(ErrorCode.UNCATEGORIZED_ERROR, "Failed to resolve file path");
-        }
-
-        if (!resource.exists() || !resource.isReadable()) {
-            throw new ResourceNotFoundException(ErrorCode.MEDIA_NOT_FOUND, "File not found: " + filename);
-        }
-
-        String contentType;
-        try {
-            contentType = Files.probeContentType(resolvedPath);
-        } catch (IOException e) {
-            contentType = null;
-        }
-        if (contentType == null) {
-            contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
-        }
-
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(contentType))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
-                .header("X-Content-Type-Options", "nosniff")
-                .header("Content-Security-Policy", "default-src 'none'")
-                .body(resource);
     }
 }

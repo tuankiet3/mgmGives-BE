@@ -84,6 +84,25 @@ public class MediaServiceImpl implements MediaService {
             throw new AppException(ErrorCode.MEDIA_ALREADY_DELETED);
         }
 
+        // Move file to /app/media/trash
+        if (media.getUrl() != null && !media.getUrl().isBlank()) {
+            Path source = Paths.get(uploadDir).resolve(media.getUrl());
+            Path trashDir = Paths.get(uploadDir).resolve("trash");
+            Path target = trashDir.resolve(media.getUrl());
+            try {
+                if (Files.exists(source)) {
+                    Files.createDirectories(trashDir);
+                    Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+                    log.info("Moved campaign media to trash: id={}, file={}", media.getId(), media.getUrl());
+                } else {
+                    log.warn("Campaign media file not found on disk during soft delete: id={}, file={}", media.getId(), media.getUrl());
+                }
+            } catch (IOException e) {
+                log.error("Failed to move campaign media to trash: id={}, file={}", media.getId(), media.getUrl(), e);
+                throw new AppException(ErrorCode.UNCATEGORIZED_ERROR, "Failed to move file to trash");
+            }
+        }
+
         media.setDeletedAt(LocalDateTime.now());
         CampaignMedia saved = campaignMediaRepository.save(media);
         log.info("Campaign media soft deleted: id={}, file={}", saved.getId(), saved.getUrl());
@@ -103,6 +122,27 @@ public class MediaServiceImpl implements MediaService {
 
         if (LocalDateTime.now().isAfter(media.getDeletedAt().plusDays(14))) {
             throw new AppException(ErrorCode.MEDIA_RESTORE_EXPIRED);
+        }
+
+        // move file back to /app/media
+        if (media.getUrl() != null && !media.getUrl().isBlank()) {
+            Path source = Paths.get(uploadDir).resolve("trash").resolve(media.getUrl());
+            Path targetDir = Paths.get(uploadDir);
+            Path target = targetDir.resolve(media.getUrl());
+            try {
+                if (Files.exists(source)) {
+                    Files.createDirectories(targetDir);
+                    Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+                    log.info("Restored campaign media from trash: id={}, file={}", media.getId(), media.getUrl());
+                } else {
+                    log.warn("Campaign media file not found in trash during restore: id={}, file={}", media.getId(), media.getUrl());
+                    throw new ResourceNotFoundException(ErrorCode.MEDIA_NOT_FOUND,
+                            "Campaign media file not found in trash during restore: " + media.getUrl());
+                }
+            } catch (IOException e) {
+                log.error("Failed to restore campaign media from trash: id={}, file={}", media.getId(), media.getUrl(), e);
+                throw new AppException(ErrorCode.UNCATEGORIZED_ERROR, "Failed to restore file from trash");
+            }
         }
 
         media.setDeletedAt(null);
@@ -175,17 +215,5 @@ public class MediaServiceImpl implements MediaService {
         user.setAvatarUrl(null);
         userRepository.save(user);
         log.info("Avatar deleted: userId={}, file={}", currentUser.getId(), currentAvatar);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public void assertFileAccessible(String filename) {
-        campaignMediaRepository.findByUrl(filename).ifPresent(media -> {
-            if (media.getDeletedAt() != null) {
-                log.warn("Access attempt on soft-deleted media: file={}", filename);
-                throw new ResourceNotFoundException(ErrorCode.MEDIA_NOT_FOUND,
-                        "Media file not found or has been deleted");
-            }
-        });
     }
 }

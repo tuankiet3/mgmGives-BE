@@ -42,9 +42,14 @@ public class MediaCleanupScheduler {
             int deleted = 0;
             int failed = 0;
             for (CampaignMedia record : expired) {
-                Path path = Paths.get(uploadDir).resolve(record.getUrl());
+                Path trashPath = Paths.get(uploadDir).resolve("trash").resolve(record.getUrl());
+                Path rootPath = Paths.get(uploadDir).resolve(record.getUrl());
                 try {
-                    Files.deleteIfExists(path);
+                    if (Files.exists(trashPath)) {
+                        Files.deleteIfExists(trashPath);
+                    } else {
+                        Files.deleteIfExists(rootPath);
+                    }
                 } catch (IOException e) {
                     log.warn("Could not delete file on disk: {}", record.getUrl(), e);
                     failed++;
