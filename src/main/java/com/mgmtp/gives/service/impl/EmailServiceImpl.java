@@ -68,6 +68,12 @@ public class EmailServiceImpl implements EmailService {
                 .toUriString();
         log.debug("Built email link. type={}, link={}", type, link);
 
+        log.info("==================================================");
+        log.info("LOCAL DEVELOPMENT EMAIL LINK ({}):", type.name());
+        log.info("To: {}", toEmail);
+        log.info("Link: {}", link);
+        log.info("==================================================");
+
         Context context = new Context();
         context.setVariable(TEMPLATE_VAR_FULL_NAME, fullName);
         context.setVariable(TEMPLATE_VAR_LINK, link);

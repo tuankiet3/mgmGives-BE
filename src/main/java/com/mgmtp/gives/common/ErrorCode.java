@@ -30,6 +30,7 @@ public enum ErrorCode {
 
     CATEGORY_NOT_AVAILABLE(1022, "Category is not available", HttpStatus.BAD_REQUEST),
 
+    CAMPAIGN_NOT_IN_PROGRESS(2000,"Campaign not in progress", HttpStatus.BAD_REQUEST),
     CAMPAIGN_NOT_FOUND(2001, "Campaign not found", HttpStatus.NOT_FOUND),
     UNAUTHORIZED_CAMPAIGN_UPDATE(2003, "You do not have permission to update this campaign", HttpStatus.FORBIDDEN),
     INVALID_CAMPAIGN_STATUS_FOR_UPDATE(2004, "Cannot update campaign in current state", HttpStatus.BAD_REQUEST),
@@ -42,7 +43,8 @@ public enum ErrorCode {
     UNSUPPORTED_FILE_TYPE(3006, "Unsupported file type", HttpStatus.BAD_REQUEST),
     FILE_SIZE_EXCEEDED(3007, "File size exceeds the allowed limit", HttpStatus.BAD_REQUEST),
     IMAGE_ONLY(3008, "Only image files are allowed for avatar/cover", HttpStatus.BAD_REQUEST),
-    PATH_TRAVERSAL_DETECTED(3009, "Invalid file path", HttpStatus.BAD_REQUEST);
+    PATH_TRAVERSAL_DETECTED(3009, "Invalid file path", HttpStatus.BAD_REQUEST),
+    DONATE_NOT_FOUND(3010,"Donate not found", HttpStatus.NOT_FOUND);
 
     private final int code;
     private final String message;

@@ -18,6 +18,7 @@ public class CampaignResponse {
     private LocalDateTime startDate;
     private LocalDateTime endDate;
     private Long target;
+    private Long currentRaised;
     private CampaignPriority priority;
     private Long creatorId;
     private String creatorName;
