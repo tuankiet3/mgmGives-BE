@@ -52,4 +52,17 @@ public class CampaignFollowerController {
         service.unfollow(userId, campaignId);
         return ResponseEntity.noContent().build();
     }
-}
+
+    @PostMapping("/{campaignId}")
+    @Operation(
+            summary = "Follow a campaign",
+            description = "Adds the campaign to the user's followed list."
+    )
+    public ResponseEntity<Void> follow(@AuthenticationPrincipal CustomUserDetails customUserDetails,
+                                       @PathVariable Long campaignId) {
+
+        Long userId = customUserDetails.getUser().getId();
+        service.manualFollow(userId, campaignId);
+        return ResponseEntity.ok().build();
+    }
+}
