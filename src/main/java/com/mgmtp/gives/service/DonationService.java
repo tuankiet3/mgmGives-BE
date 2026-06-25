@@ -20,5 +20,7 @@ public interface DonationService {
     Donation confirmDonation(Long donationId, User admin);
     VNPayResponse createVNPayDonation(VNPayRequest request, User user);
     Donation confirmVNPayDonation(Long donationId);
+    Donation cancelVNPayDonation(Long donationId);
     Donation hideDonationMessage(Long donationId, boolean hidden, User currentUser);
 }
+

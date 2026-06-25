@@ -83,6 +83,16 @@ public class DonationController {
         return ApiResponse.success(toResponse(donation), "VNPay payment simulated successfully");
     }
 
+    @PostMapping("/vnpay/cancel/{id}")
+    @Operation(summary = "Cancel VNPay donation request", description = "Marks a PENDING VNPay donation request as FAILED (e.g. if the user cancels or it times out).")
+    public ApiResponse<DonationResponse> cancelVNPayDonation(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        log.info("Cancelling VNPay payment for donation ID: {} by user: {}", id, userDetails.getUser().getEmail());
+        Donation donation = donationService.cancelVNPayDonation(id);
+        return ApiResponse.success(toResponse(donation), "Donation request cancelled");
+    }
+
     @PatchMapping("/{id}/message/hide")
     @Operation(summary = "Hide or show a donation message (moderation)", description = "Allows Campaign Admin or global ADMIN to moderate donation messages.")
     public ApiResponse<DonationResponse> hideDonationMessage(

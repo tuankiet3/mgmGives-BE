@@ -24,6 +24,6 @@ public abstract class CampaignMapper {
         if (campaign == null || campaign.getId() == null) {
             return 0L;
         }
-        return donationRepository.sumAmountByCampaignIdAndStatusNotRejectedOrFailed(campaign.getId());
+        return donationRepository.sumAmountByCampaignIdAndStatusNotFailed(campaign.getId());
     }
 }

@@ -51,12 +51,12 @@ public class DonationServiceImpl implements DonationService {
                         ErrorCode.CAMPAIGN_NOT_FOUND,
                         "Campaign not found with ID: " + request.campaignId()
                 ));
-//        if (campaign.getStatus() != CampaignStatus.IN_PROGRESS) {
-//            throw new AppException(
-//                    ErrorCode.CAMPAIGN_NOT_IN_PROGRESS,
-//                    "Cannot donate to this campaign because it is currently " + campaign.getStatus()
-//            );
-//        }
+        if (campaign.getStatus() != CampaignStatus.IN_PROGRESS) {
+            throw new AppException(
+                    ErrorCode.CAMPAIGN_NOT_IN_PROGRESS,
+                    "Cannot donate to this campaign because it is currently " + campaign.getStatus()
+            );
+        }
         // Use detail directly, or fallback to goodsDescription for goods donation
         String detailText = request.detail();
         if (request.donationType() == DonationType.GOODS && request.goodsDescription() != null) {
@@ -98,8 +98,8 @@ public class DonationServiceImpl implements DonationService {
     @Override
     @Transactional(readOnly = true)
     public List<Donation> getPublicDonationsByCampaignId(Long campaignId) {
-        return donationRepository.findByCampaignIdAndStatusNotAndStatusNotOrderByCreatedAtDesc(
-                campaignId, DonationStatus.REJECTED, DonationStatus.FAILED);
+        return donationRepository.findByCampaignIdAndStatusNotOrderByCreatedAtDesc(
+                campaignId, DonationStatus.FAILED);
     }
 
     @Override
@@ -198,6 +198,10 @@ public class DonationServiceImpl implements DonationService {
         donation.setUpdatedAt(LocalDateTime.now());
         Donation savedDonation = donationRepository.save(donation);
 
+        if (donation.getUser() != null && donation.getCampaign() != null) {
+            campaignFollowerService.autoFollow(donation.getUser().getId(), donation.getCampaign().getId());
+        }
+
         String amountText = donation.getAmount() + " VND";
         String message = String.format("Your VNPay donation of %s for campaign '%s' has been confirmed successfully.", 
                 amountText, donation.getCampaign().getTitle());
@@ -205,7 +209,7 @@ public class DonationServiceImpl implements DonationService {
         notificationService.notifyDonationStatus(
                 donation.getUser(),
                 new DonationNotification(donation.getId(), "CONFIRMED", message)
-        );
+            );
 
         notificationService.broadcastDonationUpdate(savedDonation);
         return savedDonation;
@@ -236,5 +240,23 @@ public class DonationServiceImpl implements DonationService {
         Donation saved = donationRepository.save(donation);
         notificationService.broadcastDonationUpdate(saved);
         return saved;
+    }
+
+    @Override
+    @Transactional
+    public Donation cancelVNPayDonation(Long donationId) {
+        log.info("Cancelling VNPay payment for donation ID: {}", donationId);
+        Donation donation = donationRepository.findById(donationId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorCode.DONATE_NOT_FOUND,
+                        "Donation not found with ID: " + donationId
+                ));
+        if (donation.getStatus() == DonationStatus.PENDING) {
+            donation.setStatus(DonationStatus.FAILED);
+            donation.setUpdatedAt(LocalDateTime.now());
+            donation = donationRepository.save(donation);
+            notificationService.broadcastDonationUpdate(donation);
+        }
+        return donation;
     }
 }
