@@ -86,11 +86,11 @@ public class CampaignController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Delete a campaign", description = "Removes a campaign by ID. Restricted to ADMIN role only.")
+    @Operation(summary = "Delete a campaign", description = "Removes a campaign by ID. Restricted to ADMIN role or the creator (for drafts).")
     public ApiResponse<Void> deleteCampaign(
-            @Parameter(description = "The ID of the campaign to delete", required = true) @PathVariable Long id) {
-        campaignService.deleteCampaign(id);
+            @Parameter(description = "The ID of the campaign to delete", required = true) @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        campaignService.deleteCampaign(id, userDetails.getUser());
         return ApiResponse.success(null, "Campaign deleted successfully");
     }
 }

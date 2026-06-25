@@ -19,6 +19,7 @@ import com.mgmtp.gives.util.StringNormalizeUtils;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 import static com.mgmtp.gives.common.ErrorCode.CATEGORY_NAME_ALREADY_EXISTS;
 import static com.mgmtp.gives.common.ErrorCode.CATEGORY_NOT_FOUND;
@@ -82,8 +83,29 @@ public class CategoryServiceImpl implements UserCategoryService, AdminCategorySe
     @Transactional
     public UserCategoryResponse suggestCategory(UserSuggestCategoryRequest request) {
 
-        // Business rule: no duplicate names, case-insensitive
-        String normalisedName = normaliseAndValidateUniqueName(request.name());
+        String normalisedName = StringNormalizeUtils.normalizeName(request.name());
+        if (normalisedName == null || normalisedName.isEmpty()) {
+            throw new AppException(
+                    VALIDATION_ERROR,
+                    "Category name must not be blank."
+            );
+        }
+
+        // Return existing category if found (regardless of status PENDING or APPROVED)
+        // If it was REJECTED or HIDDEN, reset it to PENDING for admin review again
+        Optional<Category> existingOpt = categoryRepository.findByNameIgnoreCase(normalisedName);
+        if (existingOpt.isPresent()) {
+            Category existing = existingOpt.get();
+            if (existing.getStatus() == CategoryStatus.REJECTED || existing.getStatus() == CategoryStatus.HIDDEN) {
+                CategoryStatus oldStatus = existing.getStatus();
+                existing.setStatus(CategoryStatus.PENDING);
+                Category saved = categoryRepository.save(existing);
+                log.info("Existing category (previously {}) suggested again, auto-transitioned back to PENDING. id={}, name={}",
+                        oldStatus, saved.getId(), saved.getName());
+                return categoryMapper.toUserResponse(saved);
+            }
+            return categoryMapper.toUserResponse(existing);
+        }
 
         // Normalize description: blank string -> null
         String normalizedDescription = StringNormalizeUtils.normalizeDescription(request.description());

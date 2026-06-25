@@ -10,11 +10,14 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface CategoryRepository extends JpaRepository<Category, Long>, JpaSpecificationExecutor<Category> {
 
     boolean existsByNameIgnoreCase(String name);
+
+    Optional<Category> findByNameIgnoreCase(String name);
 
     List<Category> findAllByStatusOrderByNameAsc(CategoryStatus status);
 }

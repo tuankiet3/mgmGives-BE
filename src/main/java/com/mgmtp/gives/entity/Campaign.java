@@ -29,6 +29,14 @@ public class Campaign extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Builder.Default
+    @Column(name = "accepts_money")
+    private boolean acceptsMoney = true;
+
+    @Builder.Default
+    @Column(name = "accepts_goods")
+    private boolean acceptsGoods = true;
+
     @ManyToOne
     @JoinColumn(name = "user_id")
     private User user;

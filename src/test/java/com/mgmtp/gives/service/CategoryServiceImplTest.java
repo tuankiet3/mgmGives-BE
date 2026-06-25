@@ -26,7 +26,6 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -87,7 +86,7 @@ class CategoryServiceImplTest {
 
         UserCategoryResponse responseDto = new UserCategoryResponse(2L, "Health & Wellness", "Medical suggestions");
 
-        when(categoryRepository.existsByNameIgnoreCase("Health & Wellness")).thenReturn(false);
+        when(categoryRepository.findByNameIgnoreCase("Health & Wellness")).thenReturn(Optional.empty());
         when(categoryMapper.toEntity(any(UserSuggestCategoryRequest.class))).thenReturn(mappedCategory);
         when(categoryRepository.save(mappedCategory)).thenReturn(savedCategory);
         when(categoryMapper.toUserResponse(savedCategory)).thenReturn(responseDto);
@@ -96,21 +95,71 @@ class CategoryServiceImplTest {
 
         assertNotNull(result);
         assertEquals("Health & Wellness", result.name());
-        verify(categoryRepository, times(1)).existsByNameIgnoreCase("Health & Wellness");
+        verify(categoryRepository, times(1)).findByNameIgnoreCase("Health & Wellness");
         verify(categoryRepository, times(1)).save(mappedCategory);
     }
 
     @Test
-    void suggestCategory_DuplicateName_ThrowsException() {
+    void suggestCategory_DuplicateName_ReturnsExistingCategory() {
         UserSuggestCategoryRequest request = new UserSuggestCategoryRequest("Education", "Description");
-        when(categoryRepository.existsByNameIgnoreCase("Education")).thenReturn(true);
+        when(categoryRepository.findByNameIgnoreCase("Education")).thenReturn(Optional.of(testCategory));
+        when(categoryMapper.toUserResponse(testCategory)).thenReturn(userCategoryResponse);
 
-        AppException exception = assertThrows(AppException.class, () ->
-                categoryService.suggestCategory(request)
-        );
+        UserCategoryResponse result = categoryService.suggestCategory(request);
 
-        assertEquals(ErrorCode.CATEGORY_NAME_ALREADY_EXISTS, exception.getErrorCode());
+        assertNotNull(result);
+        assertEquals("Education", result.name());
         verify(categoryRepository, never()).save(any(Category.class));
+    }
+
+    @Test
+    void suggestCategory_ExistingRejectedCategory_TransitionsToPending() {
+        UserSuggestCategoryRequest request = new UserSuggestCategoryRequest("Education", "Description");
+        Category existingCategory = new Category();
+        existingCategory.setId(1L);
+        existingCategory.setName("Education");
+        existingCategory.setStatus(CategoryStatus.REJECTED);
+
+        Category savedCategory = new Category();
+        savedCategory.setId(1L);
+        savedCategory.setName("Education");
+        savedCategory.setStatus(CategoryStatus.PENDING);
+
+        when(categoryRepository.findByNameIgnoreCase("Education")).thenReturn(Optional.of(existingCategory));
+        when(categoryRepository.save(existingCategory)).thenReturn(savedCategory);
+        when(categoryMapper.toUserResponse(savedCategory)).thenReturn(new UserCategoryResponse(1L, "Education", null));
+
+        UserCategoryResponse result = categoryService.suggestCategory(request);
+
+        assertNotNull(result);
+        assertEquals("Education", result.name());
+        assertEquals(CategoryStatus.PENDING, existingCategory.getStatus());
+        verify(categoryRepository, times(1)).save(existingCategory);
+    }
+
+    @Test
+    void suggestCategory_ExistingHiddenCategory_TransitionsToPending() {
+        UserSuggestCategoryRequest request = new UserSuggestCategoryRequest("Education", "Description");
+        Category existingCategory = new Category();
+        existingCategory.setId(1L);
+        existingCategory.setName("Education");
+        existingCategory.setStatus(CategoryStatus.HIDDEN);
+
+        Category savedCategory = new Category();
+        savedCategory.setId(1L);
+        savedCategory.setName("Education");
+        savedCategory.setStatus(CategoryStatus.PENDING);
+
+        when(categoryRepository.findByNameIgnoreCase("Education")).thenReturn(Optional.of(existingCategory));
+        when(categoryRepository.save(existingCategory)).thenReturn(savedCategory);
+        when(categoryMapper.toUserResponse(savedCategory)).thenReturn(new UserCategoryResponse(1L, "Education", null));
+
+        UserCategoryResponse result = categoryService.suggestCategory(request);
+
+        assertNotNull(result);
+        assertEquals("Education", result.name());
+        assertEquals(CategoryStatus.PENDING, existingCategory.getStatus());
+        verify(categoryRepository, times(1)).save(existingCategory);
     }
 
     @Test
@@ -275,7 +324,7 @@ class CategoryServiceImplTest {
 
         UserCategoryResponse responseDto = new UserCategoryResponse(3L, expectedNormalizedName, expectedNormalizedDescription);
 
-        when(categoryRepository.existsByNameIgnoreCase(expectedNormalizedName)).thenReturn(false);
+        when(categoryRepository.findByNameIgnoreCase(expectedNormalizedName)).thenReturn(Optional.empty());
         when(categoryMapper.toEntity(any(UserSuggestCategoryRequest.class))).thenReturn(mappedCategory);
         when(categoryRepository.save(mappedCategory)).thenReturn(savedCategory);
         when(categoryMapper.toUserResponse(savedCategory)).thenReturn(responseDto);
@@ -285,7 +334,7 @@ class CategoryServiceImplTest {
         assertNotNull(result);
         assertEquals(expectedNormalizedName, result.name());
         assertEquals(expectedNormalizedDescription, result.description());
-        verify(categoryRepository, times(1)).existsByNameIgnoreCase(expectedNormalizedName);
+        verify(categoryRepository, times(1)).findByNameIgnoreCase(expectedNormalizedName);
     }
 
     @Test

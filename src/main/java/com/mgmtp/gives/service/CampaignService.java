@@ -24,5 +24,5 @@ public interface CampaignService {
 
     Campaign updateCampaign(Long id, CampaignRequest request, User currentUser);
 
-    void deleteCampaign(Long id);
+    void deleteCampaign(Long id, User currentUser);
 }

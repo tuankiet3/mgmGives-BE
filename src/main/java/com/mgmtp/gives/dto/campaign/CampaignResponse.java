@@ -20,6 +20,9 @@ public class CampaignResponse {
     private Long target;
     private Long currentRaised;
     private CampaignPriority priority;
+    private Boolean acceptsMoney;
+    private Boolean acceptsGoods;
+    private String rejectionReason;
     private Long creatorId;
     private String creatorName;
     private List<CategoryResponse> categories;

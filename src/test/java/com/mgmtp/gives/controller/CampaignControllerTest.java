@@ -3,6 +3,7 @@ package com.mgmtp.gives.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mgmtp.gives.common.ApiResponse;
 import com.mgmtp.gives.common.ErrorCode;
+import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.common.PageResponse;
 import com.mgmtp.gives.dto.campaign.CampaignRequest;
 import com.mgmtp.gives.dto.campaign.CampaignResponse;
@@ -39,8 +40,7 @@ import java.util.HashSet;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -97,11 +97,14 @@ class CampaignControllerTest {
         validRequest = new CampaignRequest(
                 "Kon Tum Water Project",
                 "Clean water for highland children",
+                new HashSet<>(List.of(1L, 2L)),
+                true,
+                true,
+                12000L,
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(10),
-                12000L,
                 CampaignPriority.HIGH,
-                new HashSet<>(List.of(1L, 2L))
+                CampaignStatus.PENDING
         );
 
         campaignResponse = CampaignResponse.builder()
@@ -153,11 +156,14 @@ class CampaignControllerTest {
         CampaignRequest invalidRequest = new CampaignRequest(
                 "   ", // Blank title
                 "Description",
+                new HashSet<>(List.of(1L)),
+                true,
+                true,
+                5000L,
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(5),
-                5000L,
                 CampaignPriority.NORMAL,
-                new HashSet<>(List.of(1L))
+                CampaignStatus.PENDING
         );
 
         mockMvc.perform(post("/api/campaigns")
@@ -231,7 +237,7 @@ class CampaignControllerTest {
 
     @Test
     void deleteCampaign_Success_AdminOnly() throws Exception {
-        doNothing().when(campaignService).deleteCampaign(1L);
+        doNothing().when(campaignService).deleteCampaign(eq(1L), any(User.class));
 
         mockMvc.perform(delete("/api/campaigns/1")
                         .with(user(adminUserDetails)))
@@ -242,8 +248,11 @@ class CampaignControllerTest {
 
     @Test
     void deleteCampaign_Forbidden_RegularUser() throws Exception {
+        doThrow(new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE))
+                .when(campaignService).deleteCampaign(eq(1L), any(User.class));
+
         mockMvc.perform(delete("/api/campaigns/1")
-                        .with(user(regularUserDetails)))
+                         .with(user(regularUserDetails)))
                 .andExpect(status().isForbidden());
     }
 }
