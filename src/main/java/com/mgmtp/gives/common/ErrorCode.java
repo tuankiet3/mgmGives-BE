@@ -34,6 +34,7 @@ public enum ErrorCode {
     CAMPAIGN_NOT_FOUND(2001, "Campaign not found", HttpStatus.NOT_FOUND),
     UNAUTHORIZED_CAMPAIGN_UPDATE(2003, "You do not have permission to update this campaign", HttpStatus.FORBIDDEN),
     INVALID_CAMPAIGN_STATUS_FOR_UPDATE(2004, "Cannot update campaign in current state", HttpStatus.BAD_REQUEST),
+    CAMPAIGN_ALREADY_JOINED(2005, "User has already joined this campaign", HttpStatus.CONFLICT),
 
     CAMPAIGN_MEDIA_NOT_FOUND(3001, "Campaign media not found", HttpStatus.NOT_FOUND),
     MEDIA_NOT_FOUND(3002, "Media file not found", HttpStatus.NOT_FOUND),

@@ -1,7 +1,6 @@
 package com.mgmtp.gives.entity;
 
 import com.mgmtp.gives.enums.CampaignMemberRole;
-import com.mgmtp.gives.enums.CampaignMemberStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -34,11 +33,6 @@ public class CampaignMember {
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "role_in_campaign", columnDefinition = "campaign_member_role")
     private CampaignMemberRole roleInCampaign;
-
-    @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "status", columnDefinition = "campaign_member_status")
-    private CampaignMemberStatus status;
 
     @Column(name = "joined_at")
     private LocalDateTime joinedAt;
