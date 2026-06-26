@@ -13,6 +13,8 @@ public interface CampaignMediaRepository extends JpaRepository<CampaignMedia, Lo
 
     List<CampaignMedia> findByCampaignId(Long campaignId);
 
+    List<CampaignMedia> findByCampaignIdAndDeletedAtIsNull(Long campaignId);
+
     Optional<CampaignMedia> findByUrl(String url);
 
     List<CampaignMedia> findByDeletedAtNotNullAndDeletedAtBefore(LocalDateTime cutoff);

@@ -75,8 +75,7 @@ class CampaignServiceImplTest {
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(10),
                 CampaignPriority.HIGH,
-                CampaignStatus.PENDING
-        );
+                CampaignStatus.PENDING);
     }
 
     @Test
@@ -113,12 +112,10 @@ class CampaignServiceImplTest {
                 LocalDateTime.now().plusDays(5),
                 LocalDateTime.now().plusDays(2), // End date is before start date
                 CampaignPriority.HIGH,
-                CampaignStatus.PENDING
-        );
+                CampaignStatus.PENDING);
 
-        AppException exception = assertThrows(AppException.class, () -> 
-                campaignService.createCampaign(invalidRequest, testUser)
-        );
+        AppException exception = assertThrows(AppException.class,
+                () -> campaignService.createCampaign(invalidRequest, testUser));
 
         assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
         assertEquals("Start date must be before end date", exception.getMessage());
@@ -138,12 +135,10 @@ class CampaignServiceImplTest {
                 sameTime,
                 sameTime, // End date equals start date
                 CampaignPriority.HIGH,
-                CampaignStatus.PENDING
-        );
+                CampaignStatus.PENDING);
 
-        AppException exception = assertThrows(AppException.class, () -> 
-                campaignService.createCampaign(invalidRequest, testUser)
-        );
+        AppException exception = assertThrows(AppException.class,
+                () -> campaignService.createCampaign(invalidRequest, testUser));
 
         assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
         verifyNoInteractions(categoryRepository, campaignRepository);
@@ -153,9 +148,8 @@ class CampaignServiceImplTest {
     void createCampaign_InvalidCategories_ThrowsException() {
         when(categoryRepository.findAllById(anySet())).thenReturn(Collections.emptyList());
 
-        AppException exception = assertThrows(AppException.class, () -> 
-                campaignService.createCampaign(validRequest, testUser)
-        );
+        AppException exception = assertThrows(AppException.class,
+                () -> campaignService.createCampaign(validRequest, testUser));
 
         assertEquals(ErrorCode.CATEGORY_NOT_FOUND, exception.getErrorCode());
         verify(categoryRepository, times(1)).findAllById(anySet());
@@ -190,10 +184,10 @@ class CampaignServiceImplTest {
     }
 
     @Test
-    void getCampaignById_Success_ApprovedStatus() {
+    void getCampaignById_Success_InProgressStatus() {
         Campaign campaign = new Campaign();
         campaign.setId(100L);
-        campaign.setStatus(CampaignStatus.APPROVED);
+        campaign.setStatus(CampaignStatus.IN_PROGRESS);
 
         User otherUser = new User();
         otherUser.setId(3L);
@@ -208,7 +202,7 @@ class CampaignServiceImplTest {
     }
 
     @Test
-    void getCampaignById_NotFound_WhenInvisibleToUser() {
+    void getCampaignById_Forbidden_WhenInvisibleToUser() {
         Campaign campaign = new Campaign();
         campaign.setId(100L);
         campaign.setUser(testUser); // creator is testUser
@@ -220,20 +214,25 @@ class CampaignServiceImplTest {
 
         when(campaignRepository.findById(100L)).thenReturn(Optional.of(campaign));
 
-        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> 
-                campaignService.getCampaignById(100L, otherUser)
-        );
+        AppException exception = assertThrows(AppException.class,
+                () -> campaignService.getCampaignById(100L, otherUser));
 
-        assertEquals(ErrorCode.CAMPAIGN_NOT_FOUND, exception.getErrorCode());
+        assertEquals(ErrorCode.UNAUTHORIZED_CAMPAIGN_ACCESS, exception.getErrorCode());
+    }
+
+    @Test
+    void getCampaignById_Unauthorized_WhenCurrentUserIsNull() {
+        AppException exception = assertThrows(AppException.class, () -> campaignService.getCampaignById(100L, null));
+
+        assertEquals(ErrorCode.UNAUTHORIZED, exception.getErrorCode());
     }
 
     @Test
     void getCampaignById_NotFound_WhenEntityNotExists() {
         when(campaignRepository.findById(999L)).thenReturn(Optional.empty());
 
-        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> 
-                campaignService.getCampaignById(999L, testUser)
-        );
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class,
+                () -> campaignService.getCampaignById(999L, testUser));
 
         assertEquals(ErrorCode.CAMPAIGN_NOT_FOUND, exception.getErrorCode());
     }
@@ -288,9 +287,8 @@ class CampaignServiceImplTest {
 
         when(campaignRepository.findById(100L)).thenReturn(Optional.of(existing));
 
-        AppException exception = assertThrows(AppException.class, () -> 
-                campaignService.updateCampaign(100L, validRequest, otherUser)
-        );
+        AppException exception = assertThrows(AppException.class,
+                () -> campaignService.updateCampaign(100L, validRequest, otherUser));
 
         assertEquals(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE, exception.getErrorCode());
         verify(campaignRepository, never()).save(any(Campaign.class));
@@ -309,11 +307,10 @@ class CampaignServiceImplTest {
 
         when(campaignRepository.findById(100L)).thenReturn(Optional.of(existing));
 
-        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> 
-                campaignService.updateCampaign(100L, validRequest, otherUser)
-        );
+        AppException exception = assertThrows(AppException.class,
+                () -> campaignService.updateCampaign(100L, validRequest, otherUser));
 
-        assertEquals(ErrorCode.CAMPAIGN_NOT_FOUND, exception.getErrorCode());
+        assertEquals(ErrorCode.UNAUTHORIZED_CAMPAIGN_ACCESS, exception.getErrorCode());
         verify(campaignRepository, never()).save(any(Campaign.class));
     }
 
@@ -326,25 +323,90 @@ class CampaignServiceImplTest {
 
         when(campaignRepository.findById(100L)).thenReturn(Optional.of(existing));
 
-        AppException exception = assertThrows(AppException.class, () -> 
-                campaignService.updateCampaign(100L, validRequest, testUser)
-        );
+        AppException exception = assertThrows(AppException.class,
+                () -> campaignService.updateCampaign(100L, validRequest, testUser));
 
         assertEquals(ErrorCode.INVALID_CAMPAIGN_STATUS_FOR_UPDATE, exception.getErrorCode());
         verify(campaignRepository, never()).save(any(Campaign.class));
     }
 
     @Test
-    void deleteCampaign_Success() {
+    void deleteCampaign_Success_UserPending() {
         Campaign campaign = new Campaign();
         campaign.setId(100L);
+        campaign.setUser(testUser);
+        campaign.setStatus(CampaignStatus.PENDING);
 
         when(campaignRepository.findById(100L)).thenReturn(Optional.of(campaign));
         doNothing().when(campaignRepository).delete(campaign);
 
-        campaignService.deleteCampaign(100L, testAdmin);
+        campaignService.deleteCampaign(100L, testUser);
 
         verify(campaignRepository, times(1)).delete(campaign);
+    }
+
+    @Test
+    void deleteCampaign_Success_UserRejected() {
+        Campaign campaign = new Campaign();
+        campaign.setId(100L);
+        campaign.setUser(testUser);
+        campaign.setStatus(CampaignStatus.REJECTED);
+
+        when(campaignRepository.findById(100L)).thenReturn(Optional.of(campaign));
+        doNothing().when(campaignRepository).delete(campaign);
+
+        campaignService.deleteCampaign(100L, testUser);
+
+        verify(campaignRepository, times(1)).delete(campaign);
+    }
+
+    @Test
+    void deleteCampaign_Success_System() {
+        Campaign campaign = new Campaign();
+        campaign.setId(100L);
+        campaign.setUser(testUser);
+        campaign.setStatus(CampaignStatus.REJECTED);
+
+        when(campaignRepository.findById(100L)).thenReturn(Optional.of(campaign));
+        doNothing().when(campaignRepository).delete(campaign);
+
+        campaignService.deleteCampaign(100L, null);
+
+        verify(campaignRepository, times(1)).delete(campaign);
+    }
+
+    @Test
+    void deleteCampaign_Fail_NotOwner() {
+        User anotherUser = new User();
+        anotherUser.setId(99L);
+        anotherUser.setEmail("other@example.com");
+
+        Campaign campaign = new Campaign();
+        campaign.setId(100L);
+        campaign.setUser(anotherUser);
+        campaign.setStatus(CampaignStatus.PENDING);
+
+        when(campaignRepository.findById(100L)).thenReturn(Optional.of(campaign));
+
+        AppException exception = assertThrows(AppException.class, () -> campaignService.deleteCampaign(100L, testUser));
+
+        assertEquals(ErrorCode.UNAUTHORIZED_CAMPAIGN_DELETE, exception.getErrorCode());
+        verify(campaignRepository, never()).delete(any(Campaign.class));
+    }
+
+    @Test
+    void deleteCampaign_Fail_InvalidStatus() {
+        Campaign campaign = new Campaign();
+        campaign.setId(100L);
+        campaign.setUser(testUser);
+        campaign.setStatus(CampaignStatus.APPROVED);
+
+        when(campaignRepository.findById(100L)).thenReturn(Optional.of(campaign));
+
+        AppException exception = assertThrows(AppException.class, () -> campaignService.deleteCampaign(100L, testUser));
+
+        assertEquals(ErrorCode.INVALID_CAMPAIGN_STATUS_FOR_DELETE, exception.getErrorCode());
+        verify(campaignRepository, never()).delete(any(Campaign.class));
     }
 
     @Test
@@ -356,9 +418,8 @@ class CampaignServiceImplTest {
 
         when(categoryRepository.findAllById(anySet())).thenReturn(List.of(rejectedCategory));
 
-        AppException exception = assertThrows(AppException.class, () ->
-                campaignService.createCampaign(validRequest, testUser)
-        );
+        AppException exception = assertThrows(AppException.class,
+                () -> campaignService.createCampaign(validRequest, testUser));
 
         assertEquals(ErrorCode.CATEGORY_NOT_AVAILABLE, exception.getErrorCode());
         verify(categoryRepository, times(1)).findAllById(anySet());
@@ -374,9 +435,8 @@ class CampaignServiceImplTest {
 
         when(categoryRepository.findAllById(anySet())).thenReturn(List.of(hiddenCategory));
 
-        AppException exception = assertThrows(AppException.class, () ->
-                campaignService.createCampaign(validRequest, testUser)
-        );
+        AppException exception = assertThrows(AppException.class,
+                () -> campaignService.createCampaign(validRequest, testUser));
 
         assertEquals(ErrorCode.CATEGORY_NOT_AVAILABLE, exception.getErrorCode());
         verify(categoryRepository, times(1)).findAllById(anySet());
@@ -446,226 +506,27 @@ class CampaignServiceImplTest {
                 1L,
                 "keyword",
                 testUser,
-                PageRequest.of(0, 10)
-        );
+                PageRequest.of(0, 10));
 
         assertNotNull(result);
         verify(campaignRepository, times(1)).findAll(any(Specification.class), any(Pageable.class));
     }
 
     @Test
-    void createCampaign_ApprovedStatus_ByUser_ThrowsException() {
-        CampaignRequest approvedRequest = new CampaignRequest(
-                validRequest.title(),
-                validRequest.description(),
-                validRequest.categories(),
-                validRequest.acceptsMoney(),
-                validRequest.acceptsGoods(),
-                validRequest.target(),
-                validRequest.startDate(),
-                validRequest.endDate(),
-                validRequest.priority(),
-                CampaignStatus.APPROVED // illegal APPROVED status
-        );
-
-        AppException exception = assertThrows(AppException.class, () ->
-                campaignService.createCampaign(approvedRequest, testUser)
-        );
-
-        assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
-        verify(campaignRepository, never()).save(any(Campaign.class));
-    }
-
-    @Test
-    void updateCampaign_ApprovedStatus_ByUser_ThrowsException() {
-        Campaign existing = new Campaign();
-        existing.setId(100L);
-        existing.setUser(testUser);
-        existing.setStatus(CampaignStatus.DRAFT);
-
-        CampaignRequest approvedRequest = new CampaignRequest(
-                validRequest.title(),
-                validRequest.description(),
-                validRequest.categories(),
-                validRequest.acceptsMoney(),
-                validRequest.acceptsGoods(),
-                validRequest.target(),
-                validRequest.startDate(),
-                validRequest.endDate(),
-                validRequest.priority(),
-                CampaignStatus.APPROVED // illegal APPROVED status
-        );
-
-        when(campaignRepository.findById(100L)).thenReturn(Optional.of(existing));
-
-        AppException exception = assertThrows(AppException.class, () ->
-                campaignService.updateCampaign(100L, approvedRequest, testUser)
-        );
-
-        assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
-        verify(campaignRepository, never()).save(any(Campaign.class));
-    }
-
-    @Test
-    void updateCampaign_NoStatus_TransitionsRejectedStatusToPending_ForUser() {
+    void startApprovedCampaignsScheduled_Success() {
         Campaign campaign = new Campaign();
-        campaign.setId(100L);
-        campaign.setUser(testUser);
-        campaign.setStatus(CampaignStatus.REJECTED);
+        campaign.setId(1L);
+        campaign.setTitle("Starting Campaign");
+        campaign.setStatus(CampaignStatus.APPROVED);
 
-        when(campaignRepository.findById(100L)).thenReturn(Optional.of(campaign));
-        when(categoryRepository.findAllById(anySet())).thenReturn(List.of(testCategory));
+        when(campaignRepository.findByStatusAndStartDateBetween(
+                eq(CampaignStatus.APPROVED), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(campaign));
         when(campaignRepository.save(any(Campaign.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        CampaignRequest userRequest = new CampaignRequest(
-                validRequest.title(),
-                validRequest.description(),
-                validRequest.categories(),
-                validRequest.acceptsMoney(),
-                validRequest.acceptsGoods(),
-                validRequest.target(),
-                validRequest.startDate(),
-                validRequest.endDate(),
-                validRequest.priority(),
-                null // null status will auto-transition REJECTED to PENDING for regular user
-        );
+        campaignService.startApprovedCampaignsScheduled();
 
-        Campaign result = campaignService.updateCampaign(100L, userRequest, testUser);
-
-        assertNotNull(result);
-        assertEquals(CampaignStatus.PENDING, result.getStatus());
-        verify(campaignRepository, times(1)).save(any(Campaign.class));
-    }
-
-    @Test
-    void createCampaign_PendingStatus_MissingTarget_ThrowsException() {
-        CampaignRequest invalidRequest = new CampaignRequest(
-                validRequest.title(),
-                validRequest.description(),
-                validRequest.categories(),
-                validRequest.acceptsMoney(),
-                validRequest.acceptsGoods(),
-                null, // target is null
-                validRequest.startDate(),
-                validRequest.endDate(),
-                validRequest.priority(),
-                CampaignStatus.PENDING
-        );
-
-        AppException exception = assertThrows(AppException.class, () ->
-                campaignService.createCampaign(invalidRequest, testUser)
-        );
-
-        assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
-        assertTrue(exception.getMessage().contains("Target amount is required"));
-    }
-
-    @Test
-    void createCampaign_PendingStatus_MissingStartDate_ThrowsException() {
-        CampaignRequest invalidRequest = new CampaignRequest(
-                validRequest.title(),
-                validRequest.description(),
-                validRequest.categories(),
-                validRequest.acceptsMoney(),
-                validRequest.acceptsGoods(),
-                validRequest.target(),
-                null, // start date is null
-                validRequest.endDate(),
-                validRequest.priority(),
-                CampaignStatus.PENDING
-        );
-
-        AppException exception = assertThrows(AppException.class, () ->
-                campaignService.createCampaign(invalidRequest, testUser)
-        );
-
-        assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
-        assertTrue(exception.getMessage().contains("Start date is required"));
-    }
-
-    @Test
-    void createCampaign_PendingStatus_MissingEndDate_ThrowsException() {
-        CampaignRequest invalidRequest = new CampaignRequest(
-                validRequest.title(),
-                validRequest.description(),
-                validRequest.categories(),
-                validRequest.acceptsMoney(),
-                validRequest.acceptsGoods(),
-                validRequest.target(),
-                validRequest.startDate(),
-                null, // end date is null
-                validRequest.priority(),
-                CampaignStatus.PENDING
-        );
-
-        AppException exception = assertThrows(AppException.class, () ->
-                campaignService.createCampaign(invalidRequest, testUser)
-        );
-
-        assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
-        assertTrue(exception.getMessage().contains("End date is required"));
-    }
-
-    @Test
-    void createCampaign_PendingStatus_NoTarget_AcceptsGoodsOnly_Success() {
-        CampaignRequest goodsOnlyRequest = new CampaignRequest(
-                validRequest.title(),
-                validRequest.description(),
-                validRequest.categories(),
-                false, // acceptsMoney = false
-                true,  // acceptsGoods = true
-                null,  // target is null
-                validRequest.startDate(),
-                validRequest.endDate(),
-                validRequest.priority(),
-                CampaignStatus.PENDING
-        );
-
-        when(categoryRepository.findAllById(anySet())).thenReturn(List.of(testCategory));
-        when(campaignRepository.save(any(Campaign.class))).thenAnswer(invocation -> {
-            Campaign saved = invocation.getArgument(0);
-            saved.setId(100L);
-            return saved;
-        });
-
-        Campaign result = campaignService.createCampaign(goodsOnlyRequest, testUser);
-
-        assertNotNull(result);
-        assertFalse(result.isAcceptsMoney());
-        assertTrue(result.isAcceptsGoods());
-        assertNull(result.getTarget());
-    }
-
-    @Test
-    void updateCampaign_PreservesAcceptsFieldsWhenNullInRequest() {
-        Campaign existing = new Campaign();
-        existing.setId(100L);
-        existing.setUser(testUser);
-        existing.setStatus(CampaignStatus.DRAFT);
-        existing.setAcceptsMoney(false);
-        existing.setAcceptsGoods(false);
-
-        CampaignRequest partialRequest = new CampaignRequest(
-                validRequest.title(),
-                validRequest.description(),
-                validRequest.categories(),
-                null, // acceptsMoney is null
-                null, // acceptsGoods is null
-                validRequest.target(),
-                validRequest.startDate(),
-                validRequest.endDate(),
-                validRequest.priority(),
-                CampaignStatus.DRAFT
-        );
-
-        when(campaignRepository.findById(100L)).thenReturn(Optional.of(existing));
-        when(categoryRepository.findAllById(anySet())).thenReturn(List.of(testCategory));
-        when(campaignRepository.save(any(Campaign.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        Campaign result = campaignService.updateCampaign(100L, partialRequest, testUser);
-
-        assertNotNull(result);
-        assertFalse(result.isAcceptsMoney()); // Should remain false (preserved)
-        assertFalse(result.isAcceptsGoods()); // Should remain false (preserved)
+        assertEquals(CampaignStatus.IN_PROGRESS, campaign.getStatus());
+        verify(campaignRepository, times(1)).save(campaign);
     }
 }

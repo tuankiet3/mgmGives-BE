@@ -47,7 +47,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(CampaignController.class)
-@Import({SecurityConfig.class, JwtAuthenticationFilter.class})
+@Import({ SecurityConfig.class, JwtAuthenticationFilter.class })
 class CampaignControllerTest {
 
     @Autowired
@@ -67,6 +67,12 @@ class CampaignControllerTest {
 
     @MockitoBean
     private CustomUserDetailsService customUserDetailsService;
+
+    @MockitoBean
+    private com.mgmtp.gives.repository.CampaignMediaRepository campaignMediaRepository;
+
+    @MockitoBean
+    private com.mgmtp.gives.mapper.CampaignMediaMapper campaignMediaMapper;
 
     private User regularUser;
     private User adminUser;
@@ -104,8 +110,7 @@ class CampaignControllerTest {
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(10),
                 CampaignPriority.HIGH,
-                CampaignStatus.PENDING
-        );
+                CampaignStatus.PENDING);
 
         campaignResponse = CampaignResponse.builder()
                 .id(1L)
@@ -131,9 +136,9 @@ class CampaignControllerTest {
         when(campaignMapper.toResponse(any(Campaign.class))).thenReturn(campaignResponse);
 
         mockMvc.perform(post("/api/campaigns")
-                        .with(user(regularUserDetails))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(validRequest)))
+                .with(user(regularUserDetails))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(validRequest)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("Campaign created successfully"))
@@ -146,8 +151,8 @@ class CampaignControllerTest {
     @Test
     void createCampaign_Unauthorized_Anonymous() throws Exception {
         mockMvc.perform(post("/api/campaigns")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(validRequest)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(validRequest)))
                 .andExpect(status().isForbidden()); // Due to security filter rejecting anonymous users
     }
 
@@ -163,13 +168,12 @@ class CampaignControllerTest {
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(5),
                 CampaignPriority.NORMAL,
-                CampaignStatus.PENDING
-        );
+                CampaignStatus.PENDING);
 
         mockMvc.perform(post("/api/campaigns")
-                        .with(user(regularUserDetails))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidRequest)))
+                .with(user(regularUserDetails))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(invalidRequest)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()));
@@ -178,12 +182,13 @@ class CampaignControllerTest {
     @Test
     void getAllCampaigns_Success_Authenticated() throws Exception {
         Page<Campaign> page = new PageImpl<>(Collections.emptyList(), PageRequest.of(0, 10), 0);
-        when(campaignService.getAllCampaigns(any(), any(), any(), any(), any(), any(User.class), any(Pageable.class))).thenReturn(page);
+        when(campaignService.getAllCampaigns(any(), any(), any(), any(), any(), any(User.class), any(Pageable.class)))
+                .thenReturn(page);
 
         mockMvc.perform(get("/api/campaigns")
-                        .with(user(regularUserDetails))
-                        .param("page", "0")
-                        .param("size", "10"))
+                .with(user(regularUserDetails))
+                .param("page", "0")
+                .param("size", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.result.content").isArray());
@@ -192,8 +197,8 @@ class CampaignControllerTest {
     @Test
     void getAllCampaigns_Unauthorized_Anonymous() throws Exception {
         mockMvc.perform(get("/api/campaigns")
-                        .param("page", "0")
-                        .param("size", "10"))
+                .param("page", "0")
+                .param("size", "10"))
                 .andExpect(status().isForbidden());
     }
 
@@ -204,9 +209,11 @@ class CampaignControllerTest {
 
         when(campaignService.getCampaignById(eq(1L), any())).thenReturn(campaign);
         when(campaignMapper.toResponse(campaign)).thenReturn(campaignResponse);
+        when(campaignMediaRepository.findByCampaignIdAndDeletedAtIsNull(1L)).thenReturn(Collections.emptyList());
+        when(campaignMediaMapper.toResponseList(anyList())).thenReturn(Collections.emptyList());
 
         mockMvc.perform(get("/api/campaigns/1")
-                        .with(user(regularUserDetails)))
+                .with(user(regularUserDetails)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.result.id").value(1));
@@ -227,32 +234,28 @@ class CampaignControllerTest {
         when(campaignMapper.toResponse(campaign)).thenReturn(campaignResponse);
 
         mockMvc.perform(put("/api/campaigns/1")
-                        .with(user(regularUserDetails))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(validRequest)))
+                .with(user(regularUserDetails))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(validRequest)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.result.id").value(1));
     }
 
     @Test
-    void deleteCampaign_Success_AdminOnly() throws Exception {
+    void deleteCampaign_Success() throws Exception {
         doNothing().when(campaignService).deleteCampaign(eq(1L), any(User.class));
 
         mockMvc.perform(delete("/api/campaigns/1")
-                        .with(user(adminUserDetails)))
+                .with(user(regularUserDetails)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("Campaign deleted successfully"));
     }
 
     @Test
-    void deleteCampaign_Forbidden_RegularUser() throws Exception {
-        doThrow(new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE))
-                .when(campaignService).deleteCampaign(eq(1L), any(User.class));
-
-        mockMvc.perform(delete("/api/campaigns/1")
-                         .with(user(regularUserDetails)))
+    void deleteCampaign_Unauthenticated_ReturnsForbidden() throws Exception {
+        mockMvc.perform(delete("/api/campaigns/1"))
                 .andExpect(status().isForbidden());
     }
 }

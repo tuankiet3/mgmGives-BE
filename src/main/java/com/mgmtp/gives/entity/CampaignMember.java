@@ -3,7 +3,6 @@ package com.mgmtp.gives.entity;
 import com.mgmtp.gives.enums.CampaignMemberRole;
 import jakarta.persistence.*;
 import lombok.*;
-
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 

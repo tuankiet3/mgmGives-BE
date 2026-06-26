@@ -27,19 +27,21 @@ public final class CampaignSpecifications {
 
     public static Specification<Campaign> hasCategory(Long categoryId) {
         return (root, query, cb) -> {
-            if (categoryId == null) return null;
+            if (categoryId == null)
+                return null;
             return cb.equal(root.join("categories").get("id"), categoryId);
         };
     }
 
     public static Specification<Campaign> matchesKeyword(String keyword) {
         return (root, query, cb) -> {
-            if (keyword == null || keyword.trim().isEmpty()) return null;
+            if (keyword == null || keyword.trim().isEmpty())
+                return null;
             String pattern = "%" + keyword.trim().toLowerCase() + "%";
             return cb.or(
                     cb.like(cb.lower(root.get("title")), pattern),
-                    cb.like(cb.lower(root.get("description")), pattern)
-            );
+                    cb.like(cb.lower(root.get("description")), pattern),
+                    cb.like(cb.lower(root.join("user").get("fullName")), pattern));
         };
     }
 
@@ -47,17 +49,23 @@ public final class CampaignSpecifications {
         return (root, query, cb) -> {
             if (currentUser == null) {
                 // In case security filter gets bypassed or for test cases
-                return cb.equal(root.get("status"), CampaignStatus.APPROVED);
+                return root.get("status").in(
+                        CampaignStatus.APPROVED,
+                        CampaignStatus.IN_PROGRESS,
+                        CampaignStatus.COMPLETED);
             }
             if (currentUser.getRole() == UserRole.ADMIN) {
                 // Admins see all campaigns
                 return cb.conjunction();
             }
-            // Normal users see APPROVED campaigns OR their own campaigns
+            // Normal users see APPROVED, IN_PROGRESS, COMPLETED campaigns OR their own
+            // campaigns
             return cb.or(
-                    cb.equal(root.get("status"), CampaignStatus.APPROVED),
-                    cb.equal(root.get("user").get("id"), currentUser.getId())
-            );
+                    root.get("status").in(
+                            CampaignStatus.APPROVED,
+                            CampaignStatus.IN_PROGRESS,
+                            CampaignStatus.COMPLETED),
+                    cb.equal(root.get("user").get("id"), currentUser.getId()));
         };
     }
 }

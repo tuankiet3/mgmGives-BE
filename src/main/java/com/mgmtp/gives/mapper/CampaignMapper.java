@@ -18,6 +18,7 @@ public abstract class CampaignMapper {
     @Mapping(target = "creatorName", source = "user.fullName")
     @Mapping(target = "categories", source = "categories")
     @Mapping(target = "currentRaised", expression = "java(calculateCurrentRaised(campaign))")
+    @Mapping(target = "medias", ignore = true)
     public abstract CampaignResponse toResponse(Campaign campaign);
 
     protected Long calculateCurrentRaised(Campaign campaign) {

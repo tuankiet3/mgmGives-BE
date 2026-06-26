@@ -13,6 +13,7 @@ import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.CategoryRepository;
+import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.service.CampaignService;
 import static com.mgmtp.gives.specification.CampaignSpecifications.*;
 import lombok.RequiredArgsConstructor;
@@ -23,9 +24,17 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
+import org.springframework.beans.factory.annotation.Value;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.io.IOException;
+import com.mgmtp.gives.entity.CampaignMedia;
 
 @Service
 @RequiredArgsConstructor
@@ -34,12 +43,17 @@ public class CampaignServiceImpl implements CampaignService {
 
     private final CampaignRepository campaignRepository;
     private final CategoryRepository categoryRepository;
+    private final CampaignMediaRepository campaignMediaRepository;
+
+    @Value("${app.media.upload-dir}")
+    private String uploadDir;
 
     @Override
     @Transactional
     public Campaign createCampaign(CampaignRequest request, User currentUser) {
-        log.info("Creating campaign: title={}, userId={}", request.title(), currentUser != null ? currentUser.getId() : null);
-        validateDateRange(request);
+        log.info("Creating campaign: title={}, userId={}", request.title(),
+                currentUser != null ? currentUser.getId() : null);
+        validateDateRange(request, LocalDateTime.now());
 
         CampaignStatus status = request.status();
         if (status == null) {
@@ -50,7 +64,8 @@ public class CampaignServiceImpl implements CampaignService {
         if (!isAdmin && status != CampaignStatus.DRAFT && status != CampaignStatus.PENDING) {
             log.warn("Campaign creation failed: status not allowed for user. status={}, userId={}",
                     status, currentUser != null ? currentUser.getId() : null);
-            throw new AppException(ErrorCode.VALIDATION_ERROR, "Regular users can only create campaigns in DRAFT or PENDING status.");
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                    "Regular users can only create campaigns in DRAFT or PENDING status.");
         }
 
         if (status == CampaignStatus.PENDING) {
@@ -85,7 +100,7 @@ public class CampaignServiceImpl implements CampaignService {
     @Transactional(readOnly = true)
     public Page<Campaign> getAllCampaigns(CampaignStatus status, CampaignPriority priority, Long categoryId,
             Long userId, String keyword, User currentUser, Pageable pageable) {
-        log.info("Fetching campaigns: status={}, priority={}, categoryId={}, userId={}, keyword={}", 
+        log.info("Fetching campaigns: status={}, priority={}, categoryId={}, userId={}, keyword={}",
                 status, priority, categoryId, userId, keyword);
         Specification<Campaign> spec = Specification.allOf(
                 hasStatus(status),
@@ -93,8 +108,7 @@ public class CampaignServiceImpl implements CampaignService {
                 hasUserId(userId),
                 hasCategory(categoryId),
                 matchesKeyword(keyword),
-                isVisibleTo(currentUser)
-        );
+                isVisibleTo(currentUser));
 
         return campaignRepository.findAll(spec, pageable);
     }
@@ -102,21 +116,28 @@ public class CampaignServiceImpl implements CampaignService {
     @Override
     @Transactional(readOnly = true)
     public Campaign getCampaignById(Long id, User currentUser) {
-        log.info("Fetching campaign: id={}, userId={}", id, currentUser != null ? currentUser.getId() : null);
-        Campaign campaign = getCampaignByIdInternal(id);
-
-        boolean isAdmin = currentUser != null && currentUser.getRole() == UserRole.ADMIN;
-        boolean isCreator = campaign.getUser() != null && currentUser != null && campaign.getUser().getId().equals(currentUser.getId());
-        boolean isApproved = campaign.getStatus() == CampaignStatus.APPROVED;
-
-        if (!isAdmin && !isCreator && !isApproved) {
-            log.warn("Campaign access denied (not visible to user): campaignId={}, status={}, userId={}",
-                    id, campaign.getStatus(), currentUser != null ? currentUser.getId() : null);
-            throw new ResourceNotFoundException(ErrorCode.CAMPAIGN_NOT_FOUND,
-                    "Campaign not found with ID: " + id);
+        if (currentUser == null) {
+            log.warn("Campaign access denied (unauthenticated request): campaignId={}", id);
+            throw new AppException(ErrorCode.UNAUTHORIZED, "User must be authenticated to view campaign details");
         }
 
-        log.info("Campaign retrieved successfully: id={}, userId={}", id, currentUser != null ? currentUser.getId() : null);
+        Campaign campaign = getCampaignByIdInternal(id);
+
+        boolean isAdmin = currentUser.getRole() == UserRole.ADMIN;
+        boolean isCreator = campaign.getUser() != null && campaign.getUser().getId().equals(currentUser.getId());
+        boolean isVisibleStatus = campaign.getStatus() == CampaignStatus.APPROVED
+                || campaign.getStatus() == CampaignStatus.IN_PROGRESS
+                || campaign.getStatus() == CampaignStatus.COMPLETED;
+
+        if (!isAdmin && !isCreator && !isVisibleStatus) {
+            log.warn("Campaign access denied (forbidden): campaignId={}, status={}, userId={}",
+                    id, campaign.getStatus(), currentUser.getId());
+            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_ACCESS,
+                    "You do not have permission to access campaign with ID: " + id);
+        }
+
+        log.info("Campaign retrieved successfully: id={}, userId={}", id,
+                currentUser != null ? currentUser.getId() : null);
         return campaign;
     }
 
@@ -145,16 +166,20 @@ public class CampaignServiceImpl implements CampaignService {
         if (newStatus == null) {
             if (!isAdmin && campaign.getStatus() == CampaignStatus.REJECTED) {
                 newStatus = CampaignStatus.PENDING;
-                log.info("No status requested for rejected campaign update; auto-transitioning back to PENDING. campaignId={}", id);
+                log.info(
+                        "No status requested for rejected campaign update; auto-transitioning back to PENDING. campaignId={}",
+                        id);
             } else {
                 newStatus = campaign.getStatus();
             }
         }
 
         if (!isAdmin && newStatus != CampaignStatus.DRAFT && newStatus != CampaignStatus.PENDING) {
-            log.warn("Update campaign validation failed: status {} not allowed for regular user. campaignId={}, userId={}",
+            log.warn(
+                    "Update campaign validation failed: status {} not allowed for regular user. campaignId={}, userId={}",
                     newStatus, id, currentUser.getId());
-            throw new AppException(ErrorCode.VALIDATION_ERROR, "Regular users can only set status to DRAFT or PENDING.");
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                    "Regular users can only set status to DRAFT or PENDING.");
         }
 
         if (newStatus == CampaignStatus.PENDING) {
@@ -163,7 +188,7 @@ public class CampaignServiceImpl implements CampaignService {
             validatePendingCampaign(request, money, goods);
         }
 
-        validateDateRange(request);
+        validateDateRange(request, campaign.getCreatedAt());
         Set<Category> categories = fetchAndValidateCategories(request.categories());
 
         campaign.setTitle(request.title());
@@ -178,7 +203,8 @@ public class CampaignServiceImpl implements CampaignService {
         campaign.setStatus(newStatus);
 
         Campaign saved = campaignRepository.save(campaign);
-        log.info("Campaign updated: id={}, status={}, userId={}", saved.getId(), saved.getStatus(), currentUser.getId());
+        log.info("Campaign updated: id={}, status={}, userId={}", saved.getId(), saved.getStatus(),
+                currentUser.getId());
         return saved;
     }
 
@@ -187,23 +213,73 @@ public class CampaignServiceImpl implements CampaignService {
     public void deleteCampaign(Long id, User currentUser) {
         Campaign campaign = getCampaignByIdInternal(id);
 
-        boolean isAdmin = currentUser.getRole() == UserRole.ADMIN;
-        boolean isCreator = campaign.getUser() != null && campaign.getUser().getId().equals(currentUser.getId());
-
-        if (!isAdmin) {
+        if (currentUser != null) {
+            boolean isCreator = campaign.getUser() != null && campaign.getUser().getId().equals(currentUser.getId());
             if (!isCreator) {
-                throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE);
+                log.warn("Delete campaign denied: not creator. campaignId={}, userId={}", id, currentUser.getId());
+                throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_DELETE);
             }
-            if (campaign.getStatus() != CampaignStatus.DRAFT) {
-                throw new AppException(ErrorCode.INVALID_CAMPAIGN_STATUS_FOR_UPDATE, "Only draft campaigns can be deleted");
+
+            if (campaign.getStatus() != CampaignStatus.PENDING 
+                    && campaign.getStatus() != CampaignStatus.REJECTED 
+                    && campaign.getStatus() != CampaignStatus.DRAFT) {
+                log.warn("Delete campaign denied: invalid status. campaignId={}, status={}", id, campaign.getStatus());
+                throw new AppException(ErrorCode.INVALID_CAMPAIGN_STATUS_FOR_DELETE);
+            }
+        } else {
+            log.info("System initiated deletion for campaign: id={}", id);
+            if (campaign.getStatus() != CampaignStatus.REJECTED) {
+                log.warn("System delete campaign denied: invalid status. campaignId={}, status={}", id, campaign.getStatus());
+                throw new AppException(ErrorCode.INVALID_CAMPAIGN_STATUS_FOR_DELETE);
+            }
+        }
+
+        // Delete physical files on disk
+        if (campaign.getMedias() != null) {
+            for (CampaignMedia media : campaign.getMedias()) {
+                if (media.getUrl() != null) {
+                    Path path = Paths.get(uploadDir).resolve(media.getUrl());
+                    try {
+                        Files.deleteIfExists(path);
+                        log.info("Deleted physical media file: {}", media.getUrl());
+                    } catch (IOException e) {
+                        log.warn("Failed to delete physical file: {}", media.getUrl(), e);
+                    }
+                }
             }
         }
 
         campaignRepository.delete(campaign);
-        log.info("Campaign deleted: id={}, title={}", id, campaign.getTitle());
+        log.info("Campaign deleted successfully: id={}, title={}", id, campaign.getTitle());
     }
 
-    private void validateDateRange(CampaignRequest request) {
+    @Override
+    @Transactional
+    public void startApprovedCampaignsScheduled() {
+        java.time.LocalDateTime startOfDay = java.time.LocalDate.now().atStartOfDay();
+        java.time.LocalDateTime endOfDay = java.time.LocalDate.now().atTime(java.time.LocalTime.MAX);
+
+        log.info("Scanning for APPROVED campaigns starting today: {} to {}", startOfDay, endOfDay);
+
+        List<Campaign> campaignsToStart = campaignRepository.findByStatusAndStartDateBetween(
+                CampaignStatus.APPROVED, startOfDay, endOfDay);
+
+        log.info("Found {} campaigns to start", campaignsToStart.size());
+
+        for (Campaign campaign : campaignsToStart) {
+            campaign.setStatus(CampaignStatus.IN_PROGRESS);
+            campaignRepository.save(campaign);
+            log.info("Campaign activated to IN_PROGRESS: id={}, title='{}'", campaign.getId(), campaign.getTitle());
+        }
+    }
+
+    private void validateDateRange(CampaignRequest request, LocalDateTime createdAt) {
+        LocalDateTime limit = createdAt != null ? createdAt : LocalDateTime.now();
+        if (request.startDate() != null && request.startDate().isBefore(limit)) {
+            log.warn("Campaign date validation failed: startDate={}, creation date={}",
+                    request.startDate(), limit);
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Start date cannot be before creation date");
+        }
         if (request.startDate() != null && request.endDate() != null) {
             if (!request.startDate().isBefore(request.endDate())) {
                 log.warn("Campaign date validation failed: startDate={}, endDate={}",
@@ -258,7 +334,8 @@ public class CampaignServiceImpl implements CampaignService {
             if (category.getStatus() == CategoryStatus.REJECTED || category.getStatus() == CategoryStatus.HIDDEN) {
                 log.warn("Category not available for campaign: categoryId={}, status={}",
                         category.getId(), category.getStatus());
-                throw new AppException(ErrorCode.CATEGORY_NOT_AVAILABLE, "Category '" + category.getName() + "' is not available");
+                throw new AppException(ErrorCode.CATEGORY_NOT_AVAILABLE,
+                        "Category '" + category.getName() + "' is not available");
             }
         }
         return new HashSet<>(categoryList);
@@ -271,5 +348,11 @@ public class CampaignServiceImpl implements CampaignService {
                     return new ResourceNotFoundException(ErrorCode.CAMPAIGN_NOT_FOUND,
                             "Campaign not found with ID: " + id);
                 });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CampaignMedia> getActiveMediasByCampaignId(Long campaignId) {
+        return campaignMediaRepository.findByCampaignIdAndDeletedAtIsNull(campaignId);
     }
 }

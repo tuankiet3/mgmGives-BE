@@ -65,6 +65,10 @@ public class Campaign extends BaseEntity {
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;
 
+    @ManyToOne
+    @JoinColumn(name = "approved_by")
+    private User approvedBy;
+
     @LastModifiedDate
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
@@ -78,17 +82,23 @@ public class Campaign extends BaseEntity {
     )
     private Set<Category> categories = new HashSet<>();
 
-//    @OneToMany(mappedBy = "campaign")
-//    private List<CampaignMedia> media = new ArrayList<>();
-//
-//    @OneToMany(mappedBy = "campaign")
-//    private List<CampaignTask> tasks = new ArrayList<>();
-//
-//    @OneToMany(mappedBy = "campaign")
-//    private List<CampaignMember> members = new ArrayList<>();
-//
-//    @OneToMany(mappedBy = "campaign")
-//    private List<Announcement> announcements = new ArrayList<>();
+    @Builder.Default
+    @OneToMany(mappedBy = "campaign", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<CampaignMedia> medias = new HashSet<>();
 
+    @Builder.Default
+    @OneToMany(mappedBy = "campaign", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<CampaignTask> tasks = new HashSet<>();
 
+    @Builder.Default
+    @OneToMany(mappedBy = "campaign", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<CampaignMember> members = new HashSet<>();
+
+    @Builder.Default
+    @OneToMany(mappedBy = "campaign", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<Announcement> announcements = new HashSet<>();
+
+    @Builder.Default
+    @OneToMany(mappedBy = "campaign", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<Donation> donations = new HashSet<>();
 }

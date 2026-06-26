@@ -41,4 +41,8 @@ public class CampaignTask extends BaseEntity {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Builder.Default
+    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
+    private java.util.Set<TaskAssignment> assignments = new java.util.HashSet<>();
 }

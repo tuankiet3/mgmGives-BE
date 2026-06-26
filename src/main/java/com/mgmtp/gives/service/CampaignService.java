@@ -8,6 +8,9 @@ import com.mgmtp.gives.enums.CampaignStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import com.mgmtp.gives.entity.CampaignMedia;
+import java.util.List;
+
 public interface CampaignService {
     Campaign createCampaign(CampaignRequest request, User currentUser);
 
@@ -25,4 +28,8 @@ public interface CampaignService {
     Campaign updateCampaign(Long id, CampaignRequest request, User currentUser);
 
     void deleteCampaign(Long id, User currentUser);
+
+    void startApprovedCampaignsScheduled();
+
+    List<CampaignMedia> getActiveMediasByCampaignId(Long campaignId);
 }
