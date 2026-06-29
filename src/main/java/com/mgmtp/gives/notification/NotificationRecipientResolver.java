@@ -10,4 +10,6 @@ public interface NotificationRecipientResolver {
     Set<NotificationRecipient> campaignOwner(Long campaignId);
 
     Set<NotificationRecipient> singleUser(Long userId);
+
+    Set<NotificationRecipient> campaignOwnerAndFollowersExceptDonor(Long campaignId, Long donorUserId);
 }

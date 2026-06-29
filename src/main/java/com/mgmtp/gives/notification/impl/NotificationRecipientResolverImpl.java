@@ -1,6 +1,7 @@
 package com.mgmtp.gives.notification.impl;
 
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
+import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.notification.NotificationRecipientResolver;
 import com.mgmtp.gives.repository.CampaignFollowerRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Service @RequiredArgsConstructor @Slf4j
@@ -61,5 +63,20 @@ public class NotificationRecipientResolverImpl implements NotificationRecipientR
                     log.warn("Notification recipient user not found: userId={}", userId);
                     return Set.of();
                 });
+    }
+
+    @Override
+    public Set<NotificationRecipient> campaignOwnerAndFollowersExceptDonor(Long campaignId, Long donorUserId) {
+
+        Set<NotificationRecipient> recipients = new HashSet<>(campaignOwner(campaignId));
+
+        List<User> followers = campaignFollowerRepository.findFollowerUsersByCampaignId(campaignId);
+
+        followers.stream()
+                .filter(user -> donorUserId == null || !user.getId().equals(donorUserId))
+                .map(user -> new NotificationRecipient(user.getId(), user.getEmail()))
+                .forEach(recipients::add);
+
+        return recipients;
     }
 }

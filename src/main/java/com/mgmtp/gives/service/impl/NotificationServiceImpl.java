@@ -71,16 +71,21 @@ public class NotificationServiceImpl implements NotificationService {
                     recipient.email()
             );
 
-            notificationPublisher.publishToUser(
-                    recipient.email(),
-                    new NotificationPayload(
-                            savedNotification.getId(),
-                            savedNotification.getType(),
-                            savedNotification.getTitle(),
-                            savedNotification.getMessage(),
-                            savedNotification.getLinkUrl()
-                    )
-            );
+            try {
+                notificationPublisher.publishToUser(
+                        recipient.email(),
+                        new NotificationPayload(
+                                savedNotification.getId(),
+                                savedNotification.getType(),
+                                savedNotification.getTitle(),
+                                savedNotification.getMessage(),
+                                savedNotification.getLinkUrl()
+                        )
+                );
+            } catch (Exception ex) {
+                log.error("Failed to publish realtime notification to user {} for notificationId={}: {}",
+                        recipient.email(), savedNotification.getId(), ex.getMessage(), ex);
+            }
         }
 
         log.info(

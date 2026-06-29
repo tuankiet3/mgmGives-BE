@@ -2,6 +2,7 @@ package com.mgmtp.gives.repository;
 
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.CampaignFollower;
+import com.mgmtp.gives.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -60,4 +61,11 @@ public interface CampaignFollowerRepository extends JpaRepository<CampaignFollow
     List<NotificationRecipient> findFollowerRecipientsByCampaignId(@Param("campaignId") Long campaignId);
 
     long deleteByCampaignIdAndUserId(Long campaignId, Long userId);
+
+    @Query("""
+            SELECT cf.user
+            FROM CampaignFollower cf
+            WHERE cf.campaign.id = :campaignId
+            """)
+    List<User> findFollowerUsersByCampaignId(@Param("campaignId") Long campaignId);
 }
