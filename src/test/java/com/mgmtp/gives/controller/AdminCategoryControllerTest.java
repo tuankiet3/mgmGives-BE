@@ -13,6 +13,7 @@ import com.mgmtp.gives.security.CustomUserDetails;
 import com.mgmtp.gives.security.CustomUserDetailsService;
 import com.mgmtp.gives.security.JwtAuthenticationFilter;
 import com.mgmtp.gives.security.JwtService;
+import com.mgmtp.gives.security.JwtAuthenticationEntryPoint;
 import com.mgmtp.gives.service.AdminCategoryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,7 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(AdminCategoryController.class)
-@Import({SecurityConfig.class, JwtAuthenticationFilter.class})
+@Import({SecurityConfig.class, JwtAuthenticationFilter.class, JwtAuthenticationEntryPoint.class})
 class AdminCategoryControllerTest {
 
     @Autowired

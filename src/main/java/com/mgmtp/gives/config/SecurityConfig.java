@@ -1,6 +1,7 @@
 package com.mgmtp.gives.config;
 
 import com.mgmtp.gives.security.JwtAuthenticationFilter;
+import com.mgmtp.gives.security.JwtAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,6 +27,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
     private final JwtAuthenticationFilter jwtFilter;
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private static final String[] PUBLIC_ENDPOINTS = {
             "/api/auth/register",
             "/api/auth/login",
@@ -54,6 +56,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/media/**").permitAll()

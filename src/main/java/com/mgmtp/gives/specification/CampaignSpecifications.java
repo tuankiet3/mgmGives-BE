@@ -1,6 +1,7 @@
 package com.mgmtp.gives.specification;
 
 import com.mgmtp.gives.entity.Campaign;
+import com.mgmtp.gives.entity.CampaignFollower;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
@@ -55,8 +56,10 @@ public final class CampaignSpecifications {
                         CampaignStatus.COMPLETED);
             }
             if (currentUser.getRole() == UserRole.ADMIN) {
-                // Admins see all campaigns
-                return cb.conjunction();
+                // Admins see all campaigns except drafts of other users
+                return cb.or(
+                        cb.notEqual(root.get("status"), CampaignStatus.DRAFT),
+                        cb.equal(root.get("user").get("id"), currentUser.getId()));
             }
             // Normal users see APPROVED, IN_PROGRESS, COMPLETED campaigns OR their own
             // campaigns
@@ -66,6 +69,22 @@ public final class CampaignSpecifications {
                             CampaignStatus.IN_PROGRESS,
                             CampaignStatus.COMPLETED),
                     cb.equal(root.get("user").get("id"), currentUser.getId()));
+        };
+    }
+
+    public static Specification<Campaign> isNotFollowedBy(User currentUser) {
+        return (root, query, cb) -> {
+            if (currentUser == null || currentUser.getRole() == UserRole.ADMIN) {
+                return null;
+            }
+            jakarta.persistence.criteria.Subquery<Long> subquery = query.subquery(Long.class);
+            jakarta.persistence.criteria.Root<CampaignFollower> subRoot = subquery.from(CampaignFollower.class);
+            subquery.select(subRoot.get("campaign").get("id"));
+            subquery.where(cb.and(
+                    cb.equal(subRoot.get("campaign").get("id"), root.get("id")),
+                    cb.equal(subRoot.get("user").get("id"), currentUser.getId())
+            ));
+            return cb.not(cb.exists(subquery));
         };
     }
 }

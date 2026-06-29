@@ -191,12 +191,6 @@ public class DonationServiceImpl implements DonationService {
                         ErrorCode.DONATE_NOT_FOUND,
                         "Donation not found with ID: " + donationId
                 ));
-        if (donation.getCampaign().getStatus() != CampaignStatus.IN_PROGRESS) {
-            throw new AppException(
-                    ErrorCode.CAMPAIGN_NOT_IN_PROGRESS,
-                    "Cannot donate to this campaign because it is not in progress yet"
-            );
-        }
 
         donation.setStatus(DonationStatus.CONFIRMED);
         donation.setConfirmedAt(LocalDateTime.now());

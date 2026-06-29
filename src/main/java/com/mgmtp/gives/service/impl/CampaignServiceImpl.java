@@ -18,6 +18,7 @@ import com.mgmtp.gives.mapper.CampaignMapper;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.CategoryRepository;
+import com.mgmtp.gives.repository.CampaignFollowerRepository;
 import com.mgmtp.gives.service.CampaignService;
 import com.mgmtp.gives.util.HtmlSanitizerUtil;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +52,7 @@ public class CampaignServiceImpl implements CampaignService {
     private final CategoryRepository categoryRepository;
     private final CampaignMediaRepository campaignMediaRepository;
     private final CampaignMapper campaignMapper;
+    private final CampaignFollowerRepository campaignFollowerRepository;
 
     @Value("${app.media.upload-dir}")
     private String uploadDir;
@@ -115,7 +117,8 @@ public class CampaignServiceImpl implements CampaignService {
                 hasUserId(userId),
                 hasCategory(categoryId),
                 matchesKeyword(keyword),
-                isVisibleTo(currentUser));
+                isVisibleTo(currentUser),
+                isNotFollowedBy(currentUser));
 
         return campaignRepository.findAll(spec, pageable);
     }
@@ -136,7 +139,8 @@ public class CampaignServiceImpl implements CampaignService {
                 || campaign.getStatus() == CampaignStatus.IN_PROGRESS
                 || campaign.getStatus() == CampaignStatus.COMPLETED;
 
-        if (!isAdmin && !isCreator && !isVisibleStatus) {
+        if (!isAdmin && !isCreator && !isVisibleStatus
+                && !campaignFollowerRepository.existsByCampaignIdAndUserId(id, currentUser.getId())) {
             log.warn("Campaign access denied (forbidden): campaignId={}, status={}, userId={}",
                     id, campaign.getStatus(), currentUser.getId());
             throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_ACCESS,
@@ -227,8 +231,8 @@ public class CampaignServiceImpl implements CampaignService {
                 log.warn("Delete campaign denied: not creator. campaignId={}, userId={}", id, currentUser.getId());
                 throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_DELETE);
             }
-            if (campaign.getStatus() != CampaignStatus.PENDING 
-                    && campaign.getStatus() != CampaignStatus.REJECTED 
+            if (campaign.getStatus() != CampaignStatus.PENDING
+                    && campaign.getStatus() != CampaignStatus.REJECTED
                     && campaign.getStatus() != CampaignStatus.DRAFT) {
                 log.warn("Delete campaign denied: invalid status. campaignId={}, status={}", id, campaign.getStatus());
                 throw new AppException(ErrorCode.INVALID_CAMPAIGN_STATUS_FOR_DELETE);
@@ -236,7 +240,8 @@ public class CampaignServiceImpl implements CampaignService {
         } else {
             log.info("System initiated deletion for campaign: id={}", id);
             if (campaign.getStatus() != CampaignStatus.REJECTED) {
-                log.warn("System delete campaign denied: invalid status. campaignId={}, status={}", id, campaign.getStatus());
+                log.warn("System delete campaign denied: invalid status. campaignId={}, status={}", id,
+                        campaign.getStatus());
                 throw new AppException(ErrorCode.INVALID_CAMPAIGN_STATUS_FOR_DELETE);
             }
         }
@@ -431,5 +436,10 @@ public class CampaignServiceImpl implements CampaignService {
             response.setCoverImageUrl(coverImageMap.get(campaign.getId()));
             return response;
         }).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isFollowed(Long campaignId, Long userId) {
+        return campaignFollowerRepository.existsByCampaignIdAndUserId(campaignId, userId);
     }
 }

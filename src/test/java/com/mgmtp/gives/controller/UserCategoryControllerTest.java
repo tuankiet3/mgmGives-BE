@@ -11,6 +11,7 @@ import com.mgmtp.gives.security.CustomUserDetails;
 import com.mgmtp.gives.security.CustomUserDetailsService;
 import com.mgmtp.gives.security.JwtAuthenticationFilter;
 import com.mgmtp.gives.security.JwtService;
+import com.mgmtp.gives.security.JwtAuthenticationEntryPoint;
 import com.mgmtp.gives.service.UserCategoryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,7 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(UserCategoryController.class)
-@Import({SecurityConfig.class, JwtAuthenticationFilter.class})
+@Import({SecurityConfig.class, JwtAuthenticationFilter.class, JwtAuthenticationEntryPoint.class})
 class UserCategoryControllerTest {
 
     @Autowired
@@ -82,7 +83,7 @@ class UserCategoryControllerTest {
     @Test
     void getApprovedCategories_Unauthorized_AnonymousUser() throws Exception {
         mockMvc.perform(get("/api/categories"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -106,7 +107,7 @@ class UserCategoryControllerTest {
         mockMvc.perform(post("/api/categories/suggestions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

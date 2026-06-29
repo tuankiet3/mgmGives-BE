@@ -56,7 +56,8 @@ public class AdminCampaignServiceImpl implements AdminCampaignService {
         Specification<Campaign> spec = Specification.allOf(
                 CampaignSpecifications.hasStatus(status),
                 CampaignSpecifications.hasCategory(categoryId),
-                CampaignSpecifications.matchesKeyword(keyword));
+                CampaignSpecifications.matchesKeyword(keyword),
+                (root, query, cb) -> cb.notEqual(root.get("status"), CampaignStatus.DRAFT));
         return campaignRepository.findAll(spec, pageable);
     }
 

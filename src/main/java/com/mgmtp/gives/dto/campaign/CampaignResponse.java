@@ -30,6 +30,7 @@ public class CampaignResponse {
     private List<CampaignMediaResponse> media;
     private String coverImageUrl;
     private Boolean isEditable;
+    private Boolean isFollowed;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

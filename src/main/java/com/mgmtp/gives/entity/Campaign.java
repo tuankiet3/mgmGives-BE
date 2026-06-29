@@ -101,4 +101,8 @@ public class Campaign extends BaseEntity {
     @Builder.Default
     @OneToMany(mappedBy = "campaign", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Donation> donations = new HashSet<>();
+
+    @Builder.Default
+    @OneToMany(mappedBy = "campaign", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<CampaignFollower> followers = new HashSet<>();
 }

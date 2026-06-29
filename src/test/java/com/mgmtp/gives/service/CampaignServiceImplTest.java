@@ -14,6 +14,7 @@ import com.mgmtp.gives.mapper.CampaignMapper;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.CategoryRepository;
+import com.mgmtp.gives.repository.CampaignFollowerRepository;
 import com.mgmtp.gives.service.impl.CampaignServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,6 +53,9 @@ class CampaignServiceImplTest {
     @Mock
     private CampaignMapper campaignMapper;
 
+    @Mock
+    private CampaignFollowerRepository campaignFollowerRepository;
+
     @InjectMocks
     private CampaignServiceImpl campaignService;
 
@@ -87,8 +91,7 @@ class CampaignServiceImplTest {
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(10),
                 CampaignPriority.HIGH,
-                CampaignStatus.PENDING
-        );
+                CampaignStatus.PENDING);
 
         draftRequest = new CampaignRequest(
                 "Kon Tum Water Project",
@@ -100,8 +103,7 @@ class CampaignServiceImplTest {
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(10),
                 CampaignPriority.HIGH,
-                CampaignStatus.DRAFT
-        );
+                CampaignStatus.DRAFT);
 
         lenient().when(campaignMediaRepository.existsByCampaignIdAndDeletedAtIsNullAndIsCoverTrue(any()))
                 .thenReturn(true);
@@ -275,6 +277,24 @@ class CampaignServiceImplTest {
     }
 
     @Test
+    void getCampaignById_Success_ApprovedStatus() {
+        Campaign campaign = new Campaign();
+        campaign.setId(100L);
+        campaign.setStatus(CampaignStatus.APPROVED);
+
+        User otherUser = new User();
+        otherUser.setId(3L);
+        otherUser.setRole(UserRole.USER);
+
+        when(campaignRepository.findById(100L)).thenReturn(Optional.of(campaign));
+
+        Campaign result = campaignService.getCampaignById(100L, otherUser);
+
+        assertNotNull(result);
+        assertEquals(100L, result.getId());
+    }
+
+    @Test
     void getCampaignById_Forbidden_WhenInvisibleToUser() {
         Campaign campaign = new Campaign();
         campaign.setId(100L);
@@ -286,11 +306,32 @@ class CampaignServiceImplTest {
         otherUser.setRole(UserRole.USER);
 
         when(campaignRepository.findById(100L)).thenReturn(Optional.of(campaign));
+        when(campaignFollowerRepository.existsByCampaignIdAndUserId(100L, 3L)).thenReturn(false);
 
         AppException exception = assertThrows(AppException.class,
                 () -> campaignService.getCampaignById(100L, otherUser));
 
         assertEquals(ErrorCode.UNAUTHORIZED_CAMPAIGN_ACCESS, exception.getErrorCode());
+    }
+
+    @Test
+    void getCampaignById_Success_WhenFollower() {
+        Campaign campaign = new Campaign();
+        campaign.setId(100L);
+        campaign.setUser(testUser); // creator is testUser
+        campaign.setStatus(CampaignStatus.PENDING); // status is PENDING
+
+        User otherUser = new User();
+        otherUser.setId(3L);
+        otherUser.setRole(UserRole.USER);
+
+        when(campaignRepository.findById(100L)).thenReturn(Optional.of(campaign));
+        when(campaignFollowerRepository.existsByCampaignIdAndUserId(100L, 3L)).thenReturn(true);
+
+        Campaign result = campaignService.getCampaignById(100L, otherUser);
+
+        assertNotNull(result);
+        assertEquals(100L, result.getId());
     }
 
     @Test
@@ -356,7 +397,7 @@ class CampaignServiceImplTest {
         Campaign existing = new Campaign();
         existing.setId(100L);
         existing.setUser(testUser);
-        existing.setStatus(CampaignStatus.APPROVED);
+        existing.setStatus(CampaignStatus.IN_PROGRESS);
 
         when(campaignRepository.findById(100L)).thenReturn(Optional.of(existing));
 
@@ -601,5 +642,19 @@ class CampaignServiceImplTest {
 
         assertEquals(CampaignStatus.IN_PROGRESS, campaign.getStatus());
         verify(campaignRepository, times(1)).save(campaign);
+    }
+
+    @Test
+    void isFollowed_ShouldReturnTrue_WhenRecordExists() {
+        when(campaignFollowerRepository.existsByCampaignIdAndUserId(1L, 2L)).thenReturn(true);
+        boolean result = campaignService.isFollowed(1L, 2L);
+        assertTrue(result);
+    }
+
+    @Test
+    void isFollowed_ShouldReturnFalse_WhenRecordDoesNotExist() {
+        when(campaignFollowerRepository.existsByCampaignIdAndUserId(1L, 2L)).thenReturn(false);
+        boolean result = campaignService.isFollowed(1L, 2L);
+        assertFalse(result);
     }
 }
