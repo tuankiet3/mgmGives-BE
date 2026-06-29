@@ -1,9 +1,12 @@
 package com.mgmtp.gives.repository;
 
+import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
@@ -12,4 +15,14 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     Optional<User> findByEmail(String email);
 
     boolean existsByEmail(String email);
+
+    @Query("""
+        SELECT new com.mgmtp.gives.dto.notification.NotificationRecipient(
+            u.id,
+            u.email
+        )
+        FROM User u
+        WHERE u.id = :userId
+        """)
+    Optional<NotificationRecipient> findNotificationRecipientById(@Param("userId") Long userId);
 }

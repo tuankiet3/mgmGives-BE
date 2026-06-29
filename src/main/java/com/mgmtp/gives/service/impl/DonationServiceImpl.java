@@ -85,7 +85,7 @@ public class DonationServiceImpl implements DonationService {
 
         Donation savedDonation = donationRepository.save(donation);
         campaignFollowerService.autoFollow(user.getId(), campaign.getId());
-        notificationService.broadcastDonationUpdate(savedDonation);
+
         return savedDonation;
     }
 
@@ -128,19 +128,6 @@ public class DonationServiceImpl implements DonationService {
         donation.setConfirmedAt(LocalDateTime.now());
         Donation savedDonation = donationRepository.save(donation);
 
-        // Send real-time notification
-        String amountOrGoods = donation.getType() == DonationType.MONEY 
-                ? donation.getAmount() + " units"
-                : "goods donation";
-        String message = String.format("Your donation of %s for campaign '%s' has been confirmed.", 
-                amountOrGoods, donation.getCampaign().getTitle());
-
-        notificationService.notifyDonationStatus(
-                donation.getUser(),
-                new DonationNotification(donation.getId(), "CONFIRMED", message)
-        );
-
-        notificationService.broadcastDonationUpdate(savedDonation);
         return savedDonation;
     }
 
@@ -208,16 +195,6 @@ public class DonationServiceImpl implements DonationService {
             campaignFollowerService.autoFollow(donation.getUser().getId(), donation.getCampaign().getId());
         }
 
-        String amountText = donation.getAmount() + " VND";
-        String message = String.format("Your VNPay donation of %s for campaign '%s' has been confirmed successfully.", 
-                amountText, donation.getCampaign().getTitle());
-
-        notificationService.notifyDonationStatus(
-                donation.getUser(),
-                new DonationNotification(donation.getId(), "CONFIRMED", message)
-            );
-
-        notificationService.broadcastDonationUpdate(savedDonation);
         return savedDonation;
     }
 
@@ -244,7 +221,7 @@ public class DonationServiceImpl implements DonationService {
         donation.setMessageHidden(hidden);
         donation.setUpdatedAt(LocalDateTime.now());
         Donation saved = donationRepository.save(donation);
-        notificationService.broadcastDonationUpdate(saved);
+
         return saved;
     }
 
@@ -261,7 +238,7 @@ public class DonationServiceImpl implements DonationService {
             donation.setStatus(DonationStatus.FAILED);
             donation.setUpdatedAt(LocalDateTime.now());
             donation = donationRepository.save(donation);
-            notificationService.broadcastDonationUpdate(donation);
+
         }
         return donation;
     }

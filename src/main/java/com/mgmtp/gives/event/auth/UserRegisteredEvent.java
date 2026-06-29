@@ -1,4 +1,4 @@
-package com.mgmtp.gives.event;
+package com.mgmtp.gives.event.auth;
 
 public record UserRegisteredEvent(
         String email,

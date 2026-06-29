@@ -7,7 +7,7 @@ import com.mgmtp.gives.entity.UserToken;
 import com.mgmtp.gives.enums.TokenType;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.enums.UserStatus;
-import com.mgmtp.gives.event.UserRegisteredEvent;
+import com.mgmtp.gives.event.auth.UserRegisteredEvent;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
 import com.mgmtp.gives.mapper.AuthMapper;

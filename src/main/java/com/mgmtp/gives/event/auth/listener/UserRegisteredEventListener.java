@@ -1,6 +1,6 @@
-package com.mgmtp.gives.event.listener;
+package com.mgmtp.gives.event.auth.listener;
 
-import com.mgmtp.gives.event.UserRegisteredEvent;
+import com.mgmtp.gives.event.auth.UserRegisteredEvent;
 import com.mgmtp.gives.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

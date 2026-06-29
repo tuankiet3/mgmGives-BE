@@ -1,5 +1,6 @@
 package com.mgmtp.gives.entity;
 
+import com.mgmtp.gives.enums.NotificationType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -21,7 +22,8 @@ public class Notification extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String message;
 
-    private String type;
+    @Enumerated(EnumType.STRING)
+    private NotificationType type;
 
     @Column(name = "is_read")
     private boolean isRead;
