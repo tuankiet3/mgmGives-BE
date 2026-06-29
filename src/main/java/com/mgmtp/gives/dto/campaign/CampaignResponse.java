@@ -27,6 +27,9 @@ public class CampaignResponse {
     private String creatorName;
     private List<CategoryResponse> categories;
     private List<CampaignMediaResponse> medias;
+    private List<CampaignMediaResponse> media;
+    private String coverImageUrl;
+    private Boolean isEditable;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

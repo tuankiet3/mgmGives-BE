@@ -1,10 +1,8 @@
 package com.mgmtp.gives.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mgmtp.gives.common.ApiResponse;
 import com.mgmtp.gives.common.ErrorCode;
-import com.mgmtp.gives.exception.AppException;
-import com.mgmtp.gives.common.PageResponse;
+import com.mgmtp.gives.config.SecurityConfig;
 import com.mgmtp.gives.dto.campaign.CampaignRequest;
 import com.mgmtp.gives.dto.campaign.CampaignResponse;
 import com.mgmtp.gives.entity.Campaign;
@@ -13,13 +11,13 @@ import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.enums.UserStatus;
+import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.mapper.CampaignMapper;
 import com.mgmtp.gives.security.CustomUserDetails;
 import com.mgmtp.gives.security.CustomUserDetailsService;
+import com.mgmtp.gives.security.JwtAuthenticationFilter;
 import com.mgmtp.gives.security.JwtService;
 import com.mgmtp.gives.service.CampaignService;
-import com.mgmtp.gives.config.SecurityConfig;
-import com.mgmtp.gives.security.JwtAuthenticationFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,7 +28,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -39,7 +36,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -125,6 +123,9 @@ class CampaignControllerTest {
                 .creatorName("Regular User")
                 .categories(Collections.emptyList())
                 .build();
+
+        lenient().when(campaignService.toResponse(any(), any())).thenReturn(campaignResponse);
+        lenient().when(campaignService.toResponseList(any(), any())).thenReturn(List.of(campaignResponse));
     }
 
     @Test

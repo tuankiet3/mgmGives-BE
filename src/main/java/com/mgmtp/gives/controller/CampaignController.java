@@ -18,18 +18,16 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
-import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -51,7 +49,7 @@ public class CampaignController {
         log.info("REST request to create campaign: title={}, userId={}", request.title(),
                 userDetails.getUser().getId());
         Campaign campaign = campaignService.createCampaign(request, userDetails.getUser());
-        return ApiResponse.success(campaignMapper.toResponse(campaign), "Campaign created successfully");
+        return ApiResponse.success(campaignService.toResponse(campaign, userDetails.getUser()), "Campaign created successfully");
     }
 
     @GetMapping
@@ -67,9 +65,7 @@ public class CampaignController {
         log.info("REST request to get campaigns list: status={}, priority={}, keyword={}", status, priority, keyword);
         Page<Campaign> campaignPage = campaignService.getAllCampaigns(status, priority, categoryId, userId, keyword,
                 userDetails.getUser(), pageable);
-        List<CampaignResponse> dtoList = campaignPage.getContent().stream()
-                .map(campaignMapper::toResponse)
-                .collect(Collectors.toList());
+        List<CampaignResponse> dtoList = campaignService.toResponseList(campaignPage.getContent(), userDetails.getUser());
         return ApiResponse.success(PageResponse.of(campaignPage, dtoList));
     }
 
@@ -82,10 +78,7 @@ public class CampaignController {
         log.info("REST request to get campaign details: id={}, userId={}", id,
                 currentUser != null ? currentUser.getId() : "anonymous");
         Campaign campaign = campaignService.getCampaignById(id, currentUser);
-        CampaignResponse response = campaignMapper.toResponse(campaign);
-        response.setMedias(campaignMediaMapper.toResponseList(
-                campaignService.getActiveMediasByCampaignId(id)));
-        return ApiResponse.success(response);
+        return ApiResponse.success(campaignService.toResponse(campaign, currentUser));
     }
 
     @PutMapping("/{id}")
@@ -96,7 +89,7 @@ public class CampaignController {
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         log.info("REST request to update campaign: id={}, userId={}", id, userDetails.getUser().getId());
         Campaign campaign = campaignService.updateCampaign(id, request, userDetails.getUser());
-        return ApiResponse.success(campaignMapper.toResponse(campaign), "Campaign updated successfully");
+        return ApiResponse.success(campaignService.toResponse(campaign, userDetails.getUser()), "Campaign updated successfully");
     }
 
     @DeleteMapping("/{id}")

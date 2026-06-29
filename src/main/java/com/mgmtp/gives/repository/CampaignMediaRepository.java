@@ -2,6 +2,8 @@ package com.mgmtp.gives.repository;
 
 import com.mgmtp.gives.entity.CampaignMedia;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -15,6 +17,12 @@ public interface CampaignMediaRepository extends JpaRepository<CampaignMedia, Lo
 
     List<CampaignMedia> findByCampaignIdAndDeletedAtIsNull(Long campaignId);
 
+    long countByCampaignIdAndDeletedAtIsNullAndMediaType(Long campaignId, String mediaType);
+
+    boolean existsByCampaignIdAndDeletedAtIsNullAndIsCoverTrue(Long campaignId);
+
+    @Query("SELECT m FROM CampaignMedia m WHERE m.campaign.id IN :campaignIds AND m.deletedAt IS NULL AND m.isCover = true")
+    List<CampaignMedia> findCoverImagesByCampaignIds(@Param("campaignIds") List<Long> campaignIds);
     Optional<CampaignMedia> findByUrl(String url);
 
     List<CampaignMedia> findByDeletedAtNotNullAndDeletedAtBefore(LocalDateTime cutoff);

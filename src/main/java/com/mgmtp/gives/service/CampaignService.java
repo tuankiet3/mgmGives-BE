@@ -1,15 +1,15 @@
 package com.mgmtp.gives.service;
 
 import com.mgmtp.gives.dto.campaign.CampaignRequest;
+import com.mgmtp.gives.dto.campaign.CampaignResponse;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-
-import com.mgmtp.gives.entity.CampaignMedia;
 import java.util.List;
+import com.mgmtp.gives.entity.CampaignMedia;
 
 public interface CampaignService {
     Campaign createCampaign(CampaignRequest request, User currentUser);
@@ -32,4 +32,8 @@ public interface CampaignService {
     void startApprovedCampaignsScheduled();
 
     List<CampaignMedia> getActiveMediasByCampaignId(Long campaignId);
+
+    CampaignResponse toResponse(Campaign campaign, User currentUser);
+
+    List<CampaignResponse> toResponseList(List<Campaign> campaigns, User currentUser);
 }

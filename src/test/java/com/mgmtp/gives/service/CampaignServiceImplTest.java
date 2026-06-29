@@ -10,6 +10,8 @@ import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
+import com.mgmtp.gives.mapper.CampaignMapper;
+import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.CategoryRepository;
 import com.mgmtp.gives.service.impl.CampaignServiceImpl;
@@ -26,7 +28,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -41,6 +46,12 @@ class CampaignServiceImplTest {
     @Mock
     private CategoryRepository categoryRepository;
 
+    @Mock
+    private CampaignMediaRepository campaignMediaRepository;
+
+    @Mock
+    private CampaignMapper campaignMapper;
+
     @InjectMocks
     private CampaignServiceImpl campaignService;
 
@@ -48,6 +59,7 @@ class CampaignServiceImplTest {
     private User testAdmin;
     private Category testCategory;
     private CampaignRequest validRequest;
+    private CampaignRequest draftRequest;
 
     @BeforeEach
     void setUp() {
@@ -75,11 +87,50 @@ class CampaignServiceImplTest {
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(10),
                 CampaignPriority.HIGH,
-                CampaignStatus.PENDING);
+                CampaignStatus.PENDING
+        );
+
+        draftRequest = new CampaignRequest(
+                "Kon Tum Water Project",
+                "Clean water for children",
+                Set.of(10L),
+                true,
+                true,
+                5000L,
+                LocalDateTime.now().plusDays(1),
+                LocalDateTime.now().plusDays(10),
+                CampaignPriority.HIGH,
+                CampaignStatus.DRAFT
+        );
+
+        lenient().when(campaignMediaRepository.existsByCampaignIdAndDeletedAtIsNullAndIsCoverTrue(any()))
+                .thenReturn(true);
     }
 
     @Test
     void createCampaign_Success() {
+        when(categoryRepository.findAllById(anySet())).thenReturn(List.of(testCategory));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(invocation -> {
+            Campaign saved = invocation.getArgument(0);
+            saved.setId(100L);
+            return saved;
+        });
+
+        Campaign result = campaignService.createCampaign(draftRequest, testUser);
+
+        assertNotNull(result);
+        assertEquals(100L, result.getId());
+        assertEquals("Kon Tum Water Project", result.getTitle());
+        assertEquals(CampaignStatus.DRAFT, result.getStatus());
+        assertEquals(testUser, result.getUser());
+        assertTrue(result.getCategories().contains(testCategory));
+
+        verify(categoryRepository, times(1)).findAllById(anySet());
+        verify(campaignRepository, times(1)).save(any(Campaign.class));
+    }
+
+    @Test
+    void createCampaign_Success_PendingStatus() {
         when(categoryRepository.findAllById(anySet())).thenReturn(List.of(testCategory));
         when(campaignRepository.save(any(Campaign.class))).thenAnswer(invocation -> {
             Campaign saved = invocation.getArgument(0);
@@ -112,7 +163,7 @@ class CampaignServiceImplTest {
                 LocalDateTime.now().plusDays(5),
                 LocalDateTime.now().plusDays(2), // End date is before start date
                 CampaignPriority.HIGH,
-                CampaignStatus.PENDING);
+                CampaignStatus.DRAFT);
 
         AppException exception = assertThrows(AppException.class,
                 () -> campaignService.createCampaign(invalidRequest, testUser));
@@ -135,7 +186,7 @@ class CampaignServiceImplTest {
                 sameTime,
                 sameTime, // End date equals start date
                 CampaignPriority.HIGH,
-                CampaignStatus.PENDING);
+                CampaignStatus.DRAFT);
 
         AppException exception = assertThrows(AppException.class,
                 () -> campaignService.createCampaign(invalidRequest, testUser));
@@ -145,11 +196,33 @@ class CampaignServiceImplTest {
     }
 
     @Test
+    void createCampaign_StartDateInPast_ThrowsException() {
+        CampaignRequest invalidRequest = new CampaignRequest(
+                "Water Project",
+                "Description",
+                Set.of(10L),
+                true,
+                true,
+                5000L,
+                LocalDateTime.now().minusDays(1), // Start date in the past
+                LocalDateTime.now().plusDays(5),
+                CampaignPriority.HIGH,
+                CampaignStatus.DRAFT);
+
+        AppException exception = assertThrows(AppException.class,
+                () -> campaignService.createCampaign(invalidRequest, testUser));
+
+        assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
+        assertEquals("Start date cannot be in the past", exception.getMessage());
+        verifyNoInteractions(categoryRepository, campaignRepository);
+    }
+
+    @Test
     void createCampaign_InvalidCategories_ThrowsException() {
         when(categoryRepository.findAllById(anySet())).thenReturn(Collections.emptyList());
 
         AppException exception = assertThrows(AppException.class,
-                () -> campaignService.createCampaign(validRequest, testUser));
+                () -> campaignService.createCampaign(draftRequest, testUser));
 
         assertEquals(ErrorCode.CATEGORY_NOT_FOUND, exception.getErrorCode());
         verify(categoryRepository, times(1)).findAllById(anySet());
@@ -419,7 +492,7 @@ class CampaignServiceImplTest {
         when(categoryRepository.findAllById(anySet())).thenReturn(List.of(rejectedCategory));
 
         AppException exception = assertThrows(AppException.class,
-                () -> campaignService.createCampaign(validRequest, testUser));
+                () -> campaignService.createCampaign(draftRequest, testUser));
 
         assertEquals(ErrorCode.CATEGORY_NOT_AVAILABLE, exception.getErrorCode());
         verify(categoryRepository, times(1)).findAllById(anySet());
@@ -436,7 +509,7 @@ class CampaignServiceImplTest {
         when(categoryRepository.findAllById(anySet())).thenReturn(List.of(hiddenCategory));
 
         AppException exception = assertThrows(AppException.class,
-                () -> campaignService.createCampaign(validRequest, testUser));
+                () -> campaignService.createCampaign(draftRequest, testUser));
 
         assertEquals(ErrorCode.CATEGORY_NOT_AVAILABLE, exception.getErrorCode());
         verify(categoryRepository, times(1)).findAllById(anySet());

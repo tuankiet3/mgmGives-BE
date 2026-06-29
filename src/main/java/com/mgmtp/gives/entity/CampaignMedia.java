@@ -26,4 +26,7 @@ public class CampaignMedia extends BaseEntity {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+    @Builder.Default
+    @Column(name = "is_cover", nullable = false)
+    private boolean isCover = false;
 }

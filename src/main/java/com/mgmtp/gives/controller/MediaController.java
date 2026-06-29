@@ -1,6 +1,7 @@
 package com.mgmtp.gives.controller;
 
 import com.mgmtp.gives.common.ApiResponse;
+import com.mgmtp.gives.dto.campaign.CampaignMediaResponse;
 import com.mgmtp.gives.entity.CampaignMedia;
 import com.mgmtp.gives.security.CustomUserDetails;
 import com.mgmtp.gives.service.MediaService;
@@ -27,10 +28,12 @@ public class MediaController {
     @PostMapping(value = "/upload/campaign", consumes = MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Upload campaign media", description = "Uploads an image or video file for a campaign. Accepts image/jpeg, image/png, image/webp (max 5MB) and video/mp4, video/quicktime, video/x-msvideo, video/webm (max 50MB).")
-    public ApiResponse<CampaignMedia> uploadCampaignMedia(
+    public ApiResponse<CampaignMediaResponse> uploadCampaignMedia(
             @RequestParam("file") MultipartFile file,
-            @RequestParam("campaignId") Long campaignId) {
-        CampaignMedia media = mediaService.uploadCampaignMedia(file, campaignId);
+            @RequestParam("campaignId") Long campaignId,
+            @RequestParam(value = "isCover", required = false, defaultValue = "false") boolean isCover,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        CampaignMediaResponse media = mediaService.uploadCampaignMedia(file, campaignId, isCover, userDetails.getUser());
         return ApiResponse.success(media, "Campaign media uploaded successfully");
     }
 
@@ -43,8 +46,10 @@ public class MediaController {
 
     @DeleteMapping("/{id}/campaign")
     @Operation(summary = "Soft delete campaign media", description = "Marks a campaign media record as deleted. The file remains on disk and can be restored within 14 days.")
-    public ApiResponse<CampaignMedia> softDeleteCampaignMedia(@PathVariable Long id) {
-        CampaignMedia media = mediaService.softDeleteCampaignMedia(id);
+    public ApiResponse<CampaignMediaResponse> softDeleteCampaignMedia(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        CampaignMediaResponse media = mediaService.softDeleteCampaignMedia(id, userDetails.getUser());
         return ApiResponse.success(media, "Campaign media deleted successfully");
     }
 
@@ -60,8 +65,9 @@ public class MediaController {
 
     @PatchMapping("/{id}/campaign/restore")
     @Operation(summary = "Restore campaign media", description = "Restores a soft-deleted campaign media record. Must be within 14 days of deletion.")
-    public ApiResponse<CampaignMedia> restoreCampaignMedia(@PathVariable Long id) {
+    public ApiResponse<CampaignMediaResponse> restoreCampaignMedia(@PathVariable Long id) {
         CampaignMedia media = mediaService.restoreCampaignMedia(id);
-        return ApiResponse.success(media, "Campaign media restored successfully");
+        CampaignMediaResponse response = new CampaignMediaResponse(media.getId(), media.getUrl(), media.getMediaType(), media.isCover());
+        return ApiResponse.success(response, "Campaign media restored successfully");
     }
 }

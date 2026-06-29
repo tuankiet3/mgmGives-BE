@@ -1,8 +1,11 @@
 package com.mgmtp.gives.service.impl;
 
 import com.mgmtp.gives.common.ErrorCode;
+import com.mgmtp.gives.dto.campaign.CampaignMediaResponse;
 import com.mgmtp.gives.dto.campaign.CampaignRequest;
+import com.mgmtp.gives.dto.campaign.CampaignResponse;
 import com.mgmtp.gives.entity.Campaign;
+import com.mgmtp.gives.entity.CampaignMedia;
 import com.mgmtp.gives.entity.Category;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignPriority;
@@ -11,11 +14,12 @@ import com.mgmtp.gives.enums.CategoryStatus;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
+import com.mgmtp.gives.mapper.CampaignMapper;
+import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.CategoryRepository;
-import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.service.CampaignService;
-import static com.mgmtp.gives.specification.CampaignSpecifications.*;
+import com.mgmtp.gives.util.HtmlSanitizerUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -28,13 +32,15 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
+
+import static com.mgmtp.gives.specification.CampaignSpecifications.*;
 
 import org.springframework.beans.factory.annotation.Value;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.io.IOException;
-import com.mgmtp.gives.entity.CampaignMedia;
 
 @Service
 @RequiredArgsConstructor
@@ -44,6 +50,7 @@ public class CampaignServiceImpl implements CampaignService {
     private final CampaignRepository campaignRepository;
     private final CategoryRepository categoryRepository;
     private final CampaignMediaRepository campaignMediaRepository;
+    private final CampaignMapper campaignMapper;
 
     @Value("${app.media.upload-dir}")
     private String uploadDir;
@@ -53,7 +60,7 @@ public class CampaignServiceImpl implements CampaignService {
     public Campaign createCampaign(CampaignRequest request, User currentUser) {
         log.info("Creating campaign: title={}, userId={}", request.title(),
                 currentUser != null ? currentUser.getId() : null);
-        validateDateRange(request, LocalDateTime.now());
+        validateDateRange(request);
 
         CampaignStatus status = request.status();
         if (status == null) {
@@ -71,14 +78,14 @@ public class CampaignServiceImpl implements CampaignService {
         if (status == CampaignStatus.PENDING) {
             boolean money = request.acceptsMoney() != null ? request.acceptsMoney() : true;
             boolean goods = request.acceptsGoods() != null ? request.acceptsGoods() : true;
-            validatePendingCampaign(request, money, goods);
+            validatePendingCampaign(null, request, money, goods);
         }
 
         Set<Category> categories = fetchAndValidateCategories(request.categories());
 
         Campaign campaign = Campaign.builder()
                 .title(request.title())
-                .description(request.description())
+                .description(HtmlSanitizerUtil.sanitize(request.description()))
                 .startDate(request.startDate())
                 .endDate(request.endDate())
                 .target(request.target())
@@ -156,7 +163,8 @@ public class CampaignServiceImpl implements CampaignService {
         }
 
         if (!isAdmin && campaign.getStatus() != CampaignStatus.DRAFT
-                && campaign.getStatus() != CampaignStatus.REJECTED) {
+                && campaign.getStatus() != CampaignStatus.REJECTED
+                && campaign.getStatus() != CampaignStatus.PENDING) {
             log.warn("Update campaign denied: invalid status for non-admin. campaignId={}, status={}, userId={}",
                     id, campaign.getStatus(), currentUser.getId());
             throw new AppException(ErrorCode.INVALID_CAMPAIGN_STATUS_FOR_UPDATE);
@@ -185,14 +193,14 @@ public class CampaignServiceImpl implements CampaignService {
         if (newStatus == CampaignStatus.PENDING) {
             boolean money = request.acceptsMoney() != null ? request.acceptsMoney() : campaign.isAcceptsMoney();
             boolean goods = request.acceptsGoods() != null ? request.acceptsGoods() : campaign.isAcceptsGoods();
-            validatePendingCampaign(request, money, goods);
+            validatePendingCampaign(campaign.getId(), request, money, goods);
         }
 
-        validateDateRange(request, campaign.getCreatedAt());
+        validateDateRange(request);
         Set<Category> categories = fetchAndValidateCategories(request.categories());
 
         campaign.setTitle(request.title());
-        campaign.setDescription(request.description());
+        campaign.setDescription(HtmlSanitizerUtil.sanitize(request.description()));
         campaign.setStartDate(request.startDate());
         campaign.setEndDate(request.endDate());
         campaign.setTarget(request.target());
@@ -219,7 +227,6 @@ public class CampaignServiceImpl implements CampaignService {
                 log.warn("Delete campaign denied: not creator. campaignId={}, userId={}", id, currentUser.getId());
                 throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_DELETE);
             }
-
             if (campaign.getStatus() != CampaignStatus.PENDING 
                     && campaign.getStatus() != CampaignStatus.REJECTED 
                     && campaign.getStatus() != CampaignStatus.DRAFT) {
@@ -273,12 +280,12 @@ public class CampaignServiceImpl implements CampaignService {
         }
     }
 
-    private void validateDateRange(CampaignRequest request, LocalDateTime createdAt) {
-        LocalDateTime limit = createdAt != null ? createdAt : LocalDateTime.now();
+    private void validateDateRange(CampaignRequest request) {
+        LocalDateTime limit = LocalDateTime.now().toLocalDate().atStartOfDay();
         if (request.startDate() != null && request.startDate().isBefore(limit)) {
-            log.warn("Campaign date validation failed: startDate={}, creation date={}",
+            log.warn("Campaign date validation failed: startDate={}, limit={}",
                     request.startDate(), limit);
-            throw new AppException(ErrorCode.VALIDATION_ERROR, "Start date cannot be before creation date");
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Start date cannot be in the past");
         }
         if (request.startDate() != null && request.endDate() != null) {
             if (!request.startDate().isBefore(request.endDate())) {
@@ -289,7 +296,7 @@ public class CampaignServiceImpl implements CampaignService {
         }
     }
 
-    private void validatePendingCampaign(CampaignRequest request, boolean money, boolean goods) {
+    private void validatePendingCampaign(Long campaignId, CampaignRequest request, boolean money, boolean goods) {
         if (request.description() == null || request.description().trim().isEmpty()) {
             log.warn("Pending campaign validation failed: description is empty");
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Description is required for submission");
@@ -317,6 +324,13 @@ public class CampaignServiceImpl implements CampaignService {
         if (request.endDate() == null) {
             log.warn("Pending campaign validation failed: end date is null");
             throw new AppException(ErrorCode.VALIDATION_ERROR, "End date is required for submission");
+        }
+        if (campaignId != null) {
+            boolean hasCover = campaignMediaRepository.existsByCampaignIdAndDeletedAtIsNullAndIsCoverTrue(campaignId);
+            if (!hasCover) {
+                throw new AppException(ErrorCode.VALIDATION_ERROR,
+                        "At least one cover image is required for submission");
+            }
         }
     }
 
@@ -354,5 +368,68 @@ public class CampaignServiceImpl implements CampaignService {
     @Transactional(readOnly = true)
     public List<CampaignMedia> getActiveMediasByCampaignId(Long campaignId) {
         return campaignMediaRepository.findByCampaignIdAndDeletedAtIsNull(campaignId);
+    }
+
+    @Override
+    public CampaignResponse toResponse(Campaign campaign, User currentUser) {
+        if (campaign == null) {
+            return null;
+        }
+        CampaignResponse response = campaignMapper.toResponse(campaign);
+
+        // 1. isEditable
+        boolean isAdmin = currentUser != null && currentUser.getRole() == UserRole.ADMIN;
+        boolean isCreator = campaign.getUser() != null && currentUser != null
+                && campaign.getUser().getId().equals(currentUser.getId());
+        boolean isEditable = isAdmin || (isCreator && campaign.getStatus().isEditable());
+        response.setIsEditable(isEditable);
+
+        // 2. Fetch active media
+        List<CampaignMedia> activeMedia = campaignMediaRepository.findByCampaignIdAndDeletedAtIsNull(campaign.getId());
+        List<CampaignMediaResponse> mediaResponses = activeMedia.stream()
+                .map(m -> new CampaignMediaResponse(m.getId(), m.getUrl(), m.getMediaType(), m.isCover()))
+                .toList();
+        response.setMedia(mediaResponses);
+        response.setMedias(mediaResponses);
+
+        // 3. coverImageUrl
+        String coverImageUrl = activeMedia.stream()
+                .filter(CampaignMedia::isCover)
+                .map(CampaignMedia::getUrl)
+                .findFirst()
+                .orElse(null);
+        response.setCoverImageUrl(coverImageUrl);
+
+        return response;
+    }
+
+    @Override
+    public List<CampaignResponse> toResponseList(List<Campaign> campaigns, User currentUser) {
+        if (campaigns == null || campaigns.isEmpty()) {
+            return List.of();
+        }
+
+        // 1. Batch fetch cover images
+        List<Long> campaignIds = campaigns.stream().map(Campaign::getId).toList();
+        List<CampaignMedia> coverImages = campaignMediaRepository.findCoverImagesByCampaignIds(campaignIds);
+        java.util.Map<Long, String> coverImageMap = coverImages.stream()
+                .collect(Collectors.toMap(
+                        m -> m.getCampaign().getId(),
+                        CampaignMedia::getUrl,
+                        (existing, replacement) -> existing));
+
+        // 2. Map and enrich each campaign
+        return campaigns.stream().map(campaign -> {
+            CampaignResponse response = campaignMapper.toResponse(campaign);
+
+            boolean isAdmin = currentUser != null && currentUser.getRole() == UserRole.ADMIN;
+            boolean isCreator = campaign.getUser() != null && currentUser != null
+                    && campaign.getUser().getId().equals(currentUser.getId());
+            boolean isEditable = isAdmin || (isCreator && campaign.getStatus().isEditable());
+            response.setIsEditable(isEditable);
+
+            response.setCoverImageUrl(coverImageMap.get(campaign.getId()));
+            return response;
+        }).toList();
     }
 }

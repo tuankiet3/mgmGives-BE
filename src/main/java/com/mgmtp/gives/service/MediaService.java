@@ -1,14 +1,15 @@
 package com.mgmtp.gives.service;
 
+import com.mgmtp.gives.dto.campaign.CampaignMediaResponse;
 import com.mgmtp.gives.entity.CampaignMedia;
 import com.mgmtp.gives.entity.User;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface MediaService {
 
-    CampaignMedia uploadCampaignMedia(MultipartFile file, Long campaignId);
+    CampaignMediaResponse uploadCampaignMedia(MultipartFile file, Long campaignId, boolean isCover, User currentUser);
 
-    CampaignMedia softDeleteCampaignMedia(Long id);
+    CampaignMediaResponse softDeleteCampaignMedia(Long id, User currentUser);
 
     CampaignMedia restoreCampaignMedia(Long id);
 

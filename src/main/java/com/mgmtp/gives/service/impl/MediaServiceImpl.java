@@ -1,11 +1,13 @@
 package com.mgmtp.gives.service.impl;
 
 import com.mgmtp.gives.common.ErrorCode;
+import com.mgmtp.gives.dto.campaign.CampaignMediaResponse;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.CampaignMedia;
+import com.mgmtp.gives.entity.User;
+import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
-import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.UserRepository;
@@ -40,12 +42,21 @@ public class MediaServiceImpl implements MediaService {
 
     @Override
     @Transactional
-    public CampaignMedia uploadCampaignMedia(MultipartFile file, Long campaignId) {
+    public CampaignMediaResponse uploadCampaignMedia(MultipartFile file, Long campaignId, boolean isCover, User currentUser) {
         MediaValidationUtil.validateFile(file, false);
 
         Campaign campaign = campaignRepository.findById(campaignId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CAMPAIGN_NOT_FOUND,
                         "Campaign not found with ID: " + campaignId));
+
+        if (campaign.getUser() == null || !campaign.getUser().getId().equals(currentUser.getId())) {
+            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE, "Only the campaign creator can upload media");
+        }
+
+        String detectedType = MediaValidationUtil.detectCategory(file.getContentType());
+        if (isCover && !"IMAGE".equals(detectedType)) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Only image files can be set as cover image");
+        }
 
         String originalFilename = file.getOriginalFilename();
         String extension = (originalFilename != null && originalFilename.contains("."))
@@ -64,24 +75,58 @@ public class MediaServiceImpl implements MediaService {
 
         CampaignMedia media = CampaignMedia.builder()
                 .url(filename)
-                .mediaType(MediaValidationUtil.detectCategory(file.getContentType()))
+                .mediaType(detectedType)
+                .isCover(isCover)
                 .campaign(campaign)
                 .build();
 
         CampaignMedia saved = campaignMediaRepository.save(media);
-        log.info("Campaign media uploaded: id={}, file={}, type={}, campaignId={}", saved.getId(), filename, saved.getMediaType(), campaignId);
-        return saved;
+
+        // If isCover is true, soft-delete any existing cover images of the campaign
+        if (isCover) {
+            campaignMediaRepository.findByCampaignIdAndDeletedAtIsNull(campaignId)
+                    .stream()
+                    .filter(CampaignMedia::isCover)
+                    .filter(m -> !m.getId().equals(saved.getId()))
+                    .forEach(this::softDeleteMedia);
+        }
+
+        log.info("Campaign media uploaded: id={}, file={}, type={}, isCover={}, campaignId={}", 
+                saved.getId(), filename, saved.getMediaType(), saved.isCover(), campaignId);
+        return new CampaignMediaResponse(saved.getId(), saved.getUrl(), saved.getMediaType(), saved.isCover());
     }
 
     @Override
     @Transactional
-    public CampaignMedia softDeleteCampaignMedia(Long id) {
+    public CampaignMediaResponse softDeleteCampaignMedia(Long id, User currentUser) {
         CampaignMedia media = campaignMediaRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CAMPAIGN_MEDIA_NOT_FOUND,
                         "Campaign media not found with ID: " + id));
 
+        if (media.getCampaign().getUser() == null || !media.getCampaign().getUser().getId().equals(currentUser.getId())) {
+            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE, "Only the campaign creator can delete media");
+        }
+
+        if (media.isCover()) {
+            CampaignStatus campaignStatus = media.getCampaign().getStatus();
+            if (campaignStatus != CampaignStatus.DRAFT
+                    && campaignStatus != CampaignStatus.PENDING
+                    && campaignStatus != CampaignStatus.REJECTED) {
+                throw new AppException(ErrorCode.VALIDATION_ERROR, "Cannot remove cover photo directly");
+            }
+        }
+
         if (media.getDeletedAt() != null) {
             throw new AppException(ErrorCode.MEDIA_ALREADY_DELETED);
+        }
+
+        softDeleteMedia(media);
+        return new CampaignMediaResponse(media.getId(), media.getUrl(), media.getMediaType(), media.isCover());
+    }
+
+    private void softDeleteMedia(CampaignMedia media) {
+        if (media.getDeletedAt() != null) {
+            return;
         }
 
         // Move file to /app/media/trash
@@ -104,9 +149,8 @@ public class MediaServiceImpl implements MediaService {
         }
 
         media.setDeletedAt(LocalDateTime.now());
-        CampaignMedia saved = campaignMediaRepository.save(media);
-        log.info("Campaign media soft deleted: id={}, file={}", saved.getId(), saved.getUrl());
-        return saved;
+        campaignMediaRepository.save(media);
+        log.info("Campaign media soft deleted: id={}, file={}", media.getId(), media.getUrl());
     }
 
     @Override
