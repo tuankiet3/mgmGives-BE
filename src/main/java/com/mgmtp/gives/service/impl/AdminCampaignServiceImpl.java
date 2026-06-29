@@ -8,6 +8,7 @@ import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
+import com.mgmtp.gives.notification.publisher.CampaignNotificationPublisher;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
@@ -38,6 +39,7 @@ public class AdminCampaignServiceImpl implements AdminCampaignService {
     private final CampaignRepository campaignRepository;
     private final CampaignMemberRepository campaignMemberRepository;
     private final CampaignMediaRepository campaignMediaRepository;
+    private final CampaignNotificationPublisher publisher;
 
     @Value("${file.upload-dir:uploads}")
     private String uploadDir;
@@ -81,8 +83,14 @@ public class AdminCampaignServiceImpl implements AdminCampaignService {
             throw new AppException(ErrorCode.INVALID_CAMPAIGN_STATUS_FOR_REVIEW,
                     "Only PENDING campaigns can be approved");
         }
+        CampaignStatus oldStatus = campaign.getStatus();
 
-        campaign.setStatus(CampaignStatus.APPROVED);
+        CampaignStatus newStatus = shouldStartImmediately(campaign)
+                ? CampaignStatus.IN_PROGRESS
+                : CampaignStatus.APPROVED;
+
+        campaign.setStatus(newStatus);
+
         campaign.setApprovedAt(LocalDateTime.now());
         campaign.setApprovedBy(adminUser);
         campaign.setRejectionReason(null); // Clear any previous rejection reason
@@ -104,6 +112,9 @@ public class AdminCampaignServiceImpl implements AdminCampaignService {
                     campaign.getUser().getId(), campaign.getId());
         }
 
+        publisher.publishCampaignStatusChanged(saved, oldStatus, saved.getStatus());
+        log.info("Campaign approved successfully: id={}, adminId={}", id, adminUser.getId());
+
         return saved;
     }
 
@@ -118,6 +129,7 @@ public class AdminCampaignServiceImpl implements AdminCampaignService {
             throw new AppException(ErrorCode.INVALID_CAMPAIGN_STATUS_FOR_REVIEW,
                     "Only PENDING campaigns can be rejected");
         }
+        CampaignStatus oldStatus = campaign.getStatus();
 
         campaign.setStatus(CampaignStatus.REJECTED);
         campaign.setRejectionReason(reason);
@@ -125,6 +137,13 @@ public class AdminCampaignServiceImpl implements AdminCampaignService {
         campaign.setApprovedAt(null); // Not approved
 
         Campaign saved = campaignRepository.save(campaign);
+
+        publisher.publishCampaignStatusChanged(
+                saved,
+                oldStatus,
+                saved.getStatus()
+        );
+
         log.info("Campaign rejected successfully: id={}, adminId={}, reason='{}'", id, adminUser.getId(), reason);
         return saved;
     }
@@ -166,5 +185,10 @@ public class AdminCampaignServiceImpl implements AdminCampaignService {
         campaignRepository.delete(campaign);
         log.info("Admin deleted campaign successfully: id={}, title={}, adminId={}",
                 id, campaign.getTitle(), adminUser.getId());
+    }
+
+    private boolean shouldStartImmediately(Campaign campaign) {
+        return campaign.getStartDate() != null
+                && !campaign.getStartDate().isAfter(LocalDateTime.now());
     }
 }

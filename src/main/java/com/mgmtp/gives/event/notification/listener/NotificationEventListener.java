@@ -34,4 +34,19 @@ public class NotificationEventListener {
                 notificationCommandFactory.campaignDonationConfirmed(event)
         );
     }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleCampaignStatusChanged(CampaignStatusChangedEvent event) {
+        log.info(
+                "Handling campaign status changed event: campaignId={}, oldStatus={}, newStatus={}",
+                event.campaignId(),
+                event.oldStatus(),
+                event.newStatus()
+        );
+
+        notificationService.createNotification(
+                notificationCommandFactory.campaignStatusChanged(event)
+        );
+    }
 }

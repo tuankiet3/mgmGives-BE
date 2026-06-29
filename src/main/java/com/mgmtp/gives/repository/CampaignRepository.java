@@ -10,6 +10,8 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface CampaignRepository extends JpaRepository<Campaign, Long>, JpaSpecificationExecutor<Campaign> {
@@ -29,4 +31,26 @@ public interface CampaignRepository extends JpaRepository<Campaign, Long>, JpaSp
 
     java.util.List<Campaign> findByStatusAndStartDateBetween(CampaignStatus status, java.time.LocalDateTime start,
             java.time.LocalDateTime end);
+
+    @Query(
+            value = """
+                SELECT *
+                FROM campaigns c
+                WHERE c.status = CAST('APPROVED' AS campaign_status)
+                  AND c.start_date <= :now
+                """,
+            nativeQuery = true
+    )
+    List<Campaign> findApprovedCampaignsToStart(@Param("now") LocalDateTime now);
+
+    @Query(
+            value = """
+                SELECT *
+                FROM campaigns c
+                WHERE c.status = CAST('IN_PROGRESS' AS campaign_status)
+                  AND c.end_date <= :now
+                """,
+            nativeQuery = true
+    )
+    List<Campaign> findInProgressCampaignsToComplete(@Param("now") LocalDateTime now);
 }

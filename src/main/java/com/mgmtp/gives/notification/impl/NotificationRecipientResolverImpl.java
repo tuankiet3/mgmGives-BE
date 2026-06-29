@@ -11,9 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 @Service @RequiredArgsConstructor @Slf4j
 public class NotificationRecipientResolverImpl implements NotificationRecipientResolver {
@@ -78,5 +76,25 @@ public class NotificationRecipientResolverImpl implements NotificationRecipientR
                 .forEach(recipients::add);
 
         return recipients;
+    }
+
+    @Override
+    public Set<NotificationRecipient> campaignOwnerAndFollowers(Long campaignId) {
+        Map<Long, NotificationRecipient> recipients = new LinkedHashMap<>();
+
+        for (NotificationRecipient owner : campaignOwner(campaignId)) {
+            recipients.put(owner.userId(), owner);
+        }
+
+        List<User> followers = campaignFollowerRepository.findFollowerUsersByCampaignId(campaignId);
+
+        for (User follower : followers) {
+            recipients.put(
+                    follower.getId(),
+                    new NotificationRecipient(follower.getId(), follower.getEmail())
+            );
+        }
+
+        return new LinkedHashSet<>(recipients.values());
     }
 }

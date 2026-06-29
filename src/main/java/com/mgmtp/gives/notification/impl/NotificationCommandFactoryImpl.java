@@ -2,6 +2,7 @@ package com.mgmtp.gives.notification.impl;
 
 import com.mgmtp.gives.dto.notification.CreateNotificationCommand;
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
+import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.DonationType;
 import com.mgmtp.gives.enums.NotificationType;
 import com.mgmtp.gives.event.notification.*;
@@ -71,6 +72,49 @@ public class NotificationCommandFactoryImpl implements NotificationCommandFactor
                 )
                 .linkUrl("/admin/campaigns/" + event.campaignId())
                 .build();
+    }
+
+    public CreateNotificationCommand campaignStatusChanged(CampaignStatusChangedEvent event) {
+        Set<NotificationRecipient> recipients = event.oldStatus() == CampaignStatus.PENDING
+                ? recipientResolver.campaignOwner(event.campaignId())
+                : recipientResolver.campaignOwnerAndFollowers(event.campaignId());
+
+        return CreateNotificationCommand.builder()
+                .recipients(recipients)
+                .type(NotificationType.CAMPAIGN_STATUS_CHANGED)
+                .title(buildCampaignStatusChangedTitle(event.newStatus()))
+                .message(
+                        "Campaign \"" + event.campaignTitle() +
+                                "\" status changed from " + formatCampaignStatus(event.oldStatus()) +
+                                " to " + formatCampaignStatus(event.newStatus()) + "."
+                )
+                .linkUrl("/campaigns/" + event.campaignId())
+                .build();
+    }
+
+    private String buildCampaignStatusChangedTitle(CampaignStatus newStatus) {
+        return switch (newStatus) {
+            case APPROVED -> "Campaign approved";
+            case REJECTED -> "Campaign rejected";
+            case IN_PROGRESS -> "Campaign started";
+            case COMPLETED -> "Campaign completed";
+            default -> "Campaign status updated";
+        };
+    }
+
+    private String formatCampaignStatus(CampaignStatus status) {
+        if (status == null) {
+            return "Unknown";
+        }
+
+        return switch (status) {
+            case DRAFT -> "Draft";
+            case PENDING -> "Pending";
+            case APPROVED -> "Approved";
+            case REJECTED -> "Rejected";
+            case IN_PROGRESS -> "In progress";
+            case COMPLETED -> "Completed";
+        };
     }
 
     private String formatContribution(DonationType donationType, Long amount, String goodsDescription) {

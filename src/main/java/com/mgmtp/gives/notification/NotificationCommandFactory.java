@@ -7,4 +7,6 @@ public interface NotificationCommandFactory {
     CreateNotificationCommand donationConfirmed(DonationConfirmedEvent event);
 
     CreateNotificationCommand campaignDonationConfirmed(CampaignDonationConfirmedEvent event);
+
+    CreateNotificationCommand campaignStatusChanged(CampaignStatusChangedEvent event);
 }
