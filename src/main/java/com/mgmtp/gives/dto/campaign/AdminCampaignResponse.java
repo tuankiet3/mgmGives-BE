@@ -19,6 +19,7 @@ public class AdminCampaignResponse {
     private LocalDateTime startDate;
     private LocalDateTime endDate;
     private Long target;
+    private Long currentRaised;
     private CampaignPriority priority;
 
     // Submitter info

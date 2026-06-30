@@ -39,10 +39,7 @@ public final class CampaignSpecifications {
             if (keyword == null || keyword.trim().isEmpty())
                 return null;
             String pattern = "%" + keyword.trim().toLowerCase() + "%";
-            return cb.or(
-                    cb.like(cb.lower(root.get("title")), pattern),
-                    cb.like(cb.lower(root.get("description")), pattern),
-                    cb.like(cb.lower(root.join("user").get("fullName")), pattern));
+            return cb.like(cb.lower(root.get("title")), pattern);
         };
     }
 
