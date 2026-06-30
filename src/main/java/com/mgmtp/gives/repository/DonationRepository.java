@@ -14,8 +14,8 @@ import java.util.List;
 public interface DonationRepository extends JpaRepository<Donation, Long>, JpaSpecificationExecutor<Donation> {
     List<Donation> findByUserIdOrderByCreatedAtDesc(Long userId);
 
-    @Query("SELECT COALESCE(SUM(d.amount), 0) FROM Donation d WHERE d.campaign.id = :campaignId AND d.status <> 'FAILED'")
-    Long sumAmountByCampaignIdAndStatusNotFailed(@Param("campaignId") Long campaignId);
+    @Query("SELECT COALESCE(SUM(d.amount), 0) FROM Donation d WHERE d.campaign.id = :campaignId AND d.status <> :failedStatus")
+    Long sumAmountByCampaignIdAndStatusNotFailed(@Param("campaignId") Long campaignId, @Param("failedStatus") DonationStatus failedStatus);
 
     List<Donation> findByCampaignIdAndStatusNotOrderByCreatedAtDesc(Long campaignId, DonationStatus status);
 }

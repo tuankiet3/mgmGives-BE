@@ -21,6 +21,7 @@ import com.mgmtp.gives.repository.CategoryRepository;
 import com.mgmtp.gives.repository.CampaignFollowerRepository;
 import com.mgmtp.gives.service.CampaignService;
 import com.mgmtp.gives.util.HtmlSanitizerUtil;
+import com.mgmtp.gives.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -53,6 +54,7 @@ public class CampaignServiceImpl implements CampaignService {
     private final CampaignMediaRepository campaignMediaRepository;
     private final CampaignMapper campaignMapper;
     private final CampaignFollowerRepository campaignFollowerRepository;
+    private final NotificationService notificationService;
 
     @Value("${app.media.upload-dir}")
     private String uploadDir;
@@ -102,6 +104,7 @@ public class CampaignServiceImpl implements CampaignService {
         Campaign saved = campaignRepository.save(campaign);
         assert currentUser != null;
         log.info("Campaign created: id={}, title={}, userId={}", saved.getId(), saved.getTitle(), currentUser.getId());
+        notificationService.broadcastDashboardUpdate();
         return saved;
     }
 
@@ -217,6 +220,7 @@ public class CampaignServiceImpl implements CampaignService {
         Campaign saved = campaignRepository.save(campaign);
         log.info("Campaign updated: id={}, status={}, userId={}", saved.getId(), saved.getStatus(),
                 currentUser.getId());
+        notificationService.broadcastDashboardUpdate();
         return saved;
     }
 
@@ -263,6 +267,7 @@ public class CampaignServiceImpl implements CampaignService {
 
         campaignRepository.delete(campaign);
         log.info("Campaign deleted successfully: id={}, title={}", id, campaign.getTitle());
+        notificationService.broadcastDashboardUpdate();
     }
 
     @Override

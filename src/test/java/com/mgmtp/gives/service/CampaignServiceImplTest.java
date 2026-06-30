@@ -16,6 +16,7 @@ import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.CategoryRepository;
 import com.mgmtp.gives.repository.CampaignFollowerRepository;
 import com.mgmtp.gives.service.impl.CampaignServiceImpl;
+import com.mgmtp.gives.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,6 +56,9 @@ class CampaignServiceImplTest {
 
     @Mock
     private CampaignFollowerRepository campaignFollowerRepository;
+
+    @Mock
+    private NotificationService notificationService;
 
     @InjectMocks
     private CampaignServiceImpl campaignService;
