@@ -1,5 +1,6 @@
 package com.mgmtp.gives.service.impl;
 
+import com.mgmtp.gives.common.ErrorCode;
 import com.mgmtp.gives.dto.user.AdminCreateUserRequest;
 import com.mgmtp.gives.dto.user.AdminUpdateUserRequest;
 import com.mgmtp.gives.dto.user.AdminUserResponse;
@@ -19,6 +20,9 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.mgmtp.gives.security.CustomUserDetails;
 
 import java.util.List;
 
@@ -97,6 +101,17 @@ public class AdminUserServiceImpl implements AdminUserService {
                     log.warn("Update user failed: User not found. id={}", id);
                     return new AppException(USER_NOT_FOUND);
                 });
+
+        // Prevent admin from banning themselves
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated() &&
+                authentication.getPrincipal() instanceof CustomUserDetails userDetails) {
+            User currentUser = userDetails.getUser();
+            if (currentUser.getId().equals(id) && request.status() == UserStatus.BANNED) {
+                log.warn("Update user failed: Admin cannot ban themselves. id={}", id);
+                throw new AppException(ErrorCode.VALIDATION_ERROR, "You cannot ban yourself.");
+            }
+        }
 
         userMapper.updateEntityFromRequest(request, user);
         
