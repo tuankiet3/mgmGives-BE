@@ -5,6 +5,7 @@ import com.mgmtp.gives.dto.campaign.CampaignRequest;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.Category;
 import com.mgmtp.gives.entity.User;
+import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.UserRole;
@@ -15,6 +16,8 @@ import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.CategoryRepository;
 import com.mgmtp.gives.repository.CampaignFollowerRepository;
+import com.mgmtp.gives.repository.CampaignMemberRepository;
+import com.mgmtp.gives.repository.DonationRepository;
 import com.mgmtp.gives.service.impl.CampaignServiceImpl;
 import com.mgmtp.gives.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +62,12 @@ class CampaignServiceImplTest {
 
     @Mock
     private NotificationService notificationService;
+
+    @Mock
+    private CampaignMemberRepository campaignMemberRepository;
+
+    @Mock
+    private DonationRepository donationRepository;
 
     @InjectMocks
     private CampaignServiceImpl campaignService;
@@ -620,7 +629,7 @@ class CampaignServiceImplTest {
         Page<Campaign> result = campaignService.getAllCampaigns(
                 CampaignStatus.APPROVED,
                 CampaignPriority.HIGH,
-                10L,
+                List.of(10L),
                 1L,
                 "keyword",
                 testUser,
@@ -660,5 +669,36 @@ class CampaignServiceImplTest {
         when(campaignFollowerRepository.existsByCampaignIdAndUserId(1L, 2L)).thenReturn(false);
         boolean result = campaignService.isFollowed(1L, 2L);
         assertFalse(result);
+    }
+
+    @Test
+    void isJoined_ShouldReturnTrue_WhenRecordExists() {
+        when(campaignMemberRepository.existsByCampaignIdAndUserIdAndRoleInCampaign(1L, 2L,
+                CampaignMemberRole.VOLUNTEER)).thenReturn(true);
+        boolean result = campaignService.isJoined(1L, 2L);
+        assertTrue(result);
+    }
+
+    @Test
+    void isJoined_ShouldReturnFalse_WhenRecordDoesNotExist() {
+        when(campaignMemberRepository.existsByCampaignIdAndUserIdAndRoleInCampaign(1L, 2L,
+                CampaignMemberRole.VOLUNTEER)).thenReturn(false);
+        boolean result = campaignService.isJoined(1L, 2L);
+        assertFalse(result);
+    }
+
+    @Test
+    void getVolunteersCount_ShouldReturnCorrectCount() {
+        when(campaignMemberRepository.countByCampaignIdAndRoleInCampaign(1L, CampaignMemberRole.VOLUNTEER))
+                .thenReturn(5L);
+        long result = campaignService.getVolunteersCount(1L);
+        assertEquals(5L, result);
+    }
+
+    @Test
+    void getDonorsCount_ShouldReturnCorrectCount() {
+        when(donationRepository.countDistinctDonorsByCampaignIdAndStatusConfirmed(1L)).thenReturn(10L);
+        long result = campaignService.getDonorsCount(1L);
+        assertEquals(10L, result);
     }
 }

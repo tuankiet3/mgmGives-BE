@@ -15,10 +15,13 @@ import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
 import com.mgmtp.gives.mapper.CampaignMapper;
+import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.CategoryRepository;
 import com.mgmtp.gives.repository.CampaignFollowerRepository;
+import com.mgmtp.gives.repository.CampaignMemberRepository;
+import com.mgmtp.gives.repository.DonationRepository;
 import com.mgmtp.gives.service.CampaignService;
 import com.mgmtp.gives.util.HtmlSanitizerUtil;
 import com.mgmtp.gives.service.NotificationService;
@@ -55,6 +58,8 @@ public class CampaignServiceImpl implements CampaignService {
     private final CampaignMapper campaignMapper;
     private final CampaignFollowerRepository campaignFollowerRepository;
     private final NotificationService notificationService;
+    private final CampaignMemberRepository campaignMemberRepository;
+    private final DonationRepository donationRepository;
 
     @Value("${app.media.upload-dir}")
     private String uploadDir;
@@ -110,15 +115,15 @@ public class CampaignServiceImpl implements CampaignService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<Campaign> getAllCampaigns(CampaignStatus status, CampaignPriority priority, Long categoryId,
+    public Page<Campaign> getAllCampaigns(CampaignStatus status, CampaignPriority priority, List<Long> categoryIds,
             Long userId, String keyword, User currentUser, Pageable pageable) {
-        log.info("Fetching campaigns: status={}, priority={}, categoryId={}, userId={}, keyword={}",
-                status, priority, categoryId, userId, keyword);
+        log.info("Fetching campaigns: status={}, priority={}, categoryIds={}, userId={}, keyword={}",
+                status, priority, categoryIds, userId, keyword);
         Specification<Campaign> spec = Specification.allOf(
                 hasStatus(status),
                 hasPriority(priority),
                 hasUserId(userId),
-                hasCategory(categoryId),
+                hasCategories(categoryIds),
                 matchesKeyword(keyword),
                 isVisibleTo(currentUser),
                 isNotFollowedBy(currentUser));
@@ -410,6 +415,17 @@ public class CampaignServiceImpl implements CampaignService {
                 .orElse(null);
         response.setCoverImageUrl(coverImageUrl);
 
+        // 4. Counts and user actions
+        response.setVolunteersCount(getVolunteersCount(campaign.getId()));
+        response.setDonorsCount(getDonorsCount(campaign.getId()));
+        if (currentUser != null) {
+            response.setIsJoined(isJoined(campaign.getId(), currentUser.getId()));
+            response.setIsFollowed(isFollowed(campaign.getId(), currentUser.getId()));
+        } else {
+            response.setIsJoined(false);
+            response.setIsFollowed(false);
+        }
+
         return response;
     }
 
@@ -439,6 +455,16 @@ public class CampaignServiceImpl implements CampaignService {
             response.setIsEditable(isEditable);
 
             response.setCoverImageUrl(coverImageMap.get(campaign.getId()));
+
+            response.setVolunteersCount(getVolunteersCount(campaign.getId()));
+            response.setDonorsCount(getDonorsCount(campaign.getId()));
+            if (currentUser != null) {
+                response.setIsJoined(isJoined(campaign.getId(), currentUser.getId()));
+                response.setIsFollowed(isFollowed(campaign.getId(), currentUser.getId()));
+            } else {
+                response.setIsJoined(false);
+                response.setIsFollowed(false);
+            }
             return response;
         }).toList();
     }
@@ -446,5 +472,24 @@ public class CampaignServiceImpl implements CampaignService {
     @Transactional(readOnly = true)
     public boolean isFollowed(Long campaignId, Long userId) {
         return campaignFollowerRepository.existsByCampaignIdAndUserId(campaignId, userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isJoined(Long campaignId, Long userId) {
+        return campaignMemberRepository.existsByCampaignIdAndUserIdAndRoleInCampaign(campaignId, userId,
+                CampaignMemberRole.VOLUNTEER);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long getVolunteersCount(Long campaignId) {
+        return campaignMemberRepository.countByCampaignIdAndRoleInCampaign(campaignId, CampaignMemberRole.VOLUNTEER);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long getDonorsCount(Long campaignId) {
+        return donationRepository.countDistinctDonorsByCampaignIdAndStatusConfirmed(campaignId);
     }
 }

@@ -52,10 +52,11 @@ public class AdminCampaignServiceImpl implements AdminCampaignService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<Campaign> getCampaigns(CampaignStatus status, Long categoryId, String keyword, Pageable pageable) {
+    public Page<Campaign> getCampaigns(CampaignStatus status, List<Long> categoryIds, String keyword,
+            Pageable pageable) {
         Specification<Campaign> spec = Specification.allOf(
                 CampaignSpecifications.hasStatus(status),
-                CampaignSpecifications.hasCategory(categoryId),
+                CampaignSpecifications.hasCategories(categoryIds),
                 CampaignSpecifications.matchesKeyword(keyword),
                 (root, query, cb) -> cb.notEqual(root.get("status"), CampaignStatus.DRAFT));
         return campaignRepository.findAll(spec, pageable);
@@ -142,8 +143,7 @@ public class AdminCampaignServiceImpl implements AdminCampaignService {
         publisher.publishCampaignStatusChanged(
                 saved,
                 oldStatus,
-                saved.getStatus()
-        );
+                saved.getStatus());
 
         log.info("Campaign rejected successfully: id={}, adminId={}, reason='{}'", id, adminUser.getId(), reason);
         return saved;

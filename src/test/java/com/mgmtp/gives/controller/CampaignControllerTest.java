@@ -215,14 +215,20 @@ class CampaignControllerTest {
                 when(campaignMediaRepository.findByCampaignIdAndDeletedAtIsNull(1L))
                                 .thenReturn(Collections.emptyList());
                 when(campaignMediaMapper.toResponseList(anyList())).thenReturn(Collections.emptyList());
+                when(campaignService.getVolunteersCount(eq(1L))).thenReturn(5L);
+                when(campaignService.getDonorsCount(eq(1L))).thenReturn(10L);
                 when(campaignService.isFollowed(eq(1L), eq(7L))).thenReturn(true);
+                when(campaignService.isJoined(eq(1L), eq(7L))).thenReturn(true);
 
                 mockMvc.perform(get("/api/campaigns/1")
                                 .with(user(regularUserDetails)))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.success").value(true))
                                 .andExpect(jsonPath("$.result.id").value(1))
-                                .andExpect(jsonPath("$.result.isFollowed").value(true));
+                                .andExpect(jsonPath("$.result.isFollowed").value(true))
+                                .andExpect(jsonPath("$.result.isJoined").value(true))
+                                .andExpect(jsonPath("$.result.volunteersCount").value(5))
+                                .andExpect(jsonPath("$.result.donorsCount").value(10));
         }
 
         @Test

@@ -17,7 +17,7 @@ public interface CampaignService {
     Page<Campaign> getAllCampaigns(
             CampaignStatus status,
             CampaignPriority priority,
-            Long categoryId,
+            List<Long> categoryIds,
             Long userId,
             String keyword,
             User currentUser,
@@ -38,4 +38,10 @@ public interface CampaignService {
     List<CampaignResponse> toResponseList(List<Campaign> campaigns, User currentUser);
 
     boolean isFollowed(Long campaignId, Long userId);
+
+    boolean isJoined(Long campaignId, Long userId);
+
+    long getVolunteersCount(Long campaignId);
+
+    long getDonorsCount(Long campaignId);
 }

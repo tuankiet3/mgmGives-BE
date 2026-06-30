@@ -31,6 +31,9 @@ public class CampaignResponse {
     private String coverImageUrl;
     private Boolean isEditable;
     private Boolean isFollowed;
+    private Boolean isJoined;
+    private Long volunteersCount;
+    private Long donorsCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

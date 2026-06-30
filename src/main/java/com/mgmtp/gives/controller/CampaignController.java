@@ -59,14 +59,14 @@ public class CampaignController {
         public ApiResponse<PageResponse<CampaignResponse>> getAllCampaigns(
                         @RequestParam(required = false) CampaignStatus status,
                         @RequestParam(required = false) CampaignPriority priority,
-                        @RequestParam(required = false) Long categoryId,
+                        @RequestParam(value = "categoryId", required = false) List<Long> categoryIds,
                         @RequestParam(required = false) Long userId,
                         @RequestParam(required = false) String keyword,
                         @AuthenticationPrincipal CustomUserDetails userDetails,
                         @ParameterObject @PageableDefault(page = 0, size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
                 log.info("REST request to get campaigns list: status={}, priority={}, keyword={}", status, priority,
                                 keyword);
-                Page<Campaign> campaignPage = campaignService.getAllCampaigns(status, priority, categoryId, userId,
+                Page<Campaign> campaignPage = campaignService.getAllCampaigns(status, priority, categoryIds, userId,
                                 keyword,
                                 userDetails.getUser(), pageable);
                 List<CampaignResponse> dtoList = campaignService.toResponseList(campaignPage.getContent(),
@@ -88,8 +88,14 @@ public class CampaignController {
                                 campaignService.getActiveMediasByCampaignId(id));
                 response.setMedias(activeMedias);
                 response.setMedia(activeMedias);
+                response.setVolunteersCount(campaignService.getVolunteersCount(id));
+                response.setDonorsCount(campaignService.getDonorsCount(id));
                 if (currentUser != null) {
                         response.setIsFollowed(campaignService.isFollowed(id, currentUser.getId()));
+                        response.setIsJoined(campaignService.isJoined(id, currentUser.getId()));
+                } else {
+                        response.setIsFollowed(false);
+                        response.setIsJoined(false);
                 }
                 return ApiResponse.success(response);
         }

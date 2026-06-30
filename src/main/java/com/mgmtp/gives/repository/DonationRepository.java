@@ -18,5 +18,8 @@ public interface DonationRepository extends JpaRepository<Donation, Long>, JpaSp
     Long sumAmountByCampaignIdAndStatusNotFailed(@Param("campaignId") Long campaignId, @Param("failedStatus") DonationStatus failedStatus);
 
     List<Donation> findByCampaignIdAndStatusNotOrderByCreatedAtDesc(Long campaignId, DonationStatus status);
+
+    @Query("SELECT COUNT(DISTINCT d.user.id) FROM Donation d WHERE d.campaign.id = :campaignId AND d.status = 'CONFIRMED'")
+    long countDistinctDonorsByCampaignIdAndStatusConfirmed(@Param("campaignId") Long campaignId);
 }
 

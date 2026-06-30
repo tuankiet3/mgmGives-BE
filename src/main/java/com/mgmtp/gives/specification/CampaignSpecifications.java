@@ -6,6 +6,9 @@ import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.UserRole;
+
+import java.util.List;
+
 import org.springframework.data.jpa.domain.Specification;
 
 public final class CampaignSpecifications {
@@ -26,11 +29,22 @@ public final class CampaignSpecifications {
         return (root, query, cb) -> userId == null ? null : cb.equal(root.get("user").get("id"), userId);
     }
 
-    public static Specification<Campaign> hasCategory(Long categoryId) {
+    public static Specification<Campaign> hasCategories(List<Long> categoryIds) {
         return (root, query, cb) -> {
-            if (categoryId == null)
+            if (categoryIds == null || categoryIds.isEmpty())
                 return null;
-            return cb.equal(root.join("categories").get("id"), categoryId);
+
+            List<Long> distinctIds = categoryIds.stream().distinct().toList();
+
+            if (query != null && query.getResultType() != Long.class && query.getResultType() != long.class) {
+                query.distinct(true);
+            }
+
+            jakarta.persistence.criteria.Predicate[] predicates = new jakarta.persistence.criteria.Predicate[distinctIds.size()];
+            for (int i = 0; i < distinctIds.size(); i++) {
+                predicates[i] = cb.equal(root.join("categories").get("id"), distinctIds.get(i));
+            }
+            return cb.and(predicates);
         };
     }
 
@@ -79,8 +93,7 @@ public final class CampaignSpecifications {
             subquery.select(subRoot.get("campaign").get("id"));
             subquery.where(cb.and(
                     cb.equal(subRoot.get("campaign").get("id"), root.get("id")),
-                    cb.equal(subRoot.get("user").get("id"), currentUser.getId())
-            ));
+                    cb.equal(subRoot.get("user").get("id"), currentUser.getId())));
             return cb.not(cb.exists(subquery));
         };
     }

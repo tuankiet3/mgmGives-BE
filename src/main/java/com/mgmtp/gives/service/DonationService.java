@@ -12,13 +12,21 @@ import java.util.List;
 
 public interface DonationService {
     DonationResponse createDonation(DonationRequest request, User user);
+
     List<DonationResponse> getMyDonations(Long userId);
+
     List<DonationResponse> getPublicDonationsByCampaignId(Long campaignId);
-    Page<DonationAdminResponse> getAllDonations(DonationStatus status, DonationType type, Long campaignId, Pageable pageable);
+
+    Page<DonationAdminResponse> getAllDonations(DonationStatus status, DonationType type, Long campaignId,
+            Pageable pageable);
+
     DonationAdminResponse confirmDonation(Long donationId, User admin);
+
     VNPayResponse createVNPayDonation(VNPayRequest request, User user);
+
     DonationResponse confirmVNPayDonation(Long donationId);
+
     DonationResponse cancelVNPayDonation(Long donationId);
+
     DonationResponse hideDonationMessage(Long donationId, boolean hidden, User currentUser);
 }
-
