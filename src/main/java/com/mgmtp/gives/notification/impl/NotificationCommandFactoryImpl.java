@@ -21,8 +21,7 @@ public class NotificationCommandFactoryImpl implements NotificationCommandFactor
     public CreateNotificationCommand donationConfirmed(DonationConfirmedEvent event) {
         String contributionText = formatContribution(
                 event.donationType(),
-                event.amount(),
-                event.goodsDescription()
+                event.amount()
         );
 
         return CreateNotificationCommand.builder()
@@ -34,7 +33,7 @@ public class NotificationCommandFactoryImpl implements NotificationCommandFactor
                                 " to campaign \"" + event.campaignTitle() +
                                 "\" has been confirmed. Kindness looks good on you 😄"
                 )
-                .linkUrl("/donations/me")
+                .linkUrl("/my-donations")
                 .build();
     }
 
@@ -57,8 +56,7 @@ public class NotificationCommandFactoryImpl implements NotificationCommandFactor
 
         String contributionText = formatContribution(
                 event.donationType(),
-                event.amount(),
-                event.goodsDescription()
+                event.amount()
         );
 
         return CreateNotificationCommand.builder()
@@ -70,7 +68,7 @@ public class NotificationCommandFactoryImpl implements NotificationCommandFactor
                                 " donated " + contributionText +
                                 " to campaign \"" + event.campaignTitle() + "\"."
                 )
-                .linkUrl("/admin/campaigns/" + event.campaignId())
+                .linkUrl("/campaigns/" + event.campaignId())
                 .build();
     }
 
@@ -117,15 +115,8 @@ public class NotificationCommandFactoryImpl implements NotificationCommandFactor
         };
     }
 
-    private String formatContribution(DonationType donationType, Long amount, String goodsDescription) {
-        if (donationType == DonationType.MONEY) {
-            return formatVnd(amount);
-        }
-
-//        if (goodsDescription != null && !goodsDescription.isBlank()) {
-//            return "goods: " + goodsDescription;
-//        }
-
+    private String formatContribution(DonationType donationType, Long amount) {
+        if (donationType == DonationType.MONEY) return formatVnd(amount);
         return "some goods";
     }
 

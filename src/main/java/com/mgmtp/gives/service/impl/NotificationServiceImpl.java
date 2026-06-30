@@ -1,16 +1,22 @@
 package com.mgmtp.gives.service.impl;
 
+import com.mgmtp.gives.common.ErrorCode;
 import com.mgmtp.gives.dto.notification.CreateNotificationCommand;
 import com.mgmtp.gives.dto.notification.NotificationPayload;
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
+import com.mgmtp.gives.dto.notification.NotificationResponse;
 import com.mgmtp.gives.entity.Notification;
 import com.mgmtp.gives.entity.User;
+import com.mgmtp.gives.exception.AppException;
+import com.mgmtp.gives.mapper.NotificationMapper;
 import com.mgmtp.gives.notification.NotificationPublisher;
 import com.mgmtp.gives.repository.NotificationRepository;
 import com.mgmtp.gives.service.NotificationService;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +33,7 @@ public class NotificationServiceImpl implements NotificationService {
     private final EntityManager entityManager;
     private final NotificationRepository notificationRepository;
     private final NotificationPublisher notificationPublisher;
+    private final NotificationMapper notificationMapper;
 
 
     @Override @Transactional
@@ -110,5 +117,52 @@ public class NotificationServiceImpl implements NotificationService {
                 .forEach(sanitizedRecipients::add);
 
         return sanitizedRecipients;
+    }
+
+    @Override
+    public Page<NotificationResponse> getUserNotifications(User user, Pageable pageable) {
+        return notificationRepository.findByUserIdOrderByCreatedAtDesc(user.getId(), pageable)
+                .map(notificationMapper::toNotificationResponse);
+    }
+
+    @Override
+    @Transactional
+    public void markAsRead(Long id, User user) {
+        Notification notification = notificationRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.NOTIFICATION_NOT_FOUND));
+
+        if (!Objects.equals(notification.getUser().getId(), user.getId())) {
+            throw new AppException(ErrorCode.NOTIFICATION_NOT_FOUND);
+        }
+
+        if (!notification.isRead()) {
+            notification.setRead(true);
+            notificationRepository.save(notification);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void markAllAsRead(User user) {
+        List<Notification> unreadNotifications = notificationRepository.findByUserIdAndIsReadFalse(user.getId());
+        if (!unreadNotifications.isEmpty()) {
+            for (Notification notification : unreadNotifications) {
+                notification.setRead(true);
+            }
+            notificationRepository.saveAll(unreadNotifications);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void deleteNotification(Long id, User user) {
+        Notification notification = notificationRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.NOTIFICATION_NOT_FOUND));
+
+        if (!Objects.equals(notification.getUser().getId(), user.getId())) {
+            throw new AppException(ErrorCode.NOTIFICATION_NOT_FOUND);
+        }
+
+        notificationRepository.delete(notification);
     }
 }

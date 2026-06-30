@@ -49,6 +49,7 @@ public enum ErrorCode {
     IMAGE_ONLY(3008, "Only image files are allowed for avatar/cover", HttpStatus.BAD_REQUEST),
     PATH_TRAVERSAL_DETECTED(3009, "Invalid file path", HttpStatus.BAD_REQUEST),
     DONATE_NOT_FOUND(3010, "Donate not found", HttpStatus.NOT_FOUND),
+    NOTIFICATION_NOT_FOUND(3011, "Notification not found", HttpStatus.NOT_FOUND),
     INVALID_CAMPAIGN_STATUS_FOR_REVIEW(2005, "Campaign is not in a reviewable state", HttpStatus.BAD_REQUEST),
     REJECTION_REASON_REQUIRED(2006, "Rejection reason is required", HttpStatus.BAD_REQUEST);
 
