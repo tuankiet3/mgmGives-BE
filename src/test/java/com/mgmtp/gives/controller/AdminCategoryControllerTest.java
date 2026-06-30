@@ -78,7 +78,7 @@ class AdminCategoryControllerTest {
         adminUserDetails = new CustomUserDetails(adminUser);
         regularUserDetails = new CustomUserDetails(regularUser);
 
-        adminCategoryResponse = new AdminCategoryResponse(1L, "Education", "Schooling", CategoryStatus.APPROVED);
+        adminCategoryResponse = new AdminCategoryResponse(1L, "Education", "Schooling", CategoryStatus.APPROVED, 0L);
     }
 
     @Test
@@ -135,7 +135,7 @@ class AdminCategoryControllerTest {
     @Test
     void updateCategory_Success_Admin() throws Exception {
         AdminUpdateCategoryRequest request = new AdminUpdateCategoryRequest("Updated Education", "New Schooling", CategoryStatus.APPROVED);
-        AdminCategoryResponse updatedResponse = new AdminCategoryResponse(1L, "Updated Education", "New Schooling", CategoryStatus.APPROVED);
+        AdminCategoryResponse updatedResponse = new AdminCategoryResponse(1L, "Updated Education", "New Schooling", CategoryStatus.APPROVED, 0L);
         when(adminCategoryService.updateCategory(eq(1L), any(AdminUpdateCategoryRequest.class))).thenReturn(updatedResponse);
 
         mockMvc.perform(put("/api/admin/categories/1")

@@ -11,6 +11,7 @@ public interface CategoryMapper {
     /**
      * Maps Category Entity to AdminCategoryResponse DTO.
      */
+    @Mapping(target = "campaignsCount", expression = "java(category.getCampaigns() != null ? (long) category.getCampaigns().size() : 0L)")
     AdminCategoryResponse toAdminResponse(Category category);
 
     List<AdminCategoryResponse> toAdminResponseList(List<Category> categories);

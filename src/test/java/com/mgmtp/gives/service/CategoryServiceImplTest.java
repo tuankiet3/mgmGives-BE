@@ -53,7 +53,7 @@ class CategoryServiceImplTest {
         testCategory.setStatus(CategoryStatus.APPROVED);
 
         userCategoryResponse = new UserCategoryResponse(1L, "Education", "Schooling and training");
-        adminCategoryResponse = new AdminCategoryResponse(1L, "Education", "Schooling and training", CategoryStatus.APPROVED);
+        adminCategoryResponse = new AdminCategoryResponse(1L, "Education", "Schooling and training", CategoryStatus.APPROVED, 0L);
     }
 
     @Test
@@ -176,7 +176,7 @@ class CategoryServiceImplTest {
         savedCategory.setDescription("Wellness");
         savedCategory.setStatus(CategoryStatus.APPROVED);
 
-        AdminCategoryResponse responseDto = new AdminCategoryResponse(3L, "Health", "Wellness", CategoryStatus.APPROVED);
+        AdminCategoryResponse responseDto = new AdminCategoryResponse(3L, "Health", "Wellness", CategoryStatus.APPROVED, 0L);
 
         when(categoryMapper.toEntity(any(AdminCreateCategoryRequest.class))).thenReturn(mappedCategory);
         when(categoryRepository.existsByNameIgnoreCase("Health")).thenReturn(false);
@@ -256,7 +256,7 @@ class CategoryServiceImplTest {
         updatedCategory.setDescription("New Description");
         updatedCategory.setStatus(CategoryStatus.APPROVED);
 
-        AdminCategoryResponse updatedResponse = new AdminCategoryResponse(1L, "Renamed Education", "New Description", CategoryStatus.APPROVED);
+        AdminCategoryResponse updatedResponse = new AdminCategoryResponse(1L, "Renamed Education", "New Description", CategoryStatus.APPROVED, 0L);
 
         when(categoryRepository.findById(1L)).thenReturn(Optional.of(testCategory));
         when(categoryRepository.existsByNameIgnoreCase("Renamed Education")).thenReturn(false);

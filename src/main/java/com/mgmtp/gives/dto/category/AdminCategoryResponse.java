@@ -10,5 +10,6 @@ public record AdminCategoryResponse(
 
                 @Schema(description = "The description of the category", example = "Funding for scholarships and tutoring programs") String description,
 
-                @Schema(description = "The status of the category", example = "APPROVED") CategoryStatus status) {
+                @Schema(description = "The status of the category", example = "APPROVED") CategoryStatus status,
+                @Schema(description = "The number of campaigns in this category", example = "5") Long campaignsCount) {
 }
