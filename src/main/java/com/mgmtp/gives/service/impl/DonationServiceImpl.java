@@ -34,6 +34,9 @@ import static com.mgmtp.gives.specification.DonationSpecifications.*;
 @Service
 @RequiredArgsConstructor
 public class DonationServiceImpl implements DonationService {
+    private static final long MAX_DONATION_AMOUNT = 999_999_999_999L;
+    private static final long VNPAY_AMOUNT_MULTIPLIER = 100L;
+
     private final DonationNotificationPublisher publisher;
     private final CampaignFollowerService campaignFollowerService;
     private final DonationRepository donationRepository;
@@ -54,6 +57,9 @@ public class DonationServiceImpl implements DonationService {
                     ErrorCode.CAMPAIGN_NOT_IN_PROGRESS,
                     "Cannot donate to this campaign because it is currently " + campaign.getStatus()
             );
+        }
+        if (request.donationType() == DonationType.MONEY) {
+            validateMoneyAmount(request.amount());
         }
         // Use detail directly, or fallback to goodsDescription for goods donation
         String detailText = request.detail();
@@ -153,6 +159,8 @@ public class DonationServiceImpl implements DonationService {
                         ErrorCode.CAMPAIGN_NOT_FOUND,
                         "Campaign not found with ID: " + request.campaignId()
                 ));
+        log.info("About to validate money amount");
+        validateMoneyAmount(request.amount());
 
         String txnRef = "VNP_MOCK_" + System.currentTimeMillis();
 
@@ -175,8 +183,8 @@ public class DonationServiceImpl implements DonationService {
 
         donation = donationRepository.save(donation);
 
-        long amountInCents = request.amount() * 100L;
-        String mockPaymentUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_Amount=" + amountInCents + "&vnp_TxnRef=" + donation.getId();
+        long vnPayAmount = toVNPayAmount(request.amount());
+        String mockPaymentUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_Amount=" + vnPayAmount + "&vnp_TxnRef=" + donation.getId();
         String qrCodeUrl = "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" + mockPaymentUrl;
 
         return new VNPayResponse(donation.getId(), qrCodeUrl, request.amount(), txnRef);
@@ -340,6 +348,33 @@ public class DonationServiceImpl implements DonationService {
             return safeOldRaised;
         }
 
-        return safeOldRaised + donation.getAmount();
+        try {
+            return Math.addExact(safeOldRaised, donation.getAmount());
+        } catch (ArithmeticException ex) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Campaign raised amount exceeds the supported range");
+        }
+    }
+
+    private void validateMoneyAmount(Long amount) {
+        if (amount == null) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Amount is required for money donations");
+        }
+        if (amount <= 0) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Amount must be greater than zero");
+        }
+        if (amount > MAX_DONATION_AMOUNT) {
+            throw new AppException(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Amount must not exceed " + MAX_DONATION_AMOUNT
+            );
+        }
+    }
+
+    private long toVNPayAmount(Long amount) {
+        try {
+            return Math.multiplyExact(amount, VNPAY_AMOUNT_MULTIPLIER);
+        } catch (ArithmeticException ex) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "VNPay amount exceeds the supported range");
+        }
     }
 }
