@@ -5,6 +5,7 @@ import com.mgmtp.gives.dto.notification.CreateNotificationCommand;
 import com.mgmtp.gives.dto.notification.NotificationPayload;
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.dto.notification.NotificationResponse;
+import com.mgmtp.gives.entity.Donation;
 import com.mgmtp.gives.entity.Notification;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.exception.AppException;
@@ -17,11 +18,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -34,6 +38,7 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationRepository notificationRepository;
     private final NotificationPublisher notificationPublisher;
     private final NotificationMapper notificationMapper;
+    private final SimpMessagingTemplate messagingTemplate;
 
 
     @Override @Transactional
@@ -164,5 +169,28 @@ public class NotificationServiceImpl implements NotificationService {
         }
 
         notificationRepository.delete(notification);
+    }
+
+    @Override
+    public void broadcastDonationUpdate(Donation donation) {
+        Map<String, Object> payload = Map.of(
+                "donationId", donation.getId(),
+                "campaignId", donation.getCampaign().getId(),
+                "status", donation.getStatus().name(),
+                "type", donation.getType().name()
+        );
+        messagingTemplate.convertAndSend(
+                "/topic/campaigns/" + donation.getCampaign().getId() + "/donations",
+                payload
+        );
+        broadcastDashboardUpdate();
+    }
+
+    @Override
+    public void broadcastDashboardUpdate() {
+        messagingTemplate.convertAndSend(
+                "/topic/dashboard/updates",
+                Map.of("timestamp", LocalDateTime.now().toString())
+        );
     }
 }

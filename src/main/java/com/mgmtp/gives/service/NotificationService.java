@@ -16,4 +16,8 @@ public interface NotificationService {
     void markAllAsRead(User user);
 
     void deleteNotification(Long id, User user);
+
+    void broadcastDonationUpdate(com.mgmtp.gives.entity.Donation donation);
+
+    void broadcastDashboardUpdate();
 }

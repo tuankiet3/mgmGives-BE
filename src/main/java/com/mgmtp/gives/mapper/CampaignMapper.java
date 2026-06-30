@@ -2,6 +2,7 @@ package com.mgmtp.gives.mapper;
 
 import com.mgmtp.gives.dto.campaign.CampaignResponse;
 import com.mgmtp.gives.entity.Campaign;
+import com.mgmtp.gives.enums.DonationStatus;
 import com.mgmtp.gives.repository.DonationRepository;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -28,6 +29,6 @@ public abstract class CampaignMapper {
         if (campaign == null || campaign.getId() == null) {
             return 0L;
         }
-        return donationRepository.sumAmountByCampaignIdAndStatusNotFailed(campaign.getId());
+        return donationRepository.sumAmountByCampaignIdAndStatusNotFailed(campaign.getId(), DonationStatus.FAILED);
     }
 }

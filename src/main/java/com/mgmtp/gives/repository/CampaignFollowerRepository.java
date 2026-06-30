@@ -68,4 +68,6 @@ public interface CampaignFollowerRepository extends JpaRepository<CampaignFollow
             WHERE cf.campaign.id = :campaignId
             """)
     List<User> findFollowerUsersByCampaignId(@Param("campaignId") Long campaignId);
+
+    long countByUserId(Long userId);
 }

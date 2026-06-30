@@ -16,6 +16,7 @@ import com.mgmtp.gives.repository.DonationRepository;
 import com.mgmtp.gives.security.CustomUserDetails;
 import com.mgmtp.gives.service.CampaignFollowerService;
 import com.mgmtp.gives.service.DonationService;
+import com.mgmtp.gives.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -41,6 +42,7 @@ public class DonationServiceImpl implements DonationService {
     private final CampaignFollowerService campaignFollowerService;
     private final DonationRepository donationRepository;
     private final CampaignRepository campaignRepository;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -92,6 +94,7 @@ public class DonationServiceImpl implements DonationService {
         campaignFollowerService.autoFollow(user.getId(), campaign.getId());
 
         publisher.publishDonationConfirmedEvents(savedDonation);
+        notificationService.broadcastDashboardUpdate();
 
         log.info(
                 "Donation created and auto-confirmed: donationId={}, campaignId={}, donorUserId={}",
@@ -210,6 +213,7 @@ public class DonationServiceImpl implements DonationService {
         }
 
         publisher.publishDonationConfirmedEvents(savedDonation);
+        notificationService.broadcastDashboardUpdate();
 
         return toResponse(savedDonation);
     }
@@ -254,6 +258,7 @@ public class DonationServiceImpl implements DonationService {
             donation.setStatus(DonationStatus.FAILED);
             donation.setUpdatedAt(LocalDateTime.now());
             donation = donationRepository.save(donation);
+            notificationService.broadcastDashboardUpdate();
         }
         return toResponse(donation);
     }

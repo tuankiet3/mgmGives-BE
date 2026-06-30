@@ -9,21 +9,16 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
+@Repository
 public interface CampaignRepository extends JpaRepository<Campaign, Long>, JpaSpecificationExecutor<Campaign> {
-
-    @Query("""
-        SELECT new com.mgmtp.gives.dto.notification.NotificationRecipient(
-            c.user.id,
-            c.user.email
-        )
-        FROM Campaign c
-        WHERE c.id = :campaignId
-        """)
+    @Query("SELECT new com.mgmtp.gives.dto.notification.NotificationRecipient(c.user.id, c.user.email) FROM Campaign c WHERE c.id = :campaignId")
     Optional<NotificationRecipient> findOwnerRecipientByCampaignId(@Param("campaignId") Long campaignId);
     Page<Campaign> findByStatus(CampaignStatus status, Pageable pageable);
 
@@ -53,4 +48,7 @@ public interface CampaignRepository extends JpaRepository<Campaign, Long>, JpaSp
             nativeQuery = true
     )
     List<Campaign> findInProgressCampaignsToComplete(@Param("now") LocalDateTime now);
+
+    long countByStatus(CampaignStatus status);
+    long countByStatusIn(Collection<CampaignStatus> statuses);
 }
