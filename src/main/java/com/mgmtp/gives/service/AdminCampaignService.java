@@ -11,10 +11,16 @@ import java.util.List;
 
 public interface AdminCampaignService {
     Page<Campaign> getPendingCampaigns(Pageable pageable);
-    Page<Campaign> getCampaigns(CampaignStatus status, Long categoryId, String keyword, Pageable pageable);
+
+    Page<Campaign> getCampaigns(CampaignStatus status, List<Long> categoryIds, String keyword, Pageable pageable);
+
     Campaign getCampaignById(Long id);
+
     Campaign approveCampaign(Long id, User adminUser);
+
     Campaign rejectCampaign(Long id, String reason, User adminUser);
+
     List<CampaignMedia> getActiveMediasByCampaignId(Long campaignId);
+
     void deleteCampaign(Long id, User adminUser);
 }

@@ -42,11 +42,12 @@ public class AdminCampaignController {
         @Operation(summary = "List campaigns for review", description = "Lists campaigns filtered by status, category, and keyword. Sorted newest first by default.")
         public ApiResponse<PageResponse<AdminCampaignResponse>> getCampaigns(
                         @Parameter(description = "Campaign status to filter by") @RequestParam(required = false) CampaignStatus status,
-                        @Parameter(description = "Category ID to filter by") @RequestParam(required = false) Long categoryId,
+                        @Parameter(description = "Category ID to filter by") @RequestParam(required = false) List<Long> categoryIds,
                         @Parameter(description = "Keyword to search by") @RequestParam(required = false) String keyword,
                         @ParameterObject @PageableDefault(page = 0, size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-                log.info("REST admin request to list campaigns: status={}, categoryId={}, keyword={}", status, categoryId, keyword);
-                Page<Campaign> page = adminCampaignService.getCampaigns(status, categoryId, keyword, pageable);
+                log.info("REST admin request to list campaigns: status={}, categoryId={}, keyword={}", status,
+                                categoryIds, keyword);
+                Page<Campaign> page = adminCampaignService.getCampaigns(status, categoryIds, keyword, pageable);
                 List<AdminCampaignResponse> dtoList = page.getContent().stream()
                                 .map(adminCampaignMapper::toAdminResponse)
                                 .collect(Collectors.toList());

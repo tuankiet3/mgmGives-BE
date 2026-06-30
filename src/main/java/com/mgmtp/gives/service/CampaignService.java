@@ -17,7 +17,7 @@ public interface CampaignService {
     Page<Campaign> getAllCampaigns(
             CampaignStatus status,
             CampaignPriority priority,
-            Long categoryId,
+            List<Long> categoryIds,
             Long userId,
             String keyword,
             User currentUser,

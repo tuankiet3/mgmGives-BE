@@ -110,15 +110,15 @@ public class CampaignServiceImpl implements CampaignService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<Campaign> getAllCampaigns(CampaignStatus status, CampaignPriority priority, Long categoryId,
+    public Page<Campaign> getAllCampaigns(CampaignStatus status, CampaignPriority priority, List<Long> categoryIds,
             Long userId, String keyword, User currentUser, Pageable pageable) {
-        log.info("Fetching campaigns: status={}, priority={}, categoryId={}, userId={}, keyword={}",
-                status, priority, categoryId, userId, keyword);
+        log.info("Fetching campaigns: status={}, priority={}, categoryIds={}, userId={}, keyword={}",
+                status, priority, categoryIds, userId, keyword);
         Specification<Campaign> spec = Specification.allOf(
                 hasStatus(status),
                 hasPriority(priority),
                 hasUserId(userId),
-                hasCategory(categoryId),
+                hasCategories(categoryIds),
                 matchesKeyword(keyword),
                 isVisibleTo(currentUser),
                 isNotFollowedBy(currentUser));

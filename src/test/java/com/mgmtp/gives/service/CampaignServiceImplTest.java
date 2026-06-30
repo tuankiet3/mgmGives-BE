@@ -620,7 +620,7 @@ class CampaignServiceImplTest {
         Page<Campaign> result = campaignService.getAllCampaigns(
                 CampaignStatus.APPROVED,
                 CampaignPriority.HIGH,
-                10L,
+                List.of(10L),
                 1L,
                 "keyword",
                 testUser,
