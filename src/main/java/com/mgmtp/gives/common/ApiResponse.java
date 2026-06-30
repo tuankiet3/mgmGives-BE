@@ -40,6 +40,17 @@ public record ApiResponse<T>(
                 .build();
     }
 
+    public static <T> ApiResponse<T> fail(T errors, ErrorCode errorCode, String message, String path) {
+        return ApiResponse.<T>builder()
+                .success(false)
+                .result(errors)
+                .message(message)
+                .code(errorCode.getCode())
+                .timestamp(Instant.now())
+                .path(path)
+                .build();
+    }
+
     public static <T> ApiResponse<T> fail(ErrorCode errorCode, String uriPath) {
         return ApiResponse.<T>builder()
                 .success(false)

@@ -1,11 +1,9 @@
 package com.mgmtp.gives.entity;
 
-import com.mgmtp.gives.enums.CategoryStatus;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -30,8 +28,6 @@ public class Category {
     @ManyToMany(mappedBy = "categories")
     private Set<Campaign> campaigns = new HashSet<>();
 
-    @Builder.Default
-    @Column(name = "status", nullable = false, columnDefinition = "campaign_category_status")
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    private CategoryStatus status = CategoryStatus.PENDING;
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 }

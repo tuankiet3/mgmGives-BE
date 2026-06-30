@@ -36,7 +36,6 @@ public interface CampaignService {
     CampaignResponse toResponse(Campaign campaign, User currentUser);
 
     List<CampaignResponse> toResponseList(List<Campaign> campaigns, User currentUser);
-
     boolean isFollowed(Long campaignId, Long userId);
 
     boolean isJoined(Long campaignId, Long userId);

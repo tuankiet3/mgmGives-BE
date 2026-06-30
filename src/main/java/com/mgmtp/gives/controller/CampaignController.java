@@ -2,15 +2,12 @@ package com.mgmtp.gives.controller;
 
 import com.mgmtp.gives.common.ApiResponse;
 import com.mgmtp.gives.common.PageResponse;
-import com.mgmtp.gives.dto.campaign.CampaignMediaResponse;
 import com.mgmtp.gives.dto.campaign.CampaignRequest;
 import com.mgmtp.gives.dto.campaign.CampaignResponse;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
-import com.mgmtp.gives.mapper.CampaignMapper;
-import com.mgmtp.gives.mapper.CampaignMediaMapper;
 import com.mgmtp.gives.security.CustomUserDetails;
 import com.mgmtp.gives.service.CampaignService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,8 +35,6 @@ import java.util.List;
 public class CampaignController {
 
         private final CampaignService campaignService;
-        private final CampaignMapper campaignMapper;
-        private final CampaignMediaMapper campaignMediaMapper;
 
         @PostMapping
         @ResponseStatus(HttpStatus.CREATED)
@@ -83,21 +78,7 @@ public class CampaignController {
                 log.info("REST request to get campaign details: id={}, userId={}", id,
                                 currentUser != null ? currentUser.getId() : "anonymous");
                 Campaign campaign = campaignService.getCampaignById(id, currentUser);
-                CampaignResponse response = campaignMapper.toResponse(campaign);
-                List<CampaignMediaResponse> activeMedias = campaignMediaMapper.toResponseList(
-                                campaignService.getActiveMediasByCampaignId(id));
-                response.setMedias(activeMedias);
-                response.setMedia(activeMedias);
-                response.setVolunteersCount(campaignService.getVolunteersCount(id));
-                response.setDonorsCount(campaignService.getDonorsCount(id));
-                if (currentUser != null) {
-                        response.setIsFollowed(campaignService.isFollowed(id, currentUser.getId()));
-                        response.setIsJoined(campaignService.isJoined(id, currentUser.getId()));
-                } else {
-                        response.setIsFollowed(false);
-                        response.setIsJoined(false);
-                }
-                return ApiResponse.success(response);
+                return ApiResponse.success(campaignService.toResponse(campaign, currentUser));
         }
 
         @PutMapping("/{id}")

@@ -5,8 +5,8 @@ import com.mgmtp.gives.config.SecurityConfig;
 import com.mgmtp.gives.dto.category.AdminCategoryResponse;
 import com.mgmtp.gives.dto.category.AdminCreateCategoryRequest;
 import com.mgmtp.gives.dto.category.AdminUpdateCategoryRequest;
+import com.mgmtp.gives.dto.category.CategoryDeleteCheckResponse;
 import com.mgmtp.gives.entity.User;
-import com.mgmtp.gives.enums.CategoryStatus;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.enums.UserStatus;
 import com.mgmtp.gives.security.CustomUserDetails;
@@ -78,7 +78,7 @@ class AdminCategoryControllerTest {
         adminUserDetails = new CustomUserDetails(adminUser);
         regularUserDetails = new CustomUserDetails(regularUser);
 
-        adminCategoryResponse = new AdminCategoryResponse(1L, "Education", "Schooling", CategoryStatus.APPROVED, 0L);
+        adminCategoryResponse = new AdminCategoryResponse(1L, "Education", "Schooling", null, 0L);
     }
 
     @Test
@@ -110,10 +110,11 @@ class AdminCategoryControllerTest {
     @Test
     void getAllCategories_Success_Admin() throws Exception {
         Page<AdminCategoryResponse> page = new PageImpl<>(List.of(adminCategoryResponse));
-        when(adminCategoryService.getAllCategories(any(), any(), any(Pageable.class))).thenReturn(page);
+        when(adminCategoryService.getAllCategories(eq(false), any(), any(Pageable.class))).thenReturn(page);
 
         mockMvc.perform(get("/api/admin/categories")
                         .with(user(adminUserDetails))
+                        .param("showDeleted", "false")
                         .param("page", "0")
                         .param("size", "10"))
                 .andExpect(status().isOk())
@@ -134,8 +135,8 @@ class AdminCategoryControllerTest {
 
     @Test
     void updateCategory_Success_Admin() throws Exception {
-        AdminUpdateCategoryRequest request = new AdminUpdateCategoryRequest("Updated Education", "New Schooling", CategoryStatus.APPROVED);
-        AdminCategoryResponse updatedResponse = new AdminCategoryResponse(1L, "Updated Education", "New Schooling", CategoryStatus.APPROVED, 0L);
+        AdminUpdateCategoryRequest request = new AdminUpdateCategoryRequest("Updated Education", "New Schooling");
+        AdminCategoryResponse updatedResponse = new AdminCategoryResponse(1L, "Updated Education", "New Schooling", null, 0L);
         when(adminCategoryService.updateCategory(eq(1L), any(AdminUpdateCategoryRequest.class))).thenReturn(updatedResponse);
 
         mockMvc.perform(put("/api/admin/categories/1")
@@ -155,5 +156,29 @@ class AdminCategoryControllerTest {
                         .with(user(adminUserDetails)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void restoreCategory_Success_Admin() throws Exception {
+        when(adminCategoryService.restoreCategory(1L)).thenReturn(adminCategoryResponse);
+
+        mockMvc.perform(post("/api/admin/categories/1/restore")
+                        .with(user(adminUserDetails)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Category Restored Successfully"));
+    }
+
+    @Test
+    void checkCategoryDeletion_Success_Admin() throws Exception {
+        CategoryDeleteCheckResponse response = new CategoryDeleteCheckResponse(5, 2);
+        when(adminCategoryService.checkCategoryDeletion(1L)).thenReturn(response);
+
+        mockMvc.perform(get("/api/admin/categories/1/delete-check")
+                        .with(user(adminUserDetails)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.result.assignedCampaignsCount").value(5))
+                .andExpect(jsonPath("$.result.onlyCategoryCampaignsCount").value(2));
     }
 }

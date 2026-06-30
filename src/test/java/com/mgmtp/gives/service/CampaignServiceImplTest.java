@@ -537,30 +537,13 @@ class CampaignServiceImplTest {
     }
 
     @Test
-    void createCampaign_RejectedCategory_ThrowsException() {
-        Category rejectedCategory = new Category();
-        rejectedCategory.setId(10L);
-        rejectedCategory.setName("Rejected Category");
-        rejectedCategory.setStatus(com.mgmtp.gives.enums.CategoryStatus.REJECTED);
+    void createCampaign_DeletedCategory_ThrowsException() {
+        Category deletedCategory = new Category();
+        deletedCategory.setId(10L);
+        deletedCategory.setName("Deleted Category");
+        deletedCategory.setDeletedAt(LocalDateTime.now());
 
-        when(categoryRepository.findAllById(anySet())).thenReturn(List.of(rejectedCategory));
-
-        AppException exception = assertThrows(AppException.class,
-                () -> campaignService.createCampaign(draftRequest, testUser));
-
-        assertEquals(ErrorCode.CATEGORY_NOT_AVAILABLE, exception.getErrorCode());
-        verify(categoryRepository, times(1)).findAllById(anySet());
-        verifyNoInteractions(campaignRepository);
-    }
-
-    @Test
-    void createCampaign_HiddenCategory_ThrowsException() {
-        Category hiddenCategory = new Category();
-        hiddenCategory.setId(10L);
-        hiddenCategory.setName("Hidden Category");
-        hiddenCategory.setStatus(com.mgmtp.gives.enums.CategoryStatus.HIDDEN);
-
-        when(categoryRepository.findAllById(anySet())).thenReturn(List.of(hiddenCategory));
+        when(categoryRepository.findAllById(anySet())).thenReturn(List.of(deletedCategory));
 
         AppException exception = assertThrows(AppException.class,
                 () -> campaignService.createCampaign(draftRequest, testUser));
@@ -656,7 +639,6 @@ class CampaignServiceImplTest {
         assertEquals(CampaignStatus.IN_PROGRESS, campaign.getStatus());
         verify(campaignRepository, times(1)).save(campaign);
     }
-
     @Test
     void isFollowed_ShouldReturnTrue_WhenRecordExists() {
         when(campaignFollowerRepository.existsByCampaignIdAndUserId(1L, 2L)).thenReturn(true);

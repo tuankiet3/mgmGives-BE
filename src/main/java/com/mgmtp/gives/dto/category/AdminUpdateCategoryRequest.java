@@ -1,6 +1,5 @@
 package com.mgmtp.gives.dto.category;
 
-import com.mgmtp.gives.enums.CategoryStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -13,9 +12,6 @@ public record AdminUpdateCategoryRequest(
 
         @Size(max = 500, message = "Description cannot exceed 500 characters")
         @Schema(description = "The updated optional description", example = "Updated funding details")
-        String description,
-
-        @Schema(description = "The updated status", example = "REJECTED")
-        CategoryStatus status
+        String description
 ) {
 }

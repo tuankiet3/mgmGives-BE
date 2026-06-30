@@ -51,4 +51,10 @@ public interface CampaignRepository extends JpaRepository<Campaign, Long>, JpaSp
 
     long countByStatus(CampaignStatus status);
     long countByStatusIn(Collection<CampaignStatus> statuses);
+
+    @Query("SELECT COUNT(c) FROM Campaign c JOIN c.categories cat WHERE cat.id = :categoryId")
+    long countCampaignsByCategoryId(@Param("categoryId") Long categoryId);
+
+    @Query("SELECT COUNT(c) FROM Campaign c JOIN c.categories cat WHERE cat.id = :categoryId AND size(c.categories) = 1")
+    long countCampaignsWhereCategoryIsOnlyOne(@Param("categoryId") Long categoryId);
 }

@@ -2,10 +2,11 @@ package com.mgmtp.gives.service.impl;
 
 import com.mgmtp.gives.dto.category.*;
 import com.mgmtp.gives.entity.Category;
-import com.mgmtp.gives.enums.CategoryStatus;
+import com.mgmtp.gives.common.ErrorCode;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.mapper.CategoryMapper;
 import com.mgmtp.gives.repository.CategoryRepository;
+import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.service.AdminCategoryService;
 import com.mgmtp.gives.service.UserCategoryService;
 import lombok.RequiredArgsConstructor;
@@ -17,14 +18,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.mgmtp.gives.util.StringNormalizeUtils;
 
-import java.util.Collection;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 import static com.mgmtp.gives.common.ErrorCode.CATEGORY_NAME_ALREADY_EXISTS;
 import static com.mgmtp.gives.common.ErrorCode.CATEGORY_NOT_FOUND;
 import static com.mgmtp.gives.common.ErrorCode.VALIDATION_ERROR;
-import static com.mgmtp.gives.specification.CategorySpecifications.hasStatusIn;
+import static com.mgmtp.gives.specification.CategorySpecifications.isDeleted;
 import static com.mgmtp.gives.specification.CategorySpecifications.matchesKeyword;
 
 @Service @RequiredArgsConstructor @Slf4j
@@ -32,6 +33,7 @@ public class CategoryServiceImpl implements UserCategoryService, AdminCategorySe
 
     private final CategoryRepository categoryRepository;
     private final CategoryMapper categoryMapper;
+    private final CampaignRepository campaignRepository;
 
     /**
      * Common helper method to validate category name uniqueness (case-insensitive).
@@ -48,11 +50,21 @@ public class CategoryServiceImpl implements UserCategoryService, AdminCategorySe
             );
         }
 
-        if (categoryRepository.existsByNameIgnoreCase(normalisedName)) {
+        if (categoryRepository.existsByNameIgnoreCaseAndDeletedAtIsNull(normalisedName)) {
             log.warn("Category name rejected: already exists. name={}", normalisedName);
             throw new AppException(
                     CATEGORY_NAME_ALREADY_EXISTS,
                     "Category with name '" + normalisedName + "' already exists."
+            );
+        }
+
+        Optional<Category> existingOpt = categoryRepository.findByNameIgnoreCase(normalisedName);
+        if (existingOpt.isPresent() && existingOpt.get().getDeletedAt() != null) {
+            log.warn("Category name collision with archived category. name={}", normalisedName);
+            throw new AppException(
+                    ErrorCode.CATEGORY_ALREADY_EXISTS_BUT_DELETED,
+                    "Category with name '" + normalisedName + "' already exists in archives.",
+                    java.util.Map.of("id", existingOpt.get().getId())
             );
         }
 
@@ -64,66 +76,16 @@ public class CategoryServiceImpl implements UserCategoryService, AdminCategorySe
     // =========================================================================
 
     /**
-     * Returns all APPROVED categories sorted by name ascending.
+     * Returns all active categories sorted by name ascending.
      * This is the public-facing list used by the campaign creation flow (DANANG-1765).
      * Read-only transaction — no DB writes occur here.
      */
     @Override
     @Transactional(readOnly = true)
     public List<UserCategoryResponse> getApprovedCategories() {
-        List<Category> categories = categoryRepository.findAllByStatusOrderByNameAsc(CategoryStatus.APPROVED);
+        List<Category> categories = categoryRepository.findAllByDeletedAtIsNullOrderByNameAsc();
         return categoryMapper.toUserResponseList(categories);
     }
-
-    /**
-     * Persists a new category suggestion submitted by an authenticated user.
-     * Enforces status forced to PENDING.
-     */
-    @Override
-    @Transactional
-    public UserCategoryResponse suggestCategory(UserSuggestCategoryRequest request) {
-
-        String normalisedName = StringNormalizeUtils.normalizeName(request.name());
-        if (normalisedName == null || normalisedName.isEmpty()) {
-            throw new AppException(
-                    VALIDATION_ERROR,
-                    "Category name must not be blank."
-            );
-        }
-
-        // Return existing category if found (regardless of status PENDING or APPROVED)
-        // If it was REJECTED or HIDDEN, reset it to PENDING for admin review again
-        Optional<Category> existingOpt = categoryRepository.findByNameIgnoreCase(normalisedName);
-        if (existingOpt.isPresent()) {
-            Category existing = existingOpt.get();
-            if (existing.getStatus() == CategoryStatus.REJECTED || existing.getStatus() == CategoryStatus.HIDDEN) {
-                CategoryStatus oldStatus = existing.getStatus();
-                existing.setStatus(CategoryStatus.PENDING);
-                Category saved = categoryRepository.save(existing);
-                log.info("Existing category (previously {}) suggested again, auto-transitioned back to PENDING. id={}, name={}",
-                        oldStatus, saved.getId(), saved.getName());
-                return categoryMapper.toUserResponse(saved);
-            }
-            return categoryMapper.toUserResponse(existing);
-        }
-
-        // Normalize description: blank string -> null
-        String normalizedDescription = StringNormalizeUtils.normalizeDescription(request.description());
-
-        // Build normalized request for mapper
-        UserSuggestCategoryRequest normalizedRequest = new UserSuggestCategoryRequest(
-                normalisedName,
-                normalizedDescription
-        );
-
-        // Security: status is always PENDING for user suggestions (enforced by @Mapping constant in CategoryMapper)
-        Category saved = categoryRepository.save(categoryMapper.toEntity(normalizedRequest));
-        log.info("Category suggestion created: id={}, name={}, status=PENDING", saved.getId(), saved.getName());
-
-        return categoryMapper.toUserResponse(saved);
-    }
-
-    // =========================================================================
     // AdminCategoryService Implementation
     // =========================================================================
 
@@ -152,9 +114,9 @@ public class CategoryServiceImpl implements UserCategoryService, AdminCategorySe
 
     @Override
     @Transactional(readOnly = true)
-    public Page<AdminCategoryResponse> getAllCategories(Collection<CategoryStatus> statuses, String search, Pageable pageable) {
+    public Page<AdminCategoryResponse> getAllCategories(boolean showDeleted, String search, Pageable pageable) {
         Specification<Category> spec = Specification.allOf(
-                hasStatusIn(statuses),
+                isDeleted(showDeleted),
                 matchesKeyword(search)
         );
 
@@ -191,11 +153,21 @@ public class CategoryServiceImpl implements UserCategoryService, AdminCategorySe
 
         // Business logic: avoid duplicate when renaming
         if (!existingCategory.getName().equalsIgnoreCase(normalisedName)) {
-            if (categoryRepository.existsByNameIgnoreCase(normalisedName)) {
+            if (categoryRepository.existsByNameIgnoreCaseAndDeletedAtIsNull(normalisedName)) {
                 log.warn("Update category rejected: new name already exists. id={}, newName={}", id, normalisedName);
                 throw new AppException(
                         CATEGORY_NAME_ALREADY_EXISTS,
                         "Category with name '" + normalisedName + "' already exists."
+                );
+            }
+
+            Optional<Category> existingOpt = categoryRepository.findByNameIgnoreCase(normalisedName);
+            if (existingOpt.isPresent() && existingOpt.get().getDeletedAt() != null) {
+                log.warn("Update category rejected: new name exists in archives. id={}, newName={}", id, normalisedName);
+                throw new AppException(
+                        ErrorCode.CATEGORY_ALREADY_EXISTS_BUT_DELETED,
+                        "Category with name '" + normalisedName + "' already exists in archives.",
+                        java.util.Map.of("id", existingOpt.get().getId())
                 );
             }
         }
@@ -205,31 +177,62 @@ public class CategoryServiceImpl implements UserCategoryService, AdminCategorySe
 
         AdminUpdateCategoryRequest normalisedRequest = new AdminUpdateCategoryRequest(
                 normalisedName,
-                normalisedDescription,
-                updatedData.status()
+                normalisedDescription
         );
 
         // Apply changes
         categoryMapper.updateEntityFromRequest(normalisedRequest, existingCategory);
 
         Category saved = categoryRepository.save(existingCategory);
-        log.info("Category updated: id={}, name={}, status={}", saved.getId(), saved.getName(), saved.getStatus());
+        log.info("Category updated: id={}, name={}", saved.getId(), saved.getName());
         return categoryMapper.toAdminResponse(saved);
     }
 
     @Override
     @Transactional
     public void deleteCategory(Long id) {
-        Category category = categoryRepository.findById(id)
+        Category category = categoryRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> {
                     log.warn("Delete category failed: not found. id={}", id);
                     return new AppException(CATEGORY_NOT_FOUND);
                 });
 
-        // Soft delete (set status to HIDDEN)
-        category.setStatus(CategoryStatus.HIDDEN);
-
+        category.setDeletedAt(LocalDateTime.now());
         categoryRepository.save(category);
-        log.info("Category soft-deleted (HIDDEN): id={}, name={}", id, category.getName());
+        log.info("Category soft-deleted: id={}, name={}", id, category.getName());
+    }
+
+    @Override
+    @Transactional
+    public AdminCategoryResponse restoreCategory(Long id) {
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> {
+                    log.warn("Restore category failed: not found. id={}", id);
+                    return new AppException(CATEGORY_NOT_FOUND);
+                });
+
+        if (categoryRepository.existsByNameIgnoreCaseAndDeletedAtIsNull(category.getName())) {
+            log.warn("Restore category failed: name already exists as active. id={}, name={}", id, category.getName());
+            throw new AppException(
+                    CATEGORY_NAME_ALREADY_EXISTS,
+                    "An active category with the name '" + category.getName() + "' already exists. Cannot restore."
+            );
+        }
+
+        category.setDeletedAt(null);
+        Category saved = categoryRepository.save(category);
+        log.info("Category restored: id={}, name={}", id, category.getName());
+        return categoryMapper.toAdminResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CategoryDeleteCheckResponse checkCategoryDeletion(Long id) {
+        if (!categoryRepository.existsById(id)) {
+            throw new AppException(CATEGORY_NOT_FOUND);
+        }
+        long assigned = campaignRepository.countCampaignsByCategoryId(id);
+        long onlyCategory = campaignRepository.countCampaignsWhereCategoryIsOnlyOne(id);
+        return new CategoryDeleteCheckResponse(assigned, onlyCategory);
     }
 }

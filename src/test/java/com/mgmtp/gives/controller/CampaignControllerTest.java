@@ -210,15 +210,13 @@ class CampaignControllerTest {
                 Campaign campaign = new Campaign();
                 campaign.setId(1L);
 
+                campaignResponse.setIsFollowed(true);
+                campaignResponse.setIsJoined(true);
+                campaignResponse.setVolunteersCount(5L);
+                campaignResponse.setDonorsCount(10L);
+
                 when(campaignService.getCampaignById(eq(1L), any())).thenReturn(campaign);
-                when(campaignMapper.toResponse(campaign)).thenReturn(campaignResponse);
-                when(campaignMediaRepository.findByCampaignIdAndDeletedAtIsNull(1L))
-                                .thenReturn(Collections.emptyList());
-                when(campaignMediaMapper.toResponseList(anyList())).thenReturn(Collections.emptyList());
-                when(campaignService.getVolunteersCount(eq(1L))).thenReturn(5L);
-                when(campaignService.getDonorsCount(eq(1L))).thenReturn(10L);
-                when(campaignService.isFollowed(eq(1L), eq(7L))).thenReturn(true);
-                when(campaignService.isJoined(eq(1L), eq(7L))).thenReturn(true);
+                when(campaignService.toResponse(eq(campaign), any())).thenReturn(campaignResponse);
 
                 mockMvc.perform(get("/api/campaigns/1")
                                 .with(user(regularUserDetails)))

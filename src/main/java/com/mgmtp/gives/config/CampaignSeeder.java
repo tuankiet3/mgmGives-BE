@@ -5,7 +5,6 @@ import com.mgmtp.gives.entity.Category;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
-import com.mgmtp.gives.enums.CategoryStatus;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.CategoryRepository;
 import com.mgmtp.gives.repository.UserRepository;
@@ -106,7 +105,6 @@ public class CampaignSeeder implements CommandLineRunner {
                 .orElseGet(() -> categoryRepository.save(Category.builder()
                         .name(name)
                         .description(description)
-                        .status(CategoryStatus.APPROVED)
                         .campaigns(new HashSet<>())
                         .build()));
     }

@@ -20,7 +20,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<?>> handleAppException(AppException ex, HttpServletRequest request) {
         log.warn("AppException Message: {}", ex.getMessage());
         String message = ex.getMessage() != null ? ex.getMessage() : ex.getErrorCode().getMessage();
-        ApiResponse<?> response = ApiResponse.fail(ex.getErrorCode(), message, request.getRequestURI());
+        ApiResponse<?> response = ApiResponse.fail(ex.getResult(), ex.getErrorCode(), message, request.getRequestURI());
 
         return ResponseEntity.status(ex.getErrorCode().getStatus()).body(response);
     }

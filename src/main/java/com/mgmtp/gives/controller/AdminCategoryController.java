@@ -5,7 +5,7 @@ import com.mgmtp.gives.common.PageResponse;
 import com.mgmtp.gives.dto.category.AdminCategoryResponse;
 import com.mgmtp.gives.dto.category.AdminCreateCategoryRequest;
 import com.mgmtp.gives.dto.category.AdminUpdateCategoryRequest;
-import com.mgmtp.gives.enums.CategoryStatus;
+import com.mgmtp.gives.dto.category.CategoryDeleteCheckResponse;
 import com.mgmtp.gives.service.AdminCategoryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -16,8 +16,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/categories")
@@ -43,16 +41,16 @@ public class AdminCategoryController {
     }
 
     @GetMapping
-    @Operation(summary = "Get all categories", description = "Retrieves a list of categories, optionally filtered by multiple statuses.")
+    @Operation(summary = "Get all categories", description = "Retrieves a list of categories, optionally filtered by deletion status.")
     public ApiResponse<?> getAllCategories(
-            @Parameter(description = "Optional list of statuses to filter categories by", example = "APPROVED,PENDING")
-            @RequestParam(required = false) List<CategoryStatus> statuses,
+            @Parameter(description = "Optional flag to retrieve deleted categories instead of active ones", example = "false")
+            @RequestParam(required = false, defaultValue = "false") boolean showDeleted,
             @Parameter(description = "Optional search query to filter categories by name or description", example = "relief")
             @RequestParam(required = false) String search,
             @PageableDefault(page = 0, size = 10, sort = "id", direction = Sort.Direction.ASC) Pageable pageable) {
 
 
-        Page<AdminCategoryResponse> responsePage = adminCategoryService.getAllCategories(statuses, search, pageable);
+        Page<AdminCategoryResponse> responsePage = adminCategoryService.getAllCategories(showDeleted, search, pageable);
 
         PageResponse<AdminCategoryResponse> pageResponse = PageResponse.of(responsePage, responsePage.getContent());
         return ApiResponse.success(pageResponse);
@@ -80,12 +78,30 @@ public class AdminCategoryController {
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "Delete category", description = "Deletes an existing category by its ID.")
+    @Operation(summary = "Delete category", description = "Soft-deletes an existing category by its ID.")
     public ApiResponse<?> deleteCategory(
             @Parameter(description = "The ID of the category to delete", required = true, example = "1")
             @PathVariable Long id) {
         adminCategoryService.deleteCategory(id);
 
         return ApiResponse.<Void>success(null);
+    }
+
+    @PostMapping("/{id}/restore")
+    @Operation(summary = "Restore category", description = "Restores a soft-deleted category by its ID.")
+    public ApiResponse<?> restoreCategory(
+            @Parameter(description = "The ID of the category to restore", required = true, example = "1")
+            @PathVariable Long id) {
+        AdminCategoryResponse response = adminCategoryService.restoreCategory(id);
+        return ApiResponse.success(response, "Category Restored Successfully");
+    }
+
+    @GetMapping("/{id}/delete-check")
+    @Operation(summary = "Check category usage before deletion", description = "Returns the count of campaigns using this category and where this is the only category.")
+    public ApiResponse<CategoryDeleteCheckResponse> checkCategoryDeletion(
+            @Parameter(description = "The ID of the category to check", required = true, example = "1")
+            @PathVariable Long id) {
+        CategoryDeleteCheckResponse response = adminCategoryService.checkCategoryDeletion(id);
+        return ApiResponse.success(response);
     }
 }

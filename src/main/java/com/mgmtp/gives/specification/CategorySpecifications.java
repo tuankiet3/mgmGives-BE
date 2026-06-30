@@ -1,20 +1,20 @@
 package com.mgmtp.gives.specification;
 
 import com.mgmtp.gives.entity.Category;
-import com.mgmtp.gives.enums.CategoryStatus;
 import org.springframework.data.jpa.domain.Specification;
-
-import java.util.Collection;
 
 public final class CategorySpecifications {
 
     private CategorySpecifications() {
     }
 
-
-    public static Specification<Category> hasStatusIn(Collection<CategoryStatus> statuses) {
-        return (root, query, criteriaBuilder) ->
-                (statuses == null || statuses.isEmpty()) ? null : root.get("status").in(statuses);
+    public static Specification<Category> isDeleted(Boolean showDeleted) {
+        return (root, query, criteriaBuilder) -> {
+            if (showDeleted == null || !showDeleted) {
+                return criteriaBuilder.isNull(root.get("deletedAt"));
+            }
+            return criteriaBuilder.isNotNull(root.get("deletedAt"));
+        };
     }
 
     public static Specification<Category> matchesKeyword(String keyword) {

@@ -3,7 +3,6 @@ package com.mgmtp.gives.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mgmtp.gives.config.SecurityConfig;
 import com.mgmtp.gives.dto.category.UserCategoryResponse;
-import com.mgmtp.gives.dto.category.UserSuggestCategoryRequest;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.enums.UserStatus;
@@ -84,53 +83,5 @@ class UserCategoryControllerTest {
     void getApprovedCategories_Unauthorized_AnonymousUser() throws Exception {
         mockMvc.perform(get("/api/categories"))
                 .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void suggestCategory_Success_AuthenticatedUser() throws Exception {
-        UserSuggestCategoryRequest request = new UserSuggestCategoryRequest("New Category", "A valid description");
-        when(userCategoryService.suggestCategory(any(UserSuggestCategoryRequest.class))).thenReturn(categoryResponse);
-
-        mockMvc.perform(post("/api/categories/suggestions")
-                        .with(user(regularUserDetails))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.result.id").value(1));
-    }
-
-    @Test
-    void suggestCategory_Unauthorized_AnonymousUser() throws Exception {
-        UserSuggestCategoryRequest request = new UserSuggestCategoryRequest("New Category", "A valid description");
-
-        mockMvc.perform(post("/api/categories/suggestions")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void suggestCategory_ValidationError_BlankName() throws Exception {
-        UserSuggestCategoryRequest request = new UserSuggestCategoryRequest("  ", "A valid description");
-
-        mockMvc.perform(post("/api/categories/suggestions")
-                        .with(user(regularUserDetails))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
-    }
-
-    @Test
-    void suggestCategory_ValidationError_NameTooShort() throws Exception {
-        UserSuggestCategoryRequest request = new UserSuggestCategoryRequest("A", "A valid description");
-
-        mockMvc.perform(post("/api/categories/suggestions")
-                        .with(user(regularUserDetails))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
     }
 }

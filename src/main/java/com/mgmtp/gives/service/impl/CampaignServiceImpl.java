@@ -10,7 +10,6 @@ import com.mgmtp.gives.entity.Category;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
-import com.mgmtp.gives.enums.CategoryStatus;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
@@ -156,7 +155,7 @@ public class CampaignServiceImpl implements CampaignService {
         }
 
         log.info("Campaign retrieved successfully: id={}, userId={}", id,
-                currentUser != null ? currentUser.getId() : null);
+                currentUser.getId());
         return campaign;
     }
 
@@ -360,9 +359,9 @@ public class CampaignServiceImpl implements CampaignService {
             throw new AppException(ErrorCode.CATEGORY_NOT_FOUND, "One or more category IDs are invalid");
         }
         for (Category category : categoryList) {
-            if (category.getStatus() == CategoryStatus.REJECTED || category.getStatus() == CategoryStatus.HIDDEN) {
-                log.warn("Category not available for campaign: categoryId={}, status={}",
-                        category.getId(), category.getStatus());
+            if (category.getDeletedAt() != null) {
+                log.warn("Category not available for campaign: categoryId={}, deletedAt={}",
+                        category.getId(), category.getDeletedAt());
                 throw new AppException(ErrorCode.CATEGORY_NOT_AVAILABLE,
                         "Category '" + category.getName() + "' is not available");
             }
@@ -468,7 +467,6 @@ public class CampaignServiceImpl implements CampaignService {
             return response;
         }).toList();
     }
-
     @Transactional(readOnly = true)
     public boolean isFollowed(Long campaignId, Long userId) {
         return campaignFollowerRepository.existsByCampaignIdAndUserId(campaignId, userId);

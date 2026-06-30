@@ -27,8 +27,8 @@ public enum ErrorCode {
 
     CATEGORY_NOT_FOUND(1020, "Category not found", HttpStatus.NOT_FOUND),
     CATEGORY_NAME_ALREADY_EXISTS(1021, "Category Name Already Exists", HttpStatus.BAD_REQUEST),
-
     CATEGORY_NOT_AVAILABLE(1022, "Category is not available", HttpStatus.BAD_REQUEST),
+    CATEGORY_ALREADY_EXISTS_BUT_DELETED(1023, "Category already exists in archives", HttpStatus.BAD_REQUEST),
 
     CAMPAIGN_NOT_IN_PROGRESS(2000, "Campaign not in progress", HttpStatus.BAD_REQUEST),
     CAMPAIGN_NOT_FOUND(2001, "Campaign not found", HttpStatus.NOT_FOUND),
