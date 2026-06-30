@@ -2,6 +2,7 @@ package com.mgmtp.gives.controller;
 
 import com.mgmtp.gives.common.ApiResponse;
 import com.mgmtp.gives.common.PageResponse;
+import com.mgmtp.gives.dto.campaign.CampaignMediaResponse;
 import com.mgmtp.gives.dto.campaign.CampaignRequest;
 import com.mgmtp.gives.dto.campaign.CampaignResponse;
 import com.mgmtp.gives.entity.Campaign;
@@ -83,8 +84,10 @@ public class CampaignController {
                                 currentUser != null ? currentUser.getId() : "anonymous");
                 Campaign campaign = campaignService.getCampaignById(id, currentUser);
                 CampaignResponse response = campaignMapper.toResponse(campaign);
-                response.setMedias(campaignMediaMapper.toResponseList(
-                                campaignService.getActiveMediasByCampaignId(id)));
+                List<CampaignMediaResponse> activeMedias = campaignMediaMapper.toResponseList(
+                                campaignService.getActiveMediasByCampaignId(id));
+                response.setMedias(activeMedias);
+                response.setMedia(activeMedias);
                 if (currentUser != null) {
                         response.setIsFollowed(campaignService.isFollowed(id, currentUser.getId()));
                 }
