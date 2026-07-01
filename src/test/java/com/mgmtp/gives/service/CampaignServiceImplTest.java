@@ -679,7 +679,7 @@ class CampaignServiceImplTest {
 
     @Test
     void getDonorsCount_ShouldReturnCorrectCount() {
-        when(donationRepository.countDistinctDonorsByCampaignIdAndStatusConfirmed(1L)).thenReturn(10L);
+        when(donationRepository.countDistinctDonorsByCampaignIdAndStatusSuccessful(1L)).thenReturn(10L);
         long result = campaignService.getDonorsCount(1L);
         assertEquals(10L, result);
     }

@@ -1,6 +1,5 @@
 package com.mgmtp.gives.service.impl;
 
-import com.mgmtp.gives.common.ErrorCode;
 import com.mgmtp.gives.dto.donation.*;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.Donation;
@@ -9,14 +8,15 @@ import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.DonationStatus;
 import com.mgmtp.gives.enums.DonationType;
 import com.mgmtp.gives.exception.AppException;
+import com.mgmtp.gives.common.ErrorCode;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
-import com.mgmtp.gives.notification.publisher.DonationNotificationPublisher;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.DonationRepository;
 import com.mgmtp.gives.security.CustomUserDetails;
 import com.mgmtp.gives.service.CampaignFollowerService;
 import com.mgmtp.gives.service.DonationService;
 import com.mgmtp.gives.service.NotificationService;
+import com.mgmtp.gives.notification.publisher.DonationNotificationPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -29,19 +29,21 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+
 import static com.mgmtp.gives.specification.DonationSpecifications.*;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DonationServiceImpl implements DonationService {
+
     private static final long MAX_DONATION_AMOUNT = 999_999_999_999L;
     private static final long VNPAY_AMOUNT_MULTIPLIER = 100L;
 
-    private final DonationNotificationPublisher publisher;
-    private final CampaignFollowerService campaignFollowerService;
     private final DonationRepository donationRepository;
     private final CampaignRepository campaignRepository;
+    private final CampaignFollowerService campaignFollowerService;
+    private final DonationNotificationPublisher publisher;
     private final NotificationService notificationService;
 
     @Override
@@ -63,7 +65,6 @@ public class DonationServiceImpl implements DonationService {
         if (request.donationType() == DonationType.MONEY) {
             validateMoneyAmount(request.amount());
         }
-        // Use detail directly, or fallback to goodsDescription for goods donation
         String detailText = request.detail();
         if (request.donationType() == DonationType.GOODS && request.goodsDescription() != null) {
             detailText = request.goodsDescription();
@@ -80,7 +81,7 @@ public class DonationServiceImpl implements DonationService {
                 .amount(request.donationType() == DonationType.GOODS ? null : request.amount())
                 .detail(detailText)
                 .isAnonymous(request.anonymous())
-                .status(DonationStatus.CONFIRMED)
+                .status(DonationStatus.SUCCESSFUL)
                 .confirmedAt(LocalDateTime.now())
                 .transactionId(request.transactionId())
                 .message(messageText)
@@ -104,13 +105,12 @@ public class DonationServiceImpl implements DonationService {
         );
 
         return toResponse(savedDonation);
-}
+    }
 
     @Override
     @Transactional(readOnly = true)
     public List<DonationResponse> getMyDonations(Long userId) {
         List<Donation> donations = donationRepository.findByUserIdOrderByCreatedAtDesc(userId);
-
         return donations.stream().map(this::toResponse).toList();
     }
 
@@ -144,7 +144,7 @@ public class DonationServiceImpl implements DonationService {
                         "Donation not found with ID: " + donationId
                 ));
 
-        donation.setStatus(DonationStatus.CONFIRMED);
+        donation.setStatus(DonationStatus.SUCCESSFUL);
         donation.setConfirmedBy(admin);
         donation.setConfirmedAt(LocalDateTime.now());
         Donation savedDonation = donationRepository.save(donation);
@@ -178,7 +178,7 @@ public class DonationServiceImpl implements DonationService {
                 .amount(request.amount())
                 .detail("VNPay Donation")
                 .isAnonymous(request.anonymous())
-                .status(DonationStatus.PENDING)
+                .status(DonationStatus.FAILED) // Created as FAILED initially. Reloads/leaves naturally stay FAILED.
                 .transactionId(txnRef)
                 .message(messageText)
                 .isMessageHidden(false)
@@ -203,7 +203,17 @@ public class DonationServiceImpl implements DonationService {
                         "Donation not found with ID: " + donationId
                 ));
 
-        donation.setStatus(DonationStatus.CONFIRMED);
+        // Ownership check: only the donation owner can confirm their VNPay payment
+        validateDonationOwnership(donation);
+
+        if (donation.getStatus() == DonationStatus.SUCCESSFUL) {
+            throw new AppException(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Donation is already confirmed."
+            );
+        }
+
+        donation.setStatus(DonationStatus.SUCCESSFUL);
         donation.setConfirmedAt(LocalDateTime.now());
         donation.setUpdatedAt(LocalDateTime.now());
         Donation savedDonation = donationRepository.save(donation);
@@ -234,7 +244,7 @@ public class DonationServiceImpl implements DonationService {
                             donation.getCampaign().getUser().getId().equals(currentUser.getId());
         
         if (!isAdmin && !isCreator) {
-            throw new com.mgmtp.gives.exception.AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE, 
+            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE, 
                     "Only Campaign Admin or global ADMIN can moderate donation messages.");
         }
 
@@ -254,13 +264,37 @@ public class DonationServiceImpl implements DonationService {
                         ErrorCode.DONATE_NOT_FOUND,
                         "Donation not found with ID: " + donationId
                 ));
-        if (donation.getStatus() == DonationStatus.PENDING) {
-            donation.setStatus(DonationStatus.FAILED);
-            donation.setUpdatedAt(LocalDateTime.now());
-            donation = donationRepository.save(donation);
-            notificationService.broadcastDashboardUpdate();
-        }
+
+        // Ownership check: only the donation owner can cancel their own payment
+        validateDonationOwnership(donation);
+
+        // It is already FAILED, so we don't need to change anything. Just return the response.
         return toResponse(donation);
+    }
+
+    /**
+     * Validates that the currently authenticated user is the owner of this donation.
+     * Throws UNAUTHORIZED if the caller does not match the donation owner.
+     */
+    private void validateDonationOwnership(Donation donation) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new AppException(ErrorCode.UNAUTHORIZED, "Authentication required");
+        }
+        if (!(authentication.getPrincipal() instanceof CustomUserDetails userDetails)) {
+            throw new AppException(ErrorCode.UNAUTHORIZED, "Authentication required");
+        }
+
+        Long currentUserId = userDetails.getUser().getId();
+        boolean isAdmin = userDetails.getUser().getRole() == com.mgmtp.gives.enums.UserRole.ADMIN;
+
+        if (!isAdmin && (donation.getUser() == null || !donation.getUser().getId().equals(currentUserId))) {
+            log.warn("Ownership check failed: donationId={}, donationOwnerId={}, requestUserId={}",
+                    donation.getId(),
+                    donation.getUser() != null ? donation.getUser().getId() : null,
+                    currentUserId);
+            throw new AppException(ErrorCode.UNAUTHORIZED, "You do not have permission to modify this donation");
+        }
     }
 
     private DonationAdminResponse toAdminResponse(Donation donation) {
@@ -294,12 +328,11 @@ public class DonationServiceImpl implements DonationService {
     private DonationResponse toResponse(Donation donation) {
         String donorName = donation.isAnonymous() ? "Anonymous" : donation.getUser().getFullName();
 
-        // Check if the current user is Campaign Admin or global ADMIN to display hidden message text
         boolean canSeeHidden = false;
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.isAuthenticated() &&
                 authentication.getPrincipal() instanceof CustomUserDetails userDetails) {
-            com.mgmtp.gives.entity.User currentUser = userDetails.getUser();
+            User currentUser = userDetails.getUser();
             boolean isAdmin = currentUser.getRole() == com.mgmtp.gives.enums.UserRole.ADMIN;
             boolean isCreator = donation.getCampaign().getUser() != null &&
                     donation.getCampaign().getUser().getId().equals(currentUser.getId());
@@ -332,32 +365,6 @@ public class DonationServiceImpl implements DonationService {
                 .deliveryMethod(donation.getDeliveryMethod())
                 .createdAt(donation.getCreatedAt())
                 .build();
-    }
-
-    private String getDonorName(Donation donation) {
-        if (donation.getUser() == null) {
-            return "Unknown donor";
-        }
-
-        if (donation.getUser().getFullName() != null && !donation.getUser().getFullName().isBlank()) {
-            return donation.getUser().getFullName();
-        }
-
-        return donation.getUser().getEmail();
-    }
-
-    private Long calculateNewRaised(Long oldRaised, Donation donation) {
-        Long safeOldRaised = oldRaised == null ? 0L : oldRaised;
-
-        if (donation.getType() != DonationType.MONEY || donation.getAmount() == null) {
-            return safeOldRaised;
-        }
-
-        try {
-            return Math.addExact(safeOldRaised, donation.getAmount());
-        } catch (ArithmeticException ex) {
-            throw new AppException(ErrorCode.VALIDATION_ERROR, "Campaign raised amount exceeds the supported range");
-        }
     }
 
     private void validateMoneyAmount(Long amount) {

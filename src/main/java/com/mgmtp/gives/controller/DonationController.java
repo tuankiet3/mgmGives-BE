@@ -55,7 +55,7 @@ public class DonationController {
     }
 
     @PostMapping("/vnpay/create")
-    @Operation(summary = "Create a new VNPay donation request", description = "Generates a mock VNPay QR code for money donation and creates a PENDING donation record in the database.")
+    @Operation(summary = "Create a new VNPay donation request", description = "Generates a mock VNPay QR code for money donation and creates a FAILED donation record in the database.")
     public ApiResponse<VNPayResponse> createVNPayDonation(@Valid @RequestBody VNPayRequest request,
                                                           @AuthenticationPrincipal CustomUserDetails userDetails) {
         VNPayResponse response = donationService.createVNPayDonation(request, userDetails.getUser());
@@ -63,15 +63,19 @@ public class DonationController {
     }
 
     @PostMapping("/vnpay/callback/{id}")
-    @Operation(summary = "Simulate VNPay IPN Callback", description = "Simulates the VNPay secure IPN callback confirming successful payment, changing status to CONFIRMED and broadcasting via WebSocket.")
-    public ApiResponse<DonationResponse> simulateVNPayCallback(@PathVariable Long id) {
+    @Operation(summary = "Simulate VNPay IPN Callback", description = "Simulates the VNPay secure IPN callback confirming successful payment, changing status to SUCCESSFUL. Only the donation owner may call this.")
+    public ApiResponse<DonationResponse> simulateVNPayCallback(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
         DonationResponse donation = donationService.confirmVNPayDonation(id);
         return ApiResponse.success(donation, "VNPay payment simulated successfully");
     }
 
     @PostMapping("/vnpay/cancel/{id}")
-    @Operation(summary = "Cancel VNPay donation request", description = "Marks a PENDING VNPay donation request as FAILED (e.g. if the user cancels or it times out).")
-    public ApiResponse<DonationResponse> cancelVNPayDonation(@PathVariable Long id) {
+    @Operation(summary = "Cancel VNPay donation request", description = "Returns the VNPay donation request which is FAILED. Only the donation owner may call this.")
+    public ApiResponse<DonationResponse> cancelVNPayDonation(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
         DonationResponse donation = donationService.cancelVNPayDonation(id);
         return ApiResponse.success(donation, "Donation request cancelled");
     }

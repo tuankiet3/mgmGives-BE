@@ -488,6 +488,6 @@ public class CampaignServiceImpl implements CampaignService {
     @Override
     @Transactional(readOnly = true)
     public long getDonorsCount(Long campaignId) {
-        return donationRepository.countDistinctDonorsByCampaignIdAndStatusConfirmed(campaignId);
+        return donationRepository.countDistinctDonorsByCampaignIdAndStatusSuccessful(campaignId);
     }
 }

@@ -1,7 +1,6 @@
 package com.mgmtp.gives.enums;
 
 public enum DonationStatus {
-    PENDING,
-    CONFIRMED,
+    SUCCESSFUL,
     FAILED
 }
