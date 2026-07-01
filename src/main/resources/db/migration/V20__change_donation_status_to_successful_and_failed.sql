@@ -7,7 +7,8 @@ ALTER TYPE donation_status ADD VALUE IF NOT EXISTS 'SUCCESSFUL';
 COMMIT;
 
 -- Step 2: Migrate existing COMPLETED, CONFIRMED records to SUCCESSFUL
-UPDATE donations SET status = 'SUCCESSFUL' WHERE status IN ('COMPLETED', 'CONFIRMED');
+UPDATE donations SET status = 'SUCCESSFUL' WHERE status::text IN ('COMPLETED', 'CONFIRMED');
 
 -- Step 3: Migrate any other pending or rejected records to FAILED
-UPDATE donations SET status = 'FAILED' WHERE status IN ('PENDING', 'REJECTED');
+UPDATE donations SET status = 'FAILED' WHERE status::text IN ('PENDING', 'REJECTED');
+

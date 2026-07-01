@@ -63,3 +63,11 @@ server:
 logging:
   file:
     path: ${LOGGING_FILE_PATH:/app/logs}
+
+payos:
+  client-id: ${PAYOS_CLIENT_ID:2c4a32f6-9017-4913-b83c-a9735c36f34f}
+  api-key: ${PAYOS_API_KEY:e99d3902-a69f-4eb4-b797-4bed2f35d087}
+  checksum-key: ${PAYOS_CHECKSUM_KEY:3b10ff6db56cc7ebeda9cba74b20418387165ba7c3a1a6879763d60fa722757e}
+  cancel-url: ${PAYOS_CANCEL_URL:http://mgm-gives.mgm-edv.de}
+  return-url: ${PAYOS_RETURN_URL:http://mgm-gives.mgm-edv.de}
+  webhook-url: ${PAYOS_WEBHOOK_URL:http://mgm-gives.mgm-edv.de/api/donations/payos/webhook}

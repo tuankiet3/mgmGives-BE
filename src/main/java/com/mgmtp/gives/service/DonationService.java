@@ -1,7 +1,6 @@
 package com.mgmtp.gives.service;
 
 import com.mgmtp.gives.dto.donation.*;
-import com.mgmtp.gives.entity.Donation;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.DonationStatus;
 import com.mgmtp.gives.enums.DonationType;
@@ -22,11 +21,11 @@ public interface DonationService {
 
     DonationAdminResponse confirmDonation(Long donationId, User admin);
 
-    VNPayResponse createVNPayDonation(VNPayRequest request, User user);
+    PayOSResponse createPayOSDonation(PayOSRequest request, User user);
 
-    DonationResponse confirmVNPayDonation(Long donationId);
+    DonationResponse confirmPayOSDonation(Long donationId);
 
-    DonationResponse cancelVNPayDonation(Long donationId);
+    DonationResponse cancelPayOSDonation(Long donationId);
 
     DonationResponse hideDonationMessage(Long donationId, boolean hidden, User currentUser);
 }

@@ -19,6 +19,7 @@ import com.mgmtp.gives.service.NotificationService;
 import com.mgmtp.gives.notification.publisher.DonationNotificationPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -26,6 +27,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.payos.PayOS;
+import vn.payos.model.v2.paymentRequests.CreatePaymentLinkRequest;
+import vn.payos.model.v2.paymentRequests.CreatePaymentLinkResponse;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -38,13 +42,19 @@ import static com.mgmtp.gives.specification.DonationSpecifications.*;
 public class DonationServiceImpl implements DonationService {
 
     private static final long MAX_DONATION_AMOUNT = 999_999_999_999L;
-    private static final long VNPAY_AMOUNT_MULTIPLIER = 100L;
 
     private final DonationRepository donationRepository;
     private final CampaignRepository campaignRepository;
     private final CampaignFollowerService campaignFollowerService;
     private final DonationNotificationPublisher publisher;
     private final NotificationService notificationService;
+    private final PayOS payOS;
+
+    @Value("${payos.cancel-url}")
+    private String payOSCancelUrl;
+
+    @Value("${payos.return-url}")
+    private String payOSReturnUrl;
 
     @Override
     @Transactional
@@ -153,22 +163,26 @@ public class DonationServiceImpl implements DonationService {
     }
 
     @Override
-    @Transactional
-    public VNPayResponse createVNPayDonation(VNPayRequest request, User user) {
-        log.info("Creating VNPay donation for campaign ID: {} with amount: {} VND by user: {}", 
+    public PayOSResponse createPayOSDonation(PayOSRequest request, User user) {
+        log.info("Creating PayOS donation for campaign ID: {} with amount: {} VND by user: {}",
                 request.campaignId(), request.amount(), user.getEmail());
         Campaign campaign = campaignRepository.findById(request.campaignId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.CAMPAIGN_NOT_FOUND,
                         "Campaign not found with ID: " + request.campaignId()
                 ));
-        log.info("About to validate money amount");
+
+        if (campaign.getStatus() != CampaignStatus.IN_PROGRESS) {
+            throw new AppException(
+                    ErrorCode.CAMPAIGN_NOT_IN_PROGRESS,
+                    "Cannot donate to this campaign because it is currently " + campaign.getStatus()
+            );
+        }
+
         validateMoneyAmount(request.amount());
 
-        String txnRef = "VNP_MOCK_" + System.currentTimeMillis();
-
-        String messageText = (request.message() != null && org.springframework.util.StringUtils.hasText(request.message())) 
-                ? request.message().trim() 
+        String messageText = (request.message() != null && org.springframework.util.StringUtils.hasText(request.message()))
+                ? request.message().trim()
                 : null;
 
         Donation donation = Donation.builder()
@@ -176,41 +190,57 @@ public class DonationServiceImpl implements DonationService {
                 .campaign(campaign)
                 .type(DonationType.MONEY)
                 .amount(request.amount())
-                .detail("VNPay Donation")
+                .detail("PayOS Donation")
                 .isAnonymous(request.anonymous())
-                .status(DonationStatus.FAILED) // Created as FAILED initially. Reloads/leaves naturally stay FAILED.
-                .transactionId(txnRef)
+                .status(DonationStatus.PENDING)
                 .message(messageText)
                 .isMessageHidden(false)
                 .build();
 
         donation = donationRepository.save(donation);
 
-        long vnPayAmount = toVNPayAmount(request.amount());
-        String mockPaymentUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_Amount=" + vnPayAmount + "&vnp_TxnRef=" + donation.getId();
-        String qrCodeUrl = "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" + mockPaymentUrl;
+        try {
+            String description = "MGM Gives " + donation.getId();
+            String cancelUrl = payOSCancelUrl + "/campaigns/" + campaign.getId() + "/donate?paymentStatus=cancel&donationId=" + donation.getId();
+            String returnUrl = payOSReturnUrl + "/campaigns/" + campaign.getId() + "?payment=success&donationId=" + donation.getId();
 
-        return new VNPayResponse(donation.getId(), qrCodeUrl, request.amount(), txnRef);
+            CreatePaymentLinkRequest paymentData = CreatePaymentLinkRequest.builder()
+                    .orderCode(donation.getId())
+                    .amount(request.amount())
+                    .description(description)
+                    .returnUrl(returnUrl)
+                    .cancelUrl(cancelUrl)
+                    .build();
+
+            CreatePaymentLinkResponse checkoutResponse = payOS.paymentRequests().create(paymentData);
+
+            donation.setTransactionId(checkoutResponse.getPaymentLinkId());
+            donationRepository.save(donation);
+
+            log.info("PayOS payment link created for donation ID: {}", donation.getId());
+            return new PayOSResponse(donation.getId(), checkoutResponse.getCheckoutUrl(), request.amount());
+        } catch (Exception e) {
+            log.error("Failed to create PayOS payment link for donation ID: {}", donation.getId(), e);
+            // Clean up the pending donation if PayOS fails
+            donation.setStatus(DonationStatus.FAILED);
+            donationRepository.save(donation);
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Failed to create payment link: " + e.getMessage());
+        }
     }
 
     @Override
     @Transactional
-    public DonationResponse confirmVNPayDonation(Long donationId) {
-        log.info("Confirming VNPay payment callback for donation ID: {}", donationId);
+    public DonationResponse confirmPayOSDonation(Long donationId) {
+        log.info("Confirming PayOS payment for donation ID: {}", donationId);
         Donation donation = donationRepository.findById(donationId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.DONATE_NOT_FOUND,
                         "Donation not found with ID: " + donationId
                 ));
 
-        // Ownership check: only the donation owner can confirm their VNPay payment
-        validateDonationOwnership(donation);
-
-        if (donation.getStatus() == DonationStatus.SUCCESSFUL) {
-            throw new AppException(
-                    ErrorCode.VALIDATION_ERROR,
-                    "Donation is already confirmed."
-            );
+        if (donation.getStatus() != DonationStatus.PENDING) {
+            log.warn("Donation ID {} is already in status {}; ignoring duplicate webhook.", donationId, donation.getStatus());
+            return toResponse(donation);
         }
 
         donation.setStatus(DonationStatus.SUCCESSFUL);
@@ -231,7 +261,7 @@ public class DonationServiceImpl implements DonationService {
     @Override
     @Transactional
     public DonationResponse hideDonationMessage(Long donationId, boolean hidden, User currentUser) {
-        log.info("User {} is setting hidden status to {} for donation message ID: {}", 
+        log.info("User {} is setting hidden status to {} for donation message ID: {}",
                 currentUser.getEmail(), hidden, donationId);
         Donation donation = donationRepository.findById(donationId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -240,11 +270,11 @@ public class DonationServiceImpl implements DonationService {
                 ));
 
         boolean isAdmin = currentUser.getRole() == com.mgmtp.gives.enums.UserRole.ADMIN;
-        boolean isCreator = donation.getCampaign().getUser() != null && 
+        boolean isCreator = donation.getCampaign().getUser() != null &&
                             donation.getCampaign().getUser().getId().equals(currentUser.getId());
-        
+
         if (!isAdmin && !isCreator) {
-            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE, 
+            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE,
                     "Only Campaign Admin or global ADMIN can moderate donation messages.");
         }
 
@@ -257,18 +287,20 @@ public class DonationServiceImpl implements DonationService {
 
     @Override
     @Transactional
-    public DonationResponse cancelVNPayDonation(Long donationId) {
-        log.info("Cancelling VNPay payment for donation ID: {}", donationId);
+    public DonationResponse cancelPayOSDonation(Long donationId) {
+        log.info("Cancelling PayOS payment for donation ID: {}", donationId);
         Donation donation = donationRepository.findById(donationId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.DONATE_NOT_FOUND,
                         "Donation not found with ID: " + donationId
                 ));
-
-        // Ownership check: only the donation owner can cancel their own payment
         validateDonationOwnership(donation);
-
-        // It is already FAILED, so we don't need to change anything. Just return the response.
+        if (donation.getStatus() == DonationStatus.PENDING) {
+            donation.setStatus(DonationStatus.FAILED);
+            donation.setUpdatedAt(LocalDateTime.now());
+            donation = donationRepository.save(donation);
+            notificationService.broadcastDashboardUpdate();
+        }
         return toResponse(donation);
     }
 
@@ -382,11 +414,4 @@ public class DonationServiceImpl implements DonationService {
         }
     }
 
-    private long toVNPayAmount(Long amount) {
-        try {
-            return Math.multiplyExact(amount, VNPAY_AMOUNT_MULTIPLIER);
-        } catch (ArithmeticException ex) {
-            throw new AppException(ErrorCode.VALIDATION_ERROR, "VNPay amount exceeds the supported range");
-        }
-    }
 }

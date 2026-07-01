@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
-public record VNPayRequest(
+public record PayOSRequest(
         @NotNull(message = "Campaign ID is required")
         Long campaignId,
 
@@ -18,5 +18,4 @@ public record VNPayRequest(
 
         @Size(max = 280, message = "Message must not exceed 280 characters")
         String message
-) {
-}
+) {}
