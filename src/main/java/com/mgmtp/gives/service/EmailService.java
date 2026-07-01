@@ -8,4 +8,6 @@ public interface EmailService {
     void sendResetPasswordEmail(String toEmail, String fullName, String token);
 
     void executeSend(String toEmail, String content, TokenType type);
+
+    void sendHtmlEmail(String toEmail, String subject, String htmlContent);
 }

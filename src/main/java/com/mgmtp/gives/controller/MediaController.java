@@ -67,7 +67,10 @@ public class MediaController {
     @Operation(summary = "Restore campaign media", description = "Restores a soft-deleted campaign media record. Must be within 14 days of deletion.")
     public ApiResponse<CampaignMediaResponse> restoreCampaignMedia(@PathVariable Long id) {
         CampaignMedia media = mediaService.restoreCampaignMedia(id);
-        CampaignMediaResponse response = new CampaignMediaResponse(media.getId(), media.getUrl(), media.getMediaType(), media.isCover());
+        CampaignMediaResponse response = CampaignMediaResponse.builder()
+                .id(media.getId()).url(media.getUrl()).mediaType(media.getMediaType()).isCover(media.isCover())
+                .caption(media.getCaption()).displayOrder(media.getDisplayOrder()).context(media.getContext())
+                .build();
         return ApiResponse.success(response, "Campaign media restored successfully");
     }
 }

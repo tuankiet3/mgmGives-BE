@@ -38,6 +38,13 @@ public enum ErrorCode {
     UNAUTHORIZED_CAMPAIGN_ACCESS(2007, "You do not have permission to access this campaign", HttpStatus.FORBIDDEN),
     UNAUTHORIZED_CAMPAIGN_DELETE(2008, "You do not have permission to delete this campaign", HttpStatus.FORBIDDEN),
     INVALID_CAMPAIGN_STATUS_FOR_DELETE(2009, "Cannot delete campaign in current state", HttpStatus.BAD_REQUEST),
+    REJECTION_REASON_REQUIRED(2006, "Rejection reason is required", HttpStatus.BAD_REQUEST),
+    CAMPAIGN_NOT_COMPLETED(2010, "Campaign is not completed yet", HttpStatus.BAD_REQUEST),
+    CAMPAIGN_RESULT_NOT_FOUND(2011, "Campaign result not found", HttpStatus.NOT_FOUND),
+    UNAUTHORIZED_RESULT_ACCESS(2012, "Only Campaign Admin or Admin can post or edit the result", HttpStatus.FORBIDDEN),
+    CAMPAIGN_RESULT_ALREADY_POSTED(2013, "Campaign result has already been posted", HttpStatus.CONFLICT),
+    GEMINI_API_ERROR(2014, "Failed to generate result draft with AI", HttpStatus.INTERNAL_SERVER_ERROR),
+    INVALID_CAMPAIGN_STATUS_FOR_REVIEW(2015, "Campaign is not in a reviewable state", HttpStatus.BAD_REQUEST),
 
     CAMPAIGN_MEDIA_NOT_FOUND(3001, "Campaign media not found", HttpStatus.NOT_FOUND),
     MEDIA_NOT_FOUND(3002, "Media file not found", HttpStatus.NOT_FOUND),
@@ -49,9 +56,7 @@ public enum ErrorCode {
     IMAGE_ONLY(3008, "Only image files are allowed for avatar/cover", HttpStatus.BAD_REQUEST),
     PATH_TRAVERSAL_DETECTED(3009, "Invalid file path", HttpStatus.BAD_REQUEST),
     DONATE_NOT_FOUND(3010, "Donate not found", HttpStatus.NOT_FOUND),
-    NOTIFICATION_NOT_FOUND(3011, "Notification not found", HttpStatus.NOT_FOUND),
-    INVALID_CAMPAIGN_STATUS_FOR_REVIEW(2005, "Campaign is not in a reviewable state", HttpStatus.BAD_REQUEST),
-    REJECTION_REASON_REQUIRED(2006, "Rejection reason is required", HttpStatus.BAD_REQUEST);
+    NOTIFICATION_NOT_FOUND(3011, "Notification not found", HttpStatus.NOT_FOUND);
 
     private final int code;
     private final String message;

@@ -105,4 +105,32 @@ public class Campaign extends BaseEntity {
     @Builder.Default
     @OneToMany(mappedBy = "campaign", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<CampaignFollower> followers = new HashSet<>();
+
+    @Column(name = "result_posted")
+    private boolean resultPosted;
+
+    @Column(name = "result_summary", columnDefinition = "TEXT")
+    private String resultSummary;
+
+    @Column(name = "final_amount_raised")
+    private Long finalAmountRaised;
+
+    @Column(name = "items_summary", columnDefinition = "TEXT")
+    private String itemsSummary;
+
+    @Column(name = "acknowledgements", columnDefinition = "TEXT")
+    private String acknowledgements;
+
+    @ManyToOne
+    @JoinColumn(name = "result_published_by")
+    private User resultPublishedBy;
+
+    @Column(name = "result_published_at")
+    private LocalDateTime resultPublishedAt;
+
+    @Column(name = "final_donor_count")
+    private Long finalDonorCount;
+
+    @Column(name = "final_volunteer_count")
+    private Long finalVolunteerCount;
 }

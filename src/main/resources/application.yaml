@@ -52,6 +52,9 @@ app:
     reset-expiration: ${MAIL_RESET_EXPIRATION:864000000}
   media:
     upload-dir: ${APP_MEDIA_UPLOAD_DIR:/app/media}
+  gemini:
+    api-key: ${GEMINI_API_KEY:}
+    models: ${GEMINI_MODELS:gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3-flash-preview,gemini-3.1-flash-lite}
   seed:
     admin:
       email: ${SEED_ADMIN_EMAIL}

@@ -123,6 +123,8 @@ class CampaignControllerTest {
                                 .creatorId(7L)
                                 .creatorName("Regular User")
                                 .categories(Collections.emptyList())
+                                .volunteersCount(5L)
+                                .donorsCount(10L)
                                 .build();
 
                 lenient().when(campaignService.toResponse(any(), any())).thenReturn(campaignResponse);
@@ -135,7 +137,6 @@ class CampaignControllerTest {
                 campaign.setId(1L);
 
                 when(campaignService.createCampaign(any(CampaignRequest.class), any(User.class))).thenReturn(campaign);
-                when(campaignMapper.toResponse(any(Campaign.class))).thenReturn(campaignResponse);
 
                 mockMvc.perform(post("/api/campaigns")
                                 .with(user(regularUserDetails))
@@ -242,7 +243,6 @@ class CampaignControllerTest {
 
                 when(campaignService.updateCampaign(eq(1L), any(CampaignRequest.class), any(User.class)))
                                 .thenReturn(campaign);
-                when(campaignMapper.toResponse(campaign)).thenReturn(campaignResponse);
 
                 mockMvc.perform(put("/api/campaigns/1")
                                 .with(user(regularUserDetails))

@@ -58,4 +58,15 @@ public class CampaignScheduler {
             log.error("Error during auto-starting approved campaigns", e);
         }
     }
+
+    // Runs daily at 00:05 AM to transition IN_PROGRESS campaigns past their end date to COMPLETED
+    @Scheduled(cron = "0 5 0 * * *")
+    public void completeEndedCampaigns() {
+        log.info("Complete ended campaigns task triggered");
+        try {
+            campaignService.completeEndedCampaignsScheduled();
+        } catch (Exception e) {
+            log.error("Error during auto-completing ended campaigns", e);
+        }
+    }
 }

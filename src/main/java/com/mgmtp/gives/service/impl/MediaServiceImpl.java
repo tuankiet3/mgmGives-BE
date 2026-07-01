@@ -93,7 +93,10 @@ public class MediaServiceImpl implements MediaService {
 
         log.info("Campaign media uploaded: id={}, file={}, type={}, isCover={}, campaignId={}", 
                 saved.getId(), filename, saved.getMediaType(), saved.isCover(), campaignId);
-        return new CampaignMediaResponse(saved.getId(), saved.getUrl(), saved.getMediaType(), saved.isCover());
+        return CampaignMediaResponse.builder()
+                .id(saved.getId()).url(saved.getUrl()).mediaType(saved.getMediaType()).isCover(saved.isCover())
+                .caption(saved.getCaption()).displayOrder(saved.getDisplayOrder()).context(saved.getContext())
+                .build();
     }
 
     @Override
@@ -121,7 +124,10 @@ public class MediaServiceImpl implements MediaService {
         }
 
         softDeleteMedia(media);
-        return new CampaignMediaResponse(media.getId(), media.getUrl(), media.getMediaType(), media.isCover());
+        return CampaignMediaResponse.builder()
+                .id(media.getId()).url(media.getUrl()).mediaType(media.getMediaType()).isCover(media.isCover())
+                .caption(media.getCaption()).displayOrder(media.getDisplayOrder()).context(media.getContext())
+                .build();
     }
 
     private void softDeleteMedia(CampaignMedia media) {

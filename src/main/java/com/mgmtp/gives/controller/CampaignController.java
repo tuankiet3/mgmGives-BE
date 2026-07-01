@@ -110,4 +110,12 @@ public class CampaignController {
                 campaignService.startApprovedCampaignsScheduled();
                 return ApiResponse.success(null, "Campaigns auto-start triggered successfully");
         }
+
+        @PostMapping("/test/trigger-auto-complete")
+        @Operation(summary = "TEST ONLY: Trigger auto-complete of ended campaigns")
+        public ApiResponse<Void> triggerAutoComplete() {
+                log.info("REST request to manually trigger auto-complete of ended campaigns");
+                campaignService.completeEndedCampaignsScheduled();
+                return ApiResponse.success(null, "Campaigns auto-complete triggered successfully");
+        }
 }

@@ -17,4 +17,7 @@ public class CampaignMediaResponse {
 
     @JsonProperty("isCover")
     private boolean isCover;
+    private String caption;
+    private Integer displayOrder;
+    private String context;
 }

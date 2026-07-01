@@ -60,6 +60,24 @@ public class EmailServiceImpl implements EmailService {
         }
     }
 
+    @Async
+    @Override
+    public void sendHtmlEmail(String toEmail, String subject, String htmlContent) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, false, StandardCharsets.UTF_8.name());
+            helper.setFrom(mailProps.getFromMail());
+            helper.setTo(toEmail);
+            helper.setSubject(subject);
+            helper.setText(htmlContent, true);
+            mailSender.send(message);
+            log.info("HTML email sent: subject={}, to={}", subject, toEmail);
+        } catch (MessagingException e) {
+            log.error("Failed to send HTML email: subject={}, to={}", subject, toEmail, e);
+            throw new AppException(ErrorCode.EMAIL_SENT_FAILURE, e.getMessage());
+        }
+    }
+
     private void sendEmail(String toEmail, String fullName, String token, TokenType type) {
         String link = UriComponentsBuilder
                 .fromUriString(mailProps.getFrontendUrl())

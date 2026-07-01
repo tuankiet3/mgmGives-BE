@@ -1,5 +1,6 @@
 package com.mgmtp.gives.repository;
 
+import com.mgmtp.gives.dto.campaign.DonorNotificationInfo;
 import com.mgmtp.gives.entity.Donation;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -21,4 +22,25 @@ public interface DonationRepository extends JpaRepository<Donation, Long>, JpaSp
 
     @Query("SELECT COUNT(DISTINCT d.user.id) FROM Donation d WHERE d.campaign.id = :campaignId AND d.status = 'SUCCESSFUL'")
     long countDistinctDonorsByCampaignIdAndStatusSuccessful(@Param("campaignId") Long campaignId);
+
+    @Query("SELECT COALESCE(SUM(d.amount), 0) FROM Donation d WHERE d.campaign.id = :campaignId AND d.status = 'SUCCESSFUL'")
+    long sumConfirmedAmountByCampaignId(@Param("campaignId") Long campaignId);
+
+    @Query("SELECT COUNT(DISTINCT d.user.id) FROM Donation d WHERE d.campaign.id = :campaignId AND d.status = 'SUCCESSFUL'")
+    long countDistinctDonorsByCampaignId(@Param("campaignId") Long campaignId);
+
+    @Query("SELECT COUNT(DISTINCT d.user.id) FROM Donation d WHERE d.campaign.id = :campaignId AND d.status = 'SUCCESSFUL'")
+    long countDistinctDonorsByCampaignIdAndStatusConfirmed(@Param("campaignId") Long campaignId);
+
+    @Query("""
+            SELECT new com.mgmtp.gives.dto.campaign.DonorNotificationInfo(
+                d.user.id, d.user.email, d.user.fullName, SUM(d.amount)
+            )
+            FROM Donation d
+            WHERE d.campaign.id = :campaignId AND d.status = :status
+            GROUP BY d.user.id, d.user.email, d.user.fullName
+            """)
+    List<DonorNotificationInfo> findDonorNotificationInfoByCampaignId(
+            @Param("campaignId") Long campaignId,
+            @Param("status") DonationStatus status);
 }

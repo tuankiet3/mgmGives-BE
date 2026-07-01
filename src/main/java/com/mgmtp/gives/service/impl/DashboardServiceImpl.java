@@ -12,6 +12,7 @@ import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.AnnouncementStatus;
 import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.DonationType;
+import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.mapper.CampaignMapper;
 import com.mgmtp.gives.repository.AnnouncementRepository;
 import com.mgmtp.gives.repository.CampaignFollowerRepository;
@@ -79,10 +80,11 @@ public class DashboardServiceImpl implements DashboardService {
         Pageable recommendedPageable = PageRequest.of(0, 3, Sort.by(
                 Sort.Order.asc("endDate")
         ));
+        boolean isAdmin = currentUser.getRole() == UserRole.ADMIN;
         List<CampaignResponse> recommendedCampaigns = campaignRepository.findAll(activeCampaignSpec, recommendedPageable)
                 .getContent()
                 .stream()
-                .map(campaignMapper::toResponse)
+                .map(campaign -> campaignMapper.toResponse(campaign, currentUser.getId(), isAdmin))
                 .toList();
 
         // 5. Get Recent Donations (Top 5)

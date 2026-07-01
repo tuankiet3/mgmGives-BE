@@ -294,6 +294,20 @@ public class CampaignServiceImpl implements CampaignService {
         }
     }
 
+    @Override
+    @Transactional
+    public void completeEndedCampaignsScheduled() {
+        log.info("Scanning for IN_PROGRESS campaigns past their end date");
+        List<Campaign> campaignsToComplete = campaignRepository.findByStatusAndEndDateBefore(
+                CampaignStatus.IN_PROGRESS, LocalDateTime.now());
+        log.info("Found {} campaigns to complete", campaignsToComplete.size());
+        for (Campaign campaign : campaignsToComplete) {
+            campaign.setStatus(CampaignStatus.COMPLETED);
+            campaignRepository.save(campaign);
+            log.info("Campaign auto-completed: id={}, title='{}'", campaign.getId(), campaign.getTitle());
+        }
+    }
+
     private void validateDateRange(CampaignRequest request) {
         LocalDateTime limit = LocalDateTime.now().toLocalDate().atStartOfDay();
         if (request.startDate() != null && request.startDate().isBefore(limit)) {
@@ -389,10 +403,11 @@ public class CampaignServiceImpl implements CampaignService {
         if (campaign == null) {
             return null;
         }
-        CampaignResponse response = campaignMapper.toResponse(campaign);
-
         // 1. isEditable
         boolean isAdmin = currentUser != null && currentUser.getRole() == UserRole.ADMIN;
+        Long currentUserId = currentUser != null ? currentUser.getId() : null;
+        CampaignResponse response = campaignMapper.toResponse(campaign, currentUserId, isAdmin);
+
         boolean isCreator = campaign.getUser() != null && currentUser != null
                 && campaign.getUser().getId().equals(currentUser.getId());
         boolean isEditable = isAdmin || (isCreator && campaign.getStatus().isEditable());
@@ -401,7 +416,15 @@ public class CampaignServiceImpl implements CampaignService {
         // 2. Fetch active media
         List<CampaignMedia> activeMedia = campaignMediaRepository.findByCampaignIdAndDeletedAtIsNull(campaign.getId());
         List<CampaignMediaResponse> mediaResponses = activeMedia.stream()
-                .map(m -> new CampaignMediaResponse(m.getId(), m.getUrl(), m.getMediaType(), m.isCover()))
+                .map(m -> CampaignMediaResponse.builder()
+                        .id(m.getId())
+                        .url(m.getUrl())
+                        .mediaType(m.getMediaType())
+                        .isCover(m.isCover())
+                        .caption(m.getCaption())
+                        .displayOrder(m.getDisplayOrder())
+                        .context(m.getContext())
+                        .build())
                 .toList();
         response.setMedia(mediaResponses);
         response.setMedias(mediaResponses);
@@ -444,10 +467,12 @@ public class CampaignServiceImpl implements CampaignService {
                         (existing, replacement) -> existing));
 
         // 2. Map and enrich each campaign
-        return campaigns.stream().map(campaign -> {
-            CampaignResponse response = campaignMapper.toResponse(campaign);
+        boolean isAdmin = currentUser != null && currentUser.getRole() == UserRole.ADMIN;
+        Long currentUserId = currentUser != null ? currentUser.getId() : null;
 
-            boolean isAdmin = currentUser != null && currentUser.getRole() == UserRole.ADMIN;
+        return campaigns.stream().map(campaign -> {
+            CampaignResponse response = campaignMapper.toResponse(campaign, currentUserId, isAdmin);
+
             boolean isCreator = campaign.getUser() != null && currentUser != null
                     && campaign.getUser().getId().equals(currentUser.getId());
             boolean isEditable = isAdmin || (isCreator && campaign.getStatus().isEditable());

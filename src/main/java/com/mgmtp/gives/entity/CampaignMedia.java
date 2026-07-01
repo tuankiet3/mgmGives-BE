@@ -29,4 +29,14 @@ public class CampaignMedia extends BaseEntity {
     @Builder.Default
     @Column(name = "is_cover", nullable = false)
     private boolean isCover = false;
+
+    @Column(name = "caption", columnDefinition = "TEXT")
+    private String caption;
+
+    @Column(name = "display_order")
+    private Integer displayOrder;
+
+    @Builder.Default
+    @Column(name = "context")
+    private String context = "CAMPAIGN";
 }

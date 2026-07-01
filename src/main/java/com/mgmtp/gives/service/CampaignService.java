@@ -31,6 +31,8 @@ public interface CampaignService {
 
     void startApprovedCampaignsScheduled();
 
+    void completeEndedCampaignsScheduled();
+
     List<CampaignMedia> getActiveMediasByCampaignId(Long campaignId);
 
     CampaignResponse toResponse(Campaign campaign, User currentUser);

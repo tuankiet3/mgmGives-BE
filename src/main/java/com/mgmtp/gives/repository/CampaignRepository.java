@@ -27,6 +27,8 @@ public interface CampaignRepository extends JpaRepository<Campaign, Long>, JpaSp
     java.util.List<Campaign> findByStatusAndStartDateBetween(CampaignStatus status, java.time.LocalDateTime start,
             java.time.LocalDateTime end);
 
+    java.util.List<Campaign> findByStatusAndEndDateBefore(CampaignStatus status, java.time.LocalDateTime dateTime);
+
     @Query(
             value = """
                 SELECT *

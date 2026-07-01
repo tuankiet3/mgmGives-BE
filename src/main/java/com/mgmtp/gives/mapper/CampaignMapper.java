@@ -2,8 +2,12 @@ package com.mgmtp.gives.mapper;
 
 import com.mgmtp.gives.dto.campaign.CampaignResponse;
 import com.mgmtp.gives.entity.Campaign;
+import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.DonationStatus;
+import com.mgmtp.gives.enums.UserRole;
+import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.DonationRepository;
+import org.mapstruct.Context;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;
@@ -15,6 +19,9 @@ public abstract class CampaignMapper {
     @Autowired
     protected DonationRepository donationRepository;
 
+    @Autowired
+    protected CampaignMemberRepository campaignMemberRepository;
+
     @Mapping(target = "creatorId", source = "user.id")
     @Mapping(target = "creatorName", source = "user.fullName")
     @Mapping(target = "categories", source = "categories")
@@ -23,12 +30,27 @@ public abstract class CampaignMapper {
     @Mapping(target = "media", ignore = true)
     @Mapping(target = "coverImageUrl", ignore = true)
     @Mapping(target = "isEditable", ignore = true)
-    public abstract CampaignResponse toResponse(Campaign campaign);
+    @Mapping(target = "isFollowed", ignore = true)
+    @Mapping(target = "isJoined", ignore = true)
+    @Mapping(target = "volunteersCount", ignore = true)
+    @Mapping(target = "donorsCount", ignore = true)
+    @Mapping(target = "isCampaignAdmin", expression = "java(resolveIsCampaignAdmin(campaign, currentUserId, isSystemAdmin))")
+    @Mapping(target = "resultPosted", source = "resultPosted")
+    @Mapping(target = "resultPublishedAt", source = "resultPublishedAt")
+    @Mapping(target = "resultPublishedByName", expression = "java(campaign.getResultPublishedBy() != null ? campaign.getResultPublishedBy().getFullName() : null)")
+    public abstract CampaignResponse toResponse(Campaign campaign, @Context Long currentUserId, @Context boolean isSystemAdmin);
 
     protected Long calculateCurrentRaised(Campaign campaign) {
         if (campaign == null || campaign.getId() == null) {
             return 0L;
         }
         return donationRepository.sumAmountByCampaignIdAndStatusNotFailed(campaign.getId(), DonationStatus.FAILED);
+    }
+
+    protected boolean resolveIsCampaignAdmin(Campaign campaign, Long currentUserId, boolean isSystemAdmin) {
+        if (isSystemAdmin) return true;
+        if (currentUserId == null || campaign == null || campaign.getId() == null) return false;
+        return campaignMemberRepository.existsByCampaignIdAndUserIdAndRoleInCampaign(
+                campaign.getId(), currentUserId, CampaignMemberRole.CAMPAIGN_ADMIN);
     }
 }

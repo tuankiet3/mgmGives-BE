@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;">
+
+    <h2 style="color:#1f2937;">
+        Campaign Results Are In!
+    </h2>
+
+    <p>
+        Hi <strong th:text="${fullName}"></strong>,
+    </p>
+
+    <p>
+        The final results for the campaign
+        <strong>"<span th:text="${campaignName}"></span>"</strong>
+        are now available!
+    </p>
+
+    <p>
+        Thank you for your dedication and hard work as a volunteer.
+        Your contribution made a real difference and we are truly grateful for your efforts.
+    </p>
+
+    <p style="color:#6b7280;font-size:12px;margin-top:32px;">
+        You received this email because you volunteered for this campaign on MgmGives.
+    </p>
+
+</div>
+
+</body>
+</html>

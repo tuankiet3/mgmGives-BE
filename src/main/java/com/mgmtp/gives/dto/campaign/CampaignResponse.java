@@ -36,4 +36,9 @@ public class CampaignResponse {
     private Long donorsCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    private boolean isCampaignAdmin;
+    private boolean resultPosted;
+    private LocalDateTime resultPublishedAt;
+    private String resultPublishedByName;
 }
