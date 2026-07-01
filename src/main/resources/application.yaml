@@ -70,4 +70,4 @@ payos:
   checksum-key: ${PAYOS_CHECKSUM_KEY:3b10ff6db56cc7ebeda9cba74b20418387165ba7c3a1a6879763d60fa722757e}
   cancel-url: ${PAYOS_CANCEL_URL:http://mgm-gives.mgm-edv.de:3000}
   return-url: ${PAYOS_RETURN_URL:http://mgm-gives.mgm-edv.de:3000}
-  webhook-url: ${PAYOS_WEBHOOK_URL:http://mgm-gives.mgm-edv.de:3000/api/donations/payos/webhook}
+  webhook-url: ${PAYOS_WEBHOOK_URL:http://mgm-gives.mgm-edv.de:8082/api/donations/payos/webhook}
