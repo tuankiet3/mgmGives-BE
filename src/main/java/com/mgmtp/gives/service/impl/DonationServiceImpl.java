@@ -224,7 +224,7 @@ public class DonationServiceImpl implements DonationService {
             // Clean up the pending donation if PayOS fails
             donation.setStatus(DonationStatus.FAILED);
             donationRepository.save(donation);
-            throw new AppException(ErrorCode.VALIDATION_ERROR, "Failed to create payment link: " + e.getMessage());
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Failed to create payment link: The payment order already exists.");
         }
     }
 
