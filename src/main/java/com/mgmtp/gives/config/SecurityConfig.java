@@ -35,6 +35,8 @@ public class SecurityConfig {
             "/api/auth/forgot-password",
             "/api/auth/reset-password",
             "/api/auth/refresh",
+            "/api/webex/oauth/callback",
+            "/api/integrations/webex/oauth/callback",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",

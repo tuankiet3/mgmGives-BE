@@ -3,6 +3,7 @@ package com.mgmtp.gives.service.impl;
 import com.mgmtp.gives.common.ErrorCode;
 import com.mgmtp.gives.dto.campaign.CampaignMediaResponse;
 import com.mgmtp.gives.entity.Campaign;
+import com.mgmtp.gives.entity.CampaignMeeting;
 import com.mgmtp.gives.entity.CampaignMedia;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignStatus;
@@ -58,20 +59,7 @@ public class MediaServiceImpl implements MediaService {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Only image files can be set as cover image");
         }
 
-        String originalFilename = file.getOriginalFilename();
-        String extension = (originalFilename != null && originalFilename.contains("."))
-                ? originalFilename.substring(originalFilename.lastIndexOf('.') + 1)
-                : "";
-        String filename = UUID.randomUUID() + (extension.isEmpty() ? "" : "." + extension);
-
-        Path targetPath = Paths.get(uploadDir).resolve(filename);
-        try {
-            Files.createDirectories(targetPath.getParent());
-            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
-            log.error("Failed to store campaign media file: path={}", targetPath, e);
-            throw new AppException(ErrorCode.UNCATEGORIZED_ERROR, "Failed to store file");
-        }
+        String filename = storeFile(file, "campaign media");
 
         CampaignMedia media = CampaignMedia.builder()
                 .url(filename)
@@ -97,6 +85,33 @@ public class MediaServiceImpl implements MediaService {
                 .id(saved.getId()).url(saved.getUrl()).mediaType(saved.getMediaType()).isCover(saved.isCover())
                 .caption(saved.getCaption()).displayOrder(saved.getDisplayOrder()).context(saved.getContext())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public CampaignMediaResponse uploadCampaignMeetingAttachment(
+            MultipartFile file,
+            Campaign campaign,
+            CampaignMeeting meeting
+    ) {
+        MediaValidationUtil.validateFile(file, false);
+
+        String detectedType = MediaValidationUtil.detectCategory(file.getContentType());
+        String filename = storeFile(file, "campaign meeting attachment");
+
+        CampaignMedia media = CampaignMedia.builder()
+                .url(filename)
+                .mediaType(detectedType)
+                .isCover(false)
+                .campaign(campaign)
+                .meeting(meeting)
+                .build();
+
+        CampaignMedia saved = campaignMediaRepository.save(media);
+        log.info("Campaign meeting attachment uploaded: id={}, file={}, type={}, campaignId={}, meetingId={}",
+                saved.getId(), filename, saved.getMediaType(), campaign.getId(), meeting.getId());
+        return new CampaignMediaResponse(saved.getId(), saved.getUrl(), saved.getMediaType(), saved.isCover(),
+                saved.getCaption(), saved.getDisplayOrder(), saved.getContext());
     }
 
     @Override
@@ -130,6 +145,17 @@ public class MediaServiceImpl implements MediaService {
                 .build();
     }
 
+    @Override
+    @Transactional
+    public CampaignMediaResponse softDeleteCampaignMeetingAttachment(CampaignMedia media) {
+        if (media.getDeletedAt() != null) {
+            throw new AppException(ErrorCode.MEDIA_ALREADY_DELETED);
+        }
+        softDeleteMedia(media);
+        return new CampaignMediaResponse(media.getId(), media.getUrl(), media.getMediaType(), media.isCover(),
+                media.getCaption(), media.getDisplayOrder(), media.getContext());
+    }
+
     private void softDeleteMedia(CampaignMedia media) {
         if (media.getDeletedAt() != null) {
             return;
@@ -157,6 +183,24 @@ public class MediaServiceImpl implements MediaService {
         media.setDeletedAt(LocalDateTime.now());
         campaignMediaRepository.save(media);
         log.info("Campaign media soft deleted: id={}, file={}", media.getId(), media.getUrl());
+    }
+
+    private String storeFile(MultipartFile file, String context) {
+        String originalFilename = file.getOriginalFilename();
+        String extension = (originalFilename != null && originalFilename.contains("."))
+                ? originalFilename.substring(originalFilename.lastIndexOf('.') + 1)
+                : "";
+        String filename = UUID.randomUUID() + (extension.isEmpty() ? "" : "." + extension);
+
+        Path targetPath = Paths.get(uploadDir).resolve(filename);
+        try {
+            Files.createDirectories(targetPath.getParent());
+            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            log.error("Failed to store {} file: path={}", context, targetPath, e);
+            throw new AppException(ErrorCode.UNCATEGORIZED_ERROR, "Failed to store file");
+        }
+        return filename;
     }
 
     @Override

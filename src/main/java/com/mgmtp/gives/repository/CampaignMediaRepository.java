@@ -19,7 +19,9 @@ public interface CampaignMediaRepository extends JpaRepository<CampaignMedia, Lo
 
     List<CampaignMedia> findByCampaignIdAndContextAndDeletedAtIsNull(Long campaignId, String context);
 
-    long countByCampaignIdAndDeletedAtIsNullAndMediaType(Long campaignId, String mediaType);
+    List<CampaignMedia> findByCampaignIdAndMeetingIdAndDeletedAtIsNull(Long campaignId, Long meetingId);
+
+    Optional<CampaignMedia> findByIdAndCampaignIdAndMeetingIdAndDeletedAtIsNull(Long id, Long campaignId, Long meetingId);
 
     boolean existsByCampaignIdAndDeletedAtIsNullAndIsCoverTrue(Long campaignId);
 

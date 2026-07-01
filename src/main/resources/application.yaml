@@ -60,6 +60,13 @@ app:
       email: ${SEED_ADMIN_EMAIL}
       password: ${SEED_ADMIN_PASSWORD}
       full-name: ${SEED_ADMIN_FULL_NAME:Admin}
+  webex:
+    client-id: ${WEBEX_CLIENT_ID}
+    client-secret: ${WEBEX_CLIENT_SECRET}
+    api-base-url: ${WEBEX_API_BASE_URL:https://webexapis.com/v1}
+    redirect-uri: ${WEBEX_REDIRECT_URI:http://localhost:8080/api/integrations/webex/oauth/callback}
+    scopes: ${WEBEX_SCOPES:meeting:schedules_read meeting:schedules_write spark:people_read spark:rooms_read}
+    time-zone: ${WEBEX_TIME_ZONE:Asia/Bangkok}
 server:
   port: ${SERVER_PORT:8080}
 

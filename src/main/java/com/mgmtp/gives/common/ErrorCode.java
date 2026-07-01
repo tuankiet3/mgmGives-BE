@@ -55,6 +55,9 @@ public enum ErrorCode {
     FILE_SIZE_EXCEEDED(3007, "File size exceeds the allowed limit", HttpStatus.BAD_REQUEST),
     IMAGE_ONLY(3008, "Only image files are allowed for avatar/cover", HttpStatus.BAD_REQUEST),
     PATH_TRAVERSAL_DETECTED(3009, "Invalid file path", HttpStatus.BAD_REQUEST),
+    WEBEX_NOT_CONNECTED(4001, "Please connect your Webex account before creating a meeting", HttpStatus.BAD_REQUEST),
+    WEBEX_AUTHORIZATION_FAILED(4002, "Webex authorization failed", HttpStatus.UNAUTHORIZED),
+    WEBEX_CONNECTION_NOT_FOUND(4003, "Webex connection not found", HttpStatus.NOT_FOUND),
     DONATE_NOT_FOUND(3010, "Donate not found", HttpStatus.NOT_FOUND),
     NOTIFICATION_NOT_FOUND(3011, "Notification not found", HttpStatus.NOT_FOUND);
 

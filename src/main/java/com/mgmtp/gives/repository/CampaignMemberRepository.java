@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface CampaignMemberRepository extends JpaRepository<CampaignMember, Long> {
+    List<CampaignMember> findByCampaignId(Long campaignId);
+
     Optional<CampaignMember> findByCampaignIdAndUserId(Long campaignId, Long userId);
 
     long deleteByCampaignIdAndUserId(Long campaignId, Long userId);
@@ -42,4 +44,5 @@ public interface CampaignMemberRepository extends JpaRepository<CampaignMember, 
     List<User> findUsersByCampaignIdAndRole(
             @Param("campaignId") Long campaignId,
             @Param("role") CampaignMemberRole role);
+
 }

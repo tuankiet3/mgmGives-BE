@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html xmlns:th="http://thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Campaign Meeting Cancelled</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #eef2f7; font-family: 'Segoe UI', Arial, sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #eef2f7; padding: 36px 16px;">
+    <tr>
+        <td align="center">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 640px; background-color: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 18px 45px rgba(15, 23, 42, 0.12);">
+                <tr>
+                    <td style="background-color: #14213d; padding: 30px 34px;">
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                            <tr>
+                                <td>
+                                    <div style="color: #ffffff; font-size: 25px; font-weight: 800; letter-spacing: 0.2px;">mgmGives</div>
+                                    <div style="color: #b8c7e0; font-size: 13px; margin-top: 6px;">Campaign coordination update</div>
+                                </td>
+                                <td align="right">
+                                    <span style="display: inline-block; background-color: #fee2e2; color: #991b1b; border-radius: 999px; padding: 8px 13px; font-size: 12px; font-weight: 700;">Cancelled</span>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding: 38px 34px 12px;">
+                        <p style="margin: 0 0 10px; color: #64748b; font-size: 14px;">Hi <strong style="color: #1e293b;" th:text="${fullName}">User</strong>,</p>
+                        <h1 style="margin: 0 0 14px; color: #111827; font-size: 28px; line-height: 1.2; font-weight: 800;">This campaign meeting was cancelled</h1>
+                        <p style="margin: 0; color: #475569; font-size: 15px; line-height: 1.7;">You do not need to join this Webex session. The campaign team may schedule a replacement meeting later.</p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding: 22px 34px 38px;">
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+                            <tr>
+                                <td style="background-color: #f8fafc; padding: 18px 20px; border-bottom: 1px solid #e2e8f0;">
+                                    <div style="color: #64748b; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;">Campaign</div>
+                                    <div style="color: #0f172a; font-size: 17px; font-weight: 700; margin-top: 5px;" th:text="${campaignName}">Campaign</div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 18px 20px;">
+                                    <div style="color: #64748b; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;">Cancelled meeting</div>
+                                    <div style="color: #0f172a; font-size: 17px; font-weight: 700; margin-top: 5px;" th:text="${meetingTitle}">Meeting</div>
+                                    <div th:if="${meetingDescription != null and !#strings.isEmpty(meetingDescription)}" style="margin-top: 14px; color: #475569; font-size: 14px; line-height: 1.6;">
+                                        <strong style="color: #111827;">Description:</strong>
+                                        <span th:text="${meetingDescription}">Meeting description</span>
+                                    </div>
+                                    <div style="margin-top: 14px; color: #475569; font-size: 14px;">
+                                        <strong style="color: #111827;">Created by:</strong>
+                                        <span th:text="${createdByName}">Campaign Admin</span>
+                                    </div>
+                                    <div style="margin-top: 14px; color: #475569; font-size: 14px;">
+                                        <strong style="color: #111827;">Original time:</strong>
+                                        <span th:text="${startTime}">Start</span> - <span th:text="${endTime}">End</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>
