@@ -42,6 +42,7 @@ public class UserWebexConnectionServiceImpl implements UserWebexConnectionServic
     private final UserWebexConnectionRepository userWebexConnectionRepository;
     private final WebexOAuthStateRepository webexOAuthStateRepository;
     private final TokenCryptoService tokenCryptoService;
+    private final RestClient restClient;
 
     @Override
     @Transactional
@@ -205,9 +206,9 @@ public class UserWebexConnectionServiceImpl implements UserWebexConnectionServic
 
     private WebexPersonResponse getCurrentWebexPerson(String accessToken) {
         try {
-            return RestClient.create(webexProps.getApiBaseUrl())
+            return restClient
                     .get()
-                    .uri("/people/me")
+                    .uri(webexProps.getApiBaseUrl() + "/people/me")
                     .headers(headers -> headers.setBearerAuth(accessToken))
                     .retrieve()
                     .body(WebexPersonResponse.class);

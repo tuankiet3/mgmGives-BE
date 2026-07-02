@@ -20,6 +20,7 @@ import org.springframework.web.client.RestClientResponseException;
 @Slf4j
 public class WebexTokenServiceImpl implements WebexTokenService {
     private final WebexProps webexProps;
+    private final RestClient restClient;
 
     @Override
     public WebexTokenResponse exchangeAuthorizationCode(String code) {
@@ -58,9 +59,9 @@ public class WebexTokenServiceImpl implements WebexTokenService {
 
     private WebexTokenResponse requestToken(MultiValueMap<String, String> body, String failureMessage) {
         try {
-            return RestClient.create(webexProps.getApiBaseUrl())
+            return restClient
                     .post()
-                    .uri("/access_token")
+                    .uri(webexProps.getApiBaseUrl() + "/access_token")
                     .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                     .body(body)
                     .retrieve()

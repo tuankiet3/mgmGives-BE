@@ -23,6 +23,7 @@ import java.time.format.DateTimeFormatter;
 @RequiredArgsConstructor
 public class WebexMeetingClientImpl implements WebexMeetingClient {
     private final WebexProps webexProps;
+    private final RestClient restClient;
 
     @Override
     public WebexMeetingResult createMeeting(WebexCreateMeetingCommand command, String accessToken) {
@@ -35,9 +36,9 @@ public class WebexMeetingClientImpl implements WebexMeetingClient {
         );
 
         try {
-            WebexMeetingResponse response = RestClient.create(webexProps.getApiBaseUrl())
+            WebexMeetingResponse response = restClient
                     .post()
-                    .uri("/meetings")
+                    .uri(webexProps.getApiBaseUrl() + "/meetings")
                     .headers(headers -> headers.setBearerAuth(accessToken))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
@@ -79,9 +80,9 @@ public class WebexMeetingClientImpl implements WebexMeetingClient {
         );
 
         try {
-            WebexMeetingResponse response = RestClient.create(webexProps.getApiBaseUrl())
+            WebexMeetingResponse response = restClient
                     .put()
-                    .uri("/meetings/{meetingId}", meetingId)
+                    .uri(webexProps.getApiBaseUrl() + "/meetings/{meetingId}", meetingId)
                     .headers(headers -> headers.setBearerAuth(accessToken))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
@@ -115,9 +116,9 @@ public class WebexMeetingClientImpl implements WebexMeetingClient {
         }
 
         try {
-            RestClient.create(webexProps.getApiBaseUrl())
+            restClient
                     .delete()
-                    .uri("/meetings/{meetingId}", meetingId)
+                    .uri(webexProps.getApiBaseUrl() + "/meetings/{meetingId}", meetingId)
                     .headers(headers -> headers.setBearerAuth(accessToken))
                     .retrieve()
                     .toBodilessEntity();

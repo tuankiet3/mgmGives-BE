@@ -42,28 +42,28 @@ ALTER TABLE campaign_medias
 CREATE INDEX idx_campaign_medias_meeting_id ON campaign_medias (meeting_id);
 
 CREATE TABLE user_webex_connections (
-                                        id                       BIGSERIAL PRIMARY KEY,
-                                        user_id                  BIGINT NOT NULL UNIQUE,
-                                        webex_person_id          VARCHAR(255),
-                                        webex_email              VARCHAR(255),
-                                        access_token             TEXT NOT NULL,
-                                        refresh_token            TEXT NOT NULL,
-                                        access_token_expires_at  TIMESTAMP,
-                                        refresh_token_expires_at TIMESTAMP,
-                                        connected_at             TIMESTAMP,
-                                        updated_at               TIMESTAMP,
-                                        created_at               TIMESTAMP,
-                                        CONSTRAINT fk_user_webex_connection_user FOREIGN KEY (user_id) REFERENCES users (id)
+     id                       BIGSERIAL PRIMARY KEY,
+     user_id                  BIGINT NOT NULL UNIQUE,
+     webex_person_id          VARCHAR(255),
+     webex_email              VARCHAR(255),
+     access_token             TEXT NOT NULL,
+     refresh_token            TEXT NOT NULL,
+     access_token_expires_at  TIMESTAMP,
+     refresh_token_expires_at TIMESTAMP,
+     connected_at             TIMESTAMP,
+     updated_at               TIMESTAMP,
+     created_at               TIMESTAMP,
+     CONSTRAINT fk_user_webex_connection_user FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
 CREATE TABLE webex_oauth_states (
-                                    id         BIGSERIAL PRIMARY KEY,
-                                    state      VARCHAR(255) NOT NULL UNIQUE,
-                                    user_id    BIGINT NOT NULL,
-                                    expires_at TIMESTAMP NOT NULL,
-                                    used_at    TIMESTAMP,
-                                    created_at TIMESTAMP,
-                                    CONSTRAINT fk_webex_oauth_state_user FOREIGN KEY (user_id) REFERENCES users (id)
+    id         BIGSERIAL PRIMARY KEY,
+    state      VARCHAR(255) NOT NULL UNIQUE,
+    user_id    BIGINT NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    used_at    TIMESTAMP,
+    created_at TIMESTAMP,
+    CONSTRAINT fk_webex_oauth_state_user FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
 CREATE INDEX idx_user_webex_connections_user_id ON user_webex_connections (user_id);

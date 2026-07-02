@@ -16,7 +16,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class CampaignMeetingEmailEventListener {
     private final EmailService emailService;
 
-    @Async
+    @Async("campaignMeetingTaskExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void handleInvitation(CampaignMeetingInvitationEmailEvent event) {
         try {
@@ -37,7 +37,7 @@ public class CampaignMeetingEmailEventListener {
         }
     }
 
-    @Async
+    @Async("campaignMeetingTaskExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void handleCancellation(CampaignMeetingCancellationEmailEvent event) {
         try {

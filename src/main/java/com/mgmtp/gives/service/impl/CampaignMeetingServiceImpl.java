@@ -21,6 +21,7 @@ import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.enums.UserStatus;
+import com.mgmtp.gives.event.campaign_meeting.CampaignMeetingWebexCancellationEvent;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
 import com.mgmtp.gives.repository.CampaignMeetingRepository;
@@ -34,6 +35,7 @@ import com.mgmtp.gives.service.UserWebexConnectionService;
 import com.mgmtp.gives.service.WebexMeetingClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -61,6 +63,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
     private final CampaignMeetingInvitationService campaignMeetingInvitationService;
     private final MediaService mediaService;
     private final UserWebexConnectionService userWebexConnectionService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -358,9 +361,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         CampaignMeeting meeting = getMeetingInCampaign(campaignId, meetingId);
         validateMeetingIsUpcomingForCancel(meeting);
         User hostUser = meeting.getCreatedBy();
-        String accessToken = userWebexConnectionService.getValidAccessToken(hostUser);
 
-        webexMeetingClient.cancelMeeting(meeting.getWebexMeetingId(), accessToken);
         meeting.setStatus(CampaignMeetingStatus.CANCELLED);
         meeting.setCancelledAt(LocalDateTime.now());
         meeting.setCancelledBy(currentUser);
@@ -370,6 +371,11 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         CampaignMeeting saved = campaignMeetingRepository.save(meeting);
         log.info("Campaign meeting cancelled: meetingId={}, campaignId={}, userId={}",
                 meetingId, campaignId, currentUser.getId());
+        eventPublisher.publishEvent(new CampaignMeetingWebexCancellationEvent(
+                saved.getId(),
+                saved.getWebexMeetingId(),
+                hostUser != null ? hostUser.getId() : null
+        ));
         campaignMeetingInvitationService.sendCancellationNotice(saved);
 
         return toResponse(saved, currentUser);
