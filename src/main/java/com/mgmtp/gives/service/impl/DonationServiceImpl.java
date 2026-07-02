@@ -48,7 +48,8 @@ public class DonationServiceImpl implements DonationService {
     private final CampaignFollowerService campaignFollowerService;
     private final DonationNotificationPublisher publisher;
     private final NotificationService notificationService;
-    private final PayOS payOS;
+    private final com.mgmtp.gives.service.PayOSClientProvider payOSClientProvider;
+    private final org.springframework.context.ApplicationContext applicationContext;
 
     @Value("${payos.cancel-url}")
     private String payOSCancelUrl;
@@ -211,7 +212,8 @@ public class DonationServiceImpl implements DonationService {
                     .cancelUrl(cancelUrl)
                     .build();
 
-            CreatePaymentLinkResponse checkoutResponse = payOS.paymentRequests().create(paymentData);
+            PayOS activePayOS = payOSClientProvider.getClientForCampaign(campaign);
+            CreatePaymentLinkResponse checkoutResponse = activePayOS.paymentRequests().create(paymentData);
 
             donation.setTransactionId(checkoutResponse.getPaymentLinkId());
             donation.setOrderCode(orderCode);
@@ -234,7 +236,7 @@ public class DonationServiceImpl implements DonationService {
             donation.setStatus(DonationStatus.FAILED);
             donationRepository.save(donation);
             throw new AppException(ErrorCode.VALIDATION_ERROR,
-                    "Failed to create payment link: The payment order already exists.");
+                    "Failed to create payment link. Please check your PayOS credentials or try again later. Details: " + e.getMessage());
         }
     }
 
@@ -364,11 +366,13 @@ public class DonationServiceImpl implements DonationService {
         }
 
         try {
-            vn.payos.model.v2.paymentRequests.PaymentLink paymentLink = payOS.paymentRequests().get(donation.getTransactionId());
+            PayOS activePayOS = payOSClientProvider.getClientForCampaign(donation.getCampaign());
+            vn.payos.model.v2.paymentRequests.PaymentLink paymentLink = activePayOS.paymentRequests().get(donation.getTransactionId());
             if (paymentLink != null) {
                 vn.payos.model.v2.paymentRequests.PaymentLinkStatus status = paymentLink.getStatus();
                 if (vn.payos.model.v2.paymentRequests.PaymentLinkStatus.PAID.equals(status)) {
-                    return confirmPayOSDonationByPaymentLinkId(donation.getTransactionId());
+                    DonationService self = applicationContext.getBean(DonationService.class);
+                    return self.confirmPayOSDonationByPaymentLinkId(donation.getTransactionId());
                 } else if (vn.payos.model.v2.paymentRequests.PaymentLinkStatus.CANCELLED.equals(status) ||
                            vn.payos.model.v2.paymentRequests.PaymentLinkStatus.EXPIRED.equals(status) ||
                            vn.payos.model.v2.paymentRequests.PaymentLinkStatus.FAILED.equals(status)) {

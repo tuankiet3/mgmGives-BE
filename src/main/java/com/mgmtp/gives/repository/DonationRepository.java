@@ -54,4 +54,10 @@ public interface DonationRepository extends JpaRepository<Donation, Long>, JpaSp
             com.mgmtp.gives.enums.DonationType type,
             java.time.LocalDateTime since
     );
+
+    List<Donation> findByStatusAndTypeAndTransactionIdIsNotNullAndCreatedAtBefore(
+            com.mgmtp.gives.enums.DonationStatus status,
+            com.mgmtp.gives.enums.DonationType type,
+            java.time.LocalDateTime limit
+    );
 }

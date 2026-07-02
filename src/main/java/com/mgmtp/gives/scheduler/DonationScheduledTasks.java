@@ -23,7 +23,7 @@ public class DonationScheduledTasks {
 
     private final DonationRepository donationRepository;
     private final DonationService donationService;
-    private final PayOS payOS;
+    private final com.mgmtp.gives.service.PayOSClientProvider payOSClientProvider;
 
     /**
      * Periodically check status of PENDING PayOS donations every 2 minutes.
@@ -38,38 +38,60 @@ public class DonationScheduledTasks {
                 since
         );
 
-        if (pendingDonations.isEmpty()) {
-            log.info("No PENDING PayOS donations found.");
-            return;
+        if (!pendingDonations.isEmpty()) {
+            log.info("Found {} PENDING PayOS donations to verify.", pendingDonations.size());
+            for (Donation donation : pendingDonations) {
+                try {
+                    String paymentLinkId = donation.getTransactionId();
+                    PayOS activePayOS = payOSClientProvider.getClientForCampaign(donation.getCampaign());
+                    PaymentLink paymentLink = activePayOS.paymentRequests().get(paymentLinkId);
+                    if (paymentLink == null) {
+                        continue;
+                    }
+
+                    PaymentLinkStatus status = paymentLink.getStatus();
+                    log.info("Donation ID {}: PayOS status is {}", donation.getId(), status);
+
+                    if (status == PaymentLinkStatus.PAID) {
+                        log.info("Donation ID {} has been PAID. Actively confirming.", donation.getId());
+                        donationService.confirmPayOSDonationByPaymentLinkId(paymentLinkId);
+                    } else if (status == PaymentLinkStatus.CANCELLED ||
+                               status == PaymentLinkStatus.EXPIRED ||
+                               status == PaymentLinkStatus.FAILED) {
+                        log.info("Donation ID {} is in terminal state {}. Updating status to FAILED in DB.", donation.getId(), status);
+                        donation.setStatus(DonationStatus.FAILED);
+                        donation.setUpdatedAt(LocalDateTime.now());
+                        donationRepository.save(donation);
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to background-verify donation ID: {}", donation.getId(), e);
+                }
+            }
+        } else {
+            log.info("No PENDING PayOS donations found in the last 1 hour.");
         }
 
-        log.info("Found {} PENDING PayOS donations to verify.", pendingDonations.size());
-        for (Donation donation : pendingDonations) {
-            try {
-                String paymentLinkId = donation.getTransactionId();
-                PaymentLink paymentLink = payOS.paymentRequests().get(paymentLinkId);
-                if (paymentLink == null) {
-                    continue;
-                }
-
-                PaymentLinkStatus status = paymentLink.getStatus();
-                log.info("Donation ID {}: PayOS status is {}", donation.getId(), status);
-
-                if (status == PaymentLinkStatus.PAID) {
-                    log.info("Donation ID {} has been PAID. Actively confirming.", donation.getId());
-                    donationService.confirmPayOSDonationByPaymentLinkId(paymentLinkId);
-                } else if (status == PaymentLinkStatus.CANCELLED || 
-                           status == PaymentLinkStatus.EXPIRED || 
-                           status == PaymentLinkStatus.FAILED) {
-                    log.info("Donation ID {} is in terminal state {}. Updating status to FAILED in DB.", donation.getId(), status);
+        // Auto-expire PENDING money donations older than 1 hour
+        try {
+            List<Donation> oldPendingDonations = donationRepository.findByStatusAndTypeAndTransactionIdIsNotNullAndCreatedAtBefore(
+                    DonationStatus.PENDING,
+                    DonationType.MONEY,
+                    since
+            );
+            if (!oldPendingDonations.isEmpty()) {
+                log.info("Found {} old PENDING PayOS donations to expire.", oldPendingDonations.size());
+                for (Donation donation : oldPendingDonations) {
+                    log.info("Auto-expiring stale PENDING donation ID: {}", donation.getId());
                     donation.setStatus(DonationStatus.FAILED);
                     donation.setUpdatedAt(LocalDateTime.now());
                     donationRepository.save(donation);
                 }
-            } catch (Exception e) {
-                log.error("Failed to background-verify donation ID: {}", donation.getId(), e);
             }
+        } catch (Exception e) {
+            log.error("Failed to auto-expire stale PENDING donations", e);
         }
+
         log.info("Completed background check for PENDING PayOS donations.");
     }
+
 }

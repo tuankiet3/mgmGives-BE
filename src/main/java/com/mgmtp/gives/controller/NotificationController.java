@@ -32,6 +32,13 @@ public class NotificationController {
         return ApiResponse.success(notifications);
     }
 
+    @GetMapping("/unread-count")
+    @Operation(summary = "Get user unread notifications count", description = "Get count of unread notifications for the current user")
+    public ApiResponse<Long> getUnreadCount(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        long count = notificationService.getUnreadCount(userDetails.getUser());
+        return ApiResponse.success(count);
+    }
+
     @PutMapping("/{id}/read")
     @Operation(summary = "Mark a notification as read")
     public ApiResponse<Void> markAsRead(@PathVariable Long id, @AuthenticationPrincipal CustomUserDetails userDetails) {

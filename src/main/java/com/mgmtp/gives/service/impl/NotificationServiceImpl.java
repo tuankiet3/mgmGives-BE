@@ -193,4 +193,9 @@ public class NotificationServiceImpl implements NotificationService {
                 Map.of("timestamp", LocalDateTime.now().toString())
         );
     }
+
+    @Override
+    public long getUnreadCount(User user) {
+        return notificationRepository.countByUserIdAndIsReadFalse(user.getId());
+    }
 }

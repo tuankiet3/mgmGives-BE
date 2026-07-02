@@ -20,4 +20,6 @@ public interface NotificationService {
     void broadcastDonationUpdate(com.mgmtp.gives.entity.Donation donation);
 
     void broadcastDashboardUpdate();
+
+    long getUnreadCount(User user);
 }
