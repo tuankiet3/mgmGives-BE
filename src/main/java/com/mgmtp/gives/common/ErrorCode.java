@@ -58,6 +58,7 @@ public enum ErrorCode {
     WEBEX_NOT_CONNECTED(4001, "Please connect your Webex account before creating a meeting", HttpStatus.BAD_REQUEST),
     WEBEX_AUTHORIZATION_FAILED(4002, "Webex authorization failed", HttpStatus.UNAUTHORIZED),
     WEBEX_CONNECTION_NOT_FOUND(4003, "Webex connection not found", HttpStatus.NOT_FOUND),
+    MEETING_TIME_CONFLICT(4004, "This campaign already has a meeting scheduled during this time", HttpStatus.CONFLICT),
     DONATE_NOT_FOUND(3010, "Donate not found", HttpStatus.NOT_FOUND),
     NOTIFICATION_NOT_FOUND(3011, "Notification not found", HttpStatus.NOT_FOUND);
 

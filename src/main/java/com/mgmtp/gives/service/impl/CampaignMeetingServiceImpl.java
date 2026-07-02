@@ -67,9 +67,10 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
     public CampaignMeetingResponse createMeeting(Long campaignId, CreateCampaignMeetingRequest request, User currentUser) {
         Campaign campaign = getCampaign(campaignId);
 
+        validateMeetingTime(request.startTime(), request.endTime());
         validateCampaignCanHaveMeetings(campaign);
         requireCampaignAdmin(campaign, currentUser);
-        validateMeetingTime(request.startTime(), request.endTime());
+        validateMeetingTimeConflict(campaign.getId(), null, request.startTime(), request.endTime());
         boolean notifyAll = request.notifyAllMembers() == null || request.notifyAllMembers();
         List<User> recipients = resolveRecipients(campaign.getId(), notifyAll, request.recipientUserIds());
         String accessToken = userWebexConnectionService.getValidAccessToken(currentUser);
@@ -153,6 +154,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Title must not be blank");
         }
         validateMeetingTime(startTime, endTime);
+        validateMeetingTimeConflict(campaignId, meetingId, startTime, endTime);
         User hostUser = meeting.getCreatedBy();
         String accessToken = userWebexConnectionService.getValidAccessToken(hostUser);
 
@@ -412,6 +414,27 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         }
         if (!endTime.isAfter(startTime)) {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Meeting end time must be after start time");
+        }
+    }
+
+    private void validateMeetingTimeConflict(
+            Long campaignId,
+            Long excludedMeetingId,
+            LocalDateTime startTime,
+            LocalDateTime endTime
+    ) {
+        boolean hasConflict = campaignMeetingRepository.existsOverlappingActiveMeeting(
+                campaignId,
+                startTime,
+                endTime,
+                excludedMeetingId,
+                CampaignMeetingStatus.CANCELLED
+        );
+        if (hasConflict) {
+            throw new AppException(
+                    ErrorCode.MEETING_TIME_CONFLICT,
+                    "This campaign already has a meeting scheduled during this time."
+            );
         }
     }
 
