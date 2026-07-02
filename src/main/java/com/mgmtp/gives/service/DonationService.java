@@ -27,5 +27,9 @@ public interface DonationService {
 
     DonationResponse cancelPayOSDonation(Long donationId);
 
+    DonationResponse confirmPayOSDonationByPaymentLinkId(String paymentLinkId);
+
+    DonationResponse verifyPayOSUserTransaction(Long donationId);
+
     DonationResponse hideDonationMessage(Long donationId, boolean hidden, User currentUser);
 }

@@ -51,6 +51,9 @@ public class Donation extends BaseEntity {
     @Column(name = "transaction_id")
     private String transactionId;
 
+    @Column(name = "order_code")
+    private Long orderCode;
+
     @ManyToOne
     @JoinColumn(name = "confirmed_by")
     private User confirmedBy;

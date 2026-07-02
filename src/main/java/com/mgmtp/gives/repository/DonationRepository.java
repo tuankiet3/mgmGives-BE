@@ -10,6 +10,7 @@ import com.mgmtp.gives.enums.DonationStatus;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface DonationRepository extends JpaRepository<Donation, Long>, JpaSpecificationExecutor<Donation> {
@@ -43,4 +44,14 @@ public interface DonationRepository extends JpaRepository<Donation, Long>, JpaSp
     List<DonorNotificationInfo> findDonorNotificationInfoByCampaignId(
             @Param("campaignId") Long campaignId,
             @Param("status") DonationStatus status);
+
+    Optional<Donation> findByTransactionId(String transactionId);
+
+    List<Donation> findByStatusAndTypeAndTransactionIdIsNotNull(com.mgmtp.gives.enums.DonationStatus status, com.mgmtp.gives.enums.DonationType type);
+
+    List<Donation> findByStatusAndTypeAndTransactionIdIsNotNullAndCreatedAtAfter(
+            com.mgmtp.gives.enums.DonationStatus status,
+            com.mgmtp.gives.enums.DonationType type,
+            java.time.LocalDateTime since
+    );
 }

@@ -41,8 +41,7 @@ public class SecurityConfig {
             "/swagger-ui/**",
             "/swagger-ui.html",
             "/error",
-            "/ws/**",
-            "/api/donations/payos/webhook"
+            "/ws/**"
     };
 
     private static final String[] ALLOWED_ORIGINS = {

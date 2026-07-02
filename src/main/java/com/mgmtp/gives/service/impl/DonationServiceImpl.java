@@ -59,18 +59,16 @@ public class DonationServiceImpl implements DonationService {
     @Override
     @Transactional
     public DonationResponse createDonation(DonationRequest request, User user) {
-        log.info("Creating donation of type {} for campaign ID: {} by user: {}", 
+        log.info("Creating donation of type {} for campaign ID: {} by user: {}",
                 request.donationType(), request.campaignId(), user.getEmail());
         Campaign campaign = campaignRepository.findById(request.campaignId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.CAMPAIGN_NOT_FOUND,
-                        "Campaign not found with ID: " + request.campaignId()
-                ));
+                        "Campaign not found with ID: " + request.campaignId()));
         if (campaign.getStatus() != CampaignStatus.IN_PROGRESS) {
             throw new AppException(
                     ErrorCode.CAMPAIGN_NOT_IN_PROGRESS,
-                    "Cannot donate to this campaign because it is currently " + campaign.getStatus()
-            );
+                    "Cannot donate to this campaign because it is currently " + campaign.getStatus());
         }
         if (request.donationType() == DonationType.MONEY) {
             validateMoneyAmount(request.amount());
@@ -80,9 +78,10 @@ public class DonationServiceImpl implements DonationService {
             detailText = request.goodsDescription();
         }
 
-        String messageText = (request.message() != null && org.springframework.util.StringUtils.hasText(request.message())) 
-                ? request.message().trim() 
-                : null;
+        String messageText = (request.message() != null
+                && org.springframework.util.StringUtils.hasText(request.message()))
+                        ? request.message().trim()
+                        : null;
 
         Donation donation = Donation.builder()
                 .user(user)
@@ -111,8 +110,7 @@ public class DonationServiceImpl implements DonationService {
                 "Donation created and auto-confirmed: donationId={}, campaignId={}, donorUserId={}",
                 savedDonation.getId(),
                 campaign.getId(),
-                user.getId()
-        );
+                user.getId());
 
         return toResponse(savedDonation);
     }
@@ -135,12 +133,12 @@ public class DonationServiceImpl implements DonationService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<DonationAdminResponse> getAllDonations(DonationStatus status, DonationType type, Long campaignId, Pageable pageable) {
+    public Page<DonationAdminResponse> getAllDonations(DonationStatus status, DonationType type, Long campaignId,
+            Pageable pageable) {
         Specification<Donation> spec = Specification.allOf(
                 hasStatus(status),
                 hasType(type),
-                hasCampaignId(campaignId)
-        );
+                hasCampaignId(campaignId));
         return donationRepository.findAll(spec, pageable).map(this::toAdminResponse);
     }
 
@@ -151,8 +149,7 @@ public class DonationServiceImpl implements DonationService {
         Donation donation = donationRepository.findById(donationId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.DONATE_NOT_FOUND,
-                        "Donation not found with ID: " + donationId
-                ));
+                        "Donation not found with ID: " + donationId));
 
         donation.setStatus(DonationStatus.SUCCESSFUL);
         donation.setConfirmedBy(admin);
@@ -169,21 +166,20 @@ public class DonationServiceImpl implements DonationService {
         Campaign campaign = campaignRepository.findById(request.campaignId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.CAMPAIGN_NOT_FOUND,
-                        "Campaign not found with ID: " + request.campaignId()
-                ));
+                        "Campaign not found with ID: " + request.campaignId()));
 
         if (campaign.getStatus() != CampaignStatus.IN_PROGRESS) {
             throw new AppException(
                     ErrorCode.CAMPAIGN_NOT_IN_PROGRESS,
-                    "Cannot donate to this campaign because it is currently " + campaign.getStatus()
-            );
+                    "Cannot donate to this campaign because it is currently " + campaign.getStatus());
         }
 
         validateMoneyAmount(request.amount());
 
-        String messageText = (request.message() != null && org.springframework.util.StringUtils.hasText(request.message()))
-                ? request.message().trim()
-                : null;
+        String messageText = (request.message() != null
+                && org.springframework.util.StringUtils.hasText(request.message()))
+                        ? request.message().trim()
+                        : null;
 
         Donation donation = Donation.builder()
                 .user(user)
@@ -200,12 +196,15 @@ public class DonationServiceImpl implements DonationService {
         donation = donationRepository.save(donation);
 
         try {
-            String description = "MGM Gives " + donation.getId();
-            String cancelUrl = payOSCancelUrl + "/campaigns/" + campaign.getId() + "/donate?paymentStatus=cancel&donationId=" + donation.getId();
-            String returnUrl = payOSReturnUrl + "/campaigns/" + campaign.getId() + "?payment=success&donationId=" + donation.getId();
+            String description = "mgm Gives " + donation.getId();
+            String cancelUrl = payOSCancelUrl + "/campaigns/" + campaign.getId()
+                    + "/donate?paymentStatus=cancel&donationId=" + donation.getId();
+            String returnUrl = payOSReturnUrl + "/campaigns/" + campaign.getId() + "?payment=success&donationId="
+                    + donation.getId();
 
+            long orderCode = System.currentTimeMillis() * 1000 + (donation.getId() % 1000);
             CreatePaymentLinkRequest paymentData = CreatePaymentLinkRequest.builder()
-                    .orderCode(donation.getId())
+                    .orderCode(orderCode)
                     .amount(request.amount())
                     .description(description)
                     .returnUrl(returnUrl)
@@ -215,16 +214,27 @@ public class DonationServiceImpl implements DonationService {
             CreatePaymentLinkResponse checkoutResponse = payOS.paymentRequests().create(paymentData);
 
             donation.setTransactionId(checkoutResponse.getPaymentLinkId());
+            donation.setOrderCode(orderCode);
             donationRepository.save(donation);
 
             log.info("PayOS payment link created for donation ID: {}", donation.getId());
-            return new PayOSResponse(donation.getId(), checkoutResponse.getCheckoutUrl(), request.amount());
+            return new PayOSResponse(
+                    donation.getId(),
+                    checkoutResponse.getCheckoutUrl(),
+                    request.amount(),
+                    checkoutResponse.getQrCode(),
+                    checkoutResponse.getBin(),
+                    checkoutResponse.getAccountNumber(),
+                    checkoutResponse.getAccountName(),
+                    checkoutResponse.getDescription()
+            );
         } catch (Exception e) {
             log.error("Failed to create PayOS payment link for donation ID: {}", donation.getId(), e);
             // Clean up the pending donation if PayOS fails
             donation.setStatus(DonationStatus.FAILED);
             donationRepository.save(donation);
-            throw new AppException(ErrorCode.VALIDATION_ERROR, "Failed to create payment link: The payment order already exists.");
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                    "Failed to create payment link: The payment order already exists.");
         }
     }
 
@@ -235,11 +245,11 @@ public class DonationServiceImpl implements DonationService {
         Donation donation = donationRepository.findById(donationId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.DONATE_NOT_FOUND,
-                        "Donation not found with ID: " + donationId
-                ));
+                        "Donation not found with ID: " + donationId));
 
         if (donation.getStatus() != DonationStatus.PENDING) {
-            log.warn("Donation ID {} is already in status {}; ignoring duplicate webhook.", donationId, donation.getStatus());
+            log.warn("Donation ID {} is already in status {}; ignoring duplicate webhook.", donationId,
+                    donation.getStatus());
             return toResponse(donation);
         }
 
@@ -266,12 +276,11 @@ public class DonationServiceImpl implements DonationService {
         Donation donation = donationRepository.findById(donationId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.DONATE_NOT_FOUND,
-                        "Donation not found with ID: " + donationId
-                ));
+                        "Donation not found with ID: " + donationId));
 
         boolean isAdmin = currentUser.getRole() == com.mgmtp.gives.enums.UserRole.ADMIN;
         boolean isCreator = donation.getCampaign().getUser() != null &&
-                            donation.getCampaign().getUser().getId().equals(currentUser.getId());
+                donation.getCampaign().getUser().getId().equals(currentUser.getId());
 
         if (!isAdmin && !isCreator) {
             throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE,
@@ -281,6 +290,8 @@ public class DonationServiceImpl implements DonationService {
         donation.setMessageHidden(hidden);
         donation.setUpdatedAt(LocalDateTime.now());
         Donation saved = donationRepository.save(donation);
+
+        notificationService.broadcastDashboardUpdate();
 
         return toResponse(saved);
     }
@@ -292,8 +303,7 @@ public class DonationServiceImpl implements DonationService {
         Donation donation = donationRepository.findById(donationId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.DONATE_NOT_FOUND,
-                        "Donation not found with ID: " + donationId
-                ));
+                        "Donation not found with ID: " + donationId));
         validateDonationOwnership(donation);
         if (donation.getStatus() == DonationStatus.PENDING) {
             donation.setStatus(DonationStatus.FAILED);
@@ -304,8 +314,82 @@ public class DonationServiceImpl implements DonationService {
         return toResponse(donation);
     }
 
+    @Override
+    @Transactional
+    public DonationResponse confirmPayOSDonationByPaymentLinkId(String paymentLinkId) {
+        log.info("Confirming PayOS payment for paymentLinkId: {}", paymentLinkId);
+        Donation donation = donationRepository.findByTransactionId(paymentLinkId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorCode.DONATE_NOT_FOUND,
+                        "Donation not found with paymentLinkId: " + paymentLinkId));
+
+        if (donation.getStatus() != DonationStatus.PENDING) {
+            log.warn("Donation with paymentLinkId {} is already in status {}; ignoring duplicate webhook.",
+                    paymentLinkId, donation.getStatus());
+            return toResponse(donation);
+        }
+
+        donation.setStatus(DonationStatus.SUCCESSFUL);
+        donation.setConfirmedAt(LocalDateTime.now());
+        donation.setUpdatedAt(LocalDateTime.now());
+        Donation savedDonation = donationRepository.save(donation);
+
+        if (donation.getUser() != null && donation.getCampaign() != null) {
+            campaignFollowerService.autoFollow(donation.getUser().getId(), donation.getCampaign().getId());
+        }
+
+        publisher.publishDonationConfirmedEvents(savedDonation);
+        notificationService.broadcastDashboardUpdate();
+
+        return toResponse(savedDonation);
+    }
+
+    @Override
+    public DonationResponse verifyPayOSUserTransaction(Long donationId) {
+        log.info("Active verify verification requested for donation ID: {}", donationId);
+        Donation donation = donationRepository.findById(donationId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorCode.DONATE_NOT_FOUND,
+                        "Donation not found with ID: " + donationId
+                ));
+
+        validateDonationOwnership(donation);
+
+        if (donation.getStatus() == DonationStatus.SUCCESSFUL) {
+            return toResponse(donation);
+        }
+
+        if (donation.getTransactionId() == null) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "No payment request exists for this donation.");
+        }
+
+        try {
+            vn.payos.model.v2.paymentRequests.PaymentLink paymentLink = payOS.paymentRequests().get(donation.getTransactionId());
+            if (paymentLink != null) {
+                vn.payos.model.v2.paymentRequests.PaymentLinkStatus status = paymentLink.getStatus();
+                if (vn.payos.model.v2.paymentRequests.PaymentLinkStatus.PAID.equals(status)) {
+                    return confirmPayOSDonationByPaymentLinkId(donation.getTransactionId());
+                } else if (vn.payos.model.v2.paymentRequests.PaymentLinkStatus.CANCELLED.equals(status) ||
+                           vn.payos.model.v2.paymentRequests.PaymentLinkStatus.EXPIRED.equals(status) ||
+                           vn.payos.model.v2.paymentRequests.PaymentLinkStatus.FAILED.equals(status)) {
+                    donation.setStatus(DonationStatus.FAILED);
+                    donation.setUpdatedAt(LocalDateTime.now());
+                    donationRepository.save(donation);
+                    throw new AppException(ErrorCode.VALIDATION_ERROR, "This donation payment has been cancelled, expired or failed on PayOS.");
+                }
+            }
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Transaction has not been paid successfully on PayOS yet. Please try again later.");
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to check active payment status for donation ID: {}", donationId, e);
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Failed to connect to PayOS to verify transaction: " + e.getMessage());
+        }
+    }
+
     /**
-     * Validates that the currently authenticated user is the owner of this donation.
+     * Validates that the currently authenticated user is the owner of this
+     * donation.
      * Throws UNAUTHORIZED if the caller does not match the donation owner.
      */
     private void validateDonationOwnership(Donation donation) {
@@ -409,8 +493,7 @@ public class DonationServiceImpl implements DonationService {
         if (amount > MAX_DONATION_AMOUNT) {
             throw new AppException(
                     ErrorCode.VALIDATION_ERROR,
-                    "Amount must not exceed " + MAX_DONATION_AMOUNT
-            );
+                    "Amount must not exceed " + MAX_DONATION_AMOUNT);
         }
     }
 
