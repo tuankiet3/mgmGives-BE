@@ -15,6 +15,7 @@ public interface EmailService {
             String meetingDescription,
             String createdByName,
             String meetingUrl,
+            Long campaignId,
             String startTime,
             String endTime
     );

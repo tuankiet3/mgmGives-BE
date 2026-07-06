@@ -39,6 +39,7 @@ public class EmailServiceImpl implements EmailService {
     private static final String TEMPLATE_VAR_MEETING_URL = "meetingUrl";
     private static final String TEMPLATE_VAR_START_TIME = "startTime";
     private static final String TEMPLATE_VAR_END_TIME = "endTime";
+    private static final String TEMPLATE_VAR_LINK_TO_CAMPAIGN = "linkToCampaign";
     private final TemplateEngine templateEngine;
 
     @Override
@@ -55,10 +56,12 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void sendCampaignMeetingInvitation(String toEmail, String fullName, String campaignName, String meetingTitle,
-            String meetingDescription, String createdByName, String meetingUrl, String startTime, String endTime) {
+            String meetingDescription, String createdByName, String meetingUrl, Long campaignId, String startTime,
+            String endTime) {
 
         sendCampaignMeeting(toEmail, fullName, campaignName, meetingTitle, meetingDescription, createdByName, meetingUrl,
-                startTime, endTime, "mgmGives meeting invitation: " + meetingTitle, TEMPLATE_CAMPAIGN_MEETING_INVITATION
+                campaignId, startTime, endTime, "mgmGives meeting invitation: " + meetingTitle,
+                TEMPLATE_CAMPAIGN_MEETING_INVITATION
         );
     }
 
@@ -67,7 +70,8 @@ public class EmailServiceImpl implements EmailService {
             String meetingDescription, String createdByName, String startTime, String endTime) {
 
         sendCampaignMeeting(toEmail, fullName, campaignName, meetingTitle, meetingDescription, createdByName, null,
-                startTime, endTime, "mgmGives meeting cancelled: " + meetingTitle, TEMPLATE_CAMPAIGN_MEETING_CANCELLATION
+                null, startTime, endTime, "mgmGives meeting cancelled: " + meetingTitle,
+                TEMPLATE_CAMPAIGN_MEETING_CANCELLATION
         );
     }
 
@@ -136,14 +140,26 @@ public class EmailServiceImpl implements EmailService {
     }
 
     private void sendCampaignMeeting(String toEmail, String fullName, String campaignName, String meetingTitle,
-            String meetingDescription, String createdByName, String meetingUrl, String startTime, String endTime,
-            String subject, String template) {
+            String meetingDescription, String createdByName, String meetingUrl, Long campaignId, String startTime,
+            String endTime, String subject, String template) {
+
+        String link = buildCampaignLink(campaignId);
 
         Context context = meetingContext(fullName, campaignName, meetingTitle, meetingDescription,
-                createdByName, startTime, endTime);
+                createdByName, startTime, endTime, link);
 
         context.setVariable(TEMPLATE_VAR_MEETING_URL, meetingUrl);
         sendTemplatedEmail(toEmail, subject, template, context);
+    }
+
+    private String buildCampaignLink(Long campaignId) {
+        if (campaignId == null) {
+            return null;
+        }
+        return UriComponentsBuilder
+                .fromUriString(mailProps.getFrontendUrl())
+                .pathSegment("campaigns", campaignId.toString())
+                .toUriString();
     }
 
     private void sendRawHtmlEmail(String toEmail, String subject, String content) {
@@ -175,7 +191,8 @@ public class EmailServiceImpl implements EmailService {
             String meetingDescription,
             String createdByName,
             String startTime,
-            String endTime
+            String endTime,
+            String linkToCampaign
     ) {
         Context context = new Context();
         context.setVariable(TEMPLATE_VAR_FULL_NAME, displayName(fullName));
@@ -185,6 +202,7 @@ public class EmailServiceImpl implements EmailService {
         context.setVariable(TEMPLATE_VAR_CREATED_BY_NAME, displayName(createdByName));
         context.setVariable(TEMPLATE_VAR_START_TIME, startTime);
         context.setVariable(TEMPLATE_VAR_END_TIME, endTime);
+        context.setVariable(TEMPLATE_VAR_LINK_TO_CAMPAIGN, linkToCampaign);
         return context;
     }
 }

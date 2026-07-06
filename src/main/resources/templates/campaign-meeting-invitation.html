@@ -4,59 +4,49 @@
     <meta charset="UTF-8">
     <title>Campaign Meeting Invitation</title>
 </head>
-<body style="margin: 0; padding: 0; background-color: #eef2f7; font-family: 'Segoe UI', Arial, sans-serif;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #eef2f7; padding: 36px 16px;">
+<body style="margin: 0; padding: 0; background-color: #eef4ff; font-family: 'Segoe UI', Arial, sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #eef4ff; padding: 0;">
     <tr>
         <td align="center">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 640px; background-color: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 18px 45px rgba(15, 23, 42, 0.12);">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 700px; background-color: #ffffff; border-radius: 0 0 18px 18px; overflow: hidden; box-shadow: 0 18px 46px rgba(30, 64, 175, 0.16);">
                 <tr>
-                    <td style="background-color: #14213d; padding: 30px 34px;">
+                    <td style="background: linear-gradient(135deg, #2349d7 0%, #2f6cf0 58%, #38bdf8 100%); padding: 26px 34px 28px;">
                         <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                             <tr>
                                 <td>
-                                    <div style="color: #ffffff; font-size: 25px; font-weight: 800; letter-spacing: 0.2px;">mgmGives</div>
-                                    <div style="color: #b8c7e0; font-size: 13px; margin-top: 6px;">Campaign coordination meeting</div>
+                                    <table role="presentation" cellspacing="0" cellpadding="0">
+                                        <tr>
+                                            <td width="38" height="38" align="center" style="width: 38px; height: 38px; background-color: #ffffff; border-radius: 12px; color: #2f6cf0; font-size: 22px; font-weight: 800; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);">&#9829;</td>
+                                            <td style="padding-left: 12px; color: #ffffff; font-size: 25px; font-weight: 850;">mgmGives</td>
+                                        </tr>
+                                    </table>
                                 </td>
                                 <td align="right">
-                                    <span style="display: inline-block; background-color: #2dd4bf; color: #073b3a; border-radius: 999px; padding: 8px 13px; font-size: 12px; font-weight: 700;">Webex</span>
+                                    <span style="display: inline-block; color: #ffffff; border: 1px solid rgba(255,255,255,0.55); background-color: rgba(255,255,255,0.18); border-radius: 999px; padding: 9px 17px; font-size: 13px; font-weight: 850;">MEETING INVITE</span>
                                 </td>
                             </tr>
                         </table>
+
+                        <div style="margin-top: 24px; color: #ffffff; font-size: 16px; font-weight: 700;">Hi <span th:text="${fullName}">User</span>,</div>
+                        <h1 style="margin: 8px 0 0; color: #ffffff; font-size: 27px; line-height: 1.22; font-weight: 900;">Let's move this campaign forward, together.</h1>
                     </td>
                 </tr>
 
                 <tr>
-                    <td style="padding: 38px 34px 12px;">
-                        <p style="margin: 0 0 10px; color: #64748b; font-size: 14px;">Hi <strong style="color: #1e293b;" th:text="${fullName}">User</strong>,</p>
-                        <h1 style="margin: 0 0 14px; color: #111827; font-size: 28px; line-height: 1.2; font-weight: 800;">You're invited to a campaign meeting</h1>
-                    </td>
-                </tr>
+                    <td style="padding: 26px 32px 16px;">
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f3f7ff; border: 1px solid #d8e6ff; border-radius: 18px;">
+                            <tr>
+                                <td style="padding: 24px 22px 20px;">
+                                    <span style="display: inline-block; background-color: #dceaff; color: #1552d8; border-radius: 8px; padding: 6px 11px; font-size: 13px; font-weight: 850;">DONATION CAMPAIGN</span>
+                                    <div style="margin-top: 14px; color: #06122c; font-size: 21px; line-height: 1.35; font-weight: 900;" th:text="${campaignName}">Campaign</div>
+                                    <div style="height: 1px; background-color: #d8e6ff; margin: 17px 0 20px;"></div>
 
-                <tr>
-                    <td style="padding: 22px 34px;">
-                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
-                            <tr>
-                                <td style="background-color: #f8fafc; padding: 18px 20px; border-bottom: 1px solid #e2e8f0;">
-                                    <div style="color: #64748b; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;">Campaign</div>
-                                    <div style="color: #0f172a; font-size: 17px; font-weight: 700; margin-top: 5px;" th:text="${campaignName}">Campaign</div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 18px 20px;">
-                                    <div style="color: #64748b; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;">Meeting</div>
-                                    <div style="color: #0f172a; font-size: 17px; font-weight: 700; margin-top: 5px;" th:text="${meetingTitle}">Meeting</div>
-                                    <div th:if="${meetingDescription != null and !#strings.isEmpty(meetingDescription)}" style="margin-top: 14px; color: #475569; font-size: 14px; line-height: 1.6;">
-                                        <strong style="color: #111827;">Description:</strong>
+                                    <div style="color: #1552d8; font-size: 13px; font-weight: 850;">MEETING TOPIC</div>
+                                    <div style="margin-top: 10px; color: #06122c; font-size: 18px; line-height: 1.35; font-weight: 800;" th:text="${meetingTitle}">Meeting</div>
+                                    <div th:if="${meetingDescription != null and !#strings.isEmpty(meetingDescription)}" style="margin-top: 12px; color: #17233d; font-size: 15px; line-height: 1.6;">
+                                        <strong style="color: #06122c;">Message:</strong>
                                         <span th:text="${meetingDescription}">Meeting description</span>
                                     </div>
-                                    <div style="margin-top: 14px; color: #475569; font-size: 14px;">
-                                        <strong style="color: #111827;">Created by:</strong>
-                                        <span th:text="${createdByName}">Campaign Admin</span>
-                                    </div>
-                                    <div style="margin-top: 14px; color: #475569; font-size: 14px;">
-                                        <strong style="color: #111827;">Time:</strong>
-                                        <span th:text="${startTime}">Start</span> - <span th:text="${endTime}">End</span>
-                                    </div>
                                 </td>
                             </tr>
                         </table>
@@ -64,17 +54,72 @@
                 </tr>
 
                 <tr>
-                    <td align="center" style="padding: 10px 34px 34px;">
-                        <a th:href="${meetingUrl}" style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 15px 32px; border-radius: 9px; text-decoration: none; font-weight: 800; font-size: 15px;">Join Webex Meeting</a>
+                    <td style="padding: 0 32px 22px;">
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                            <tr>
+                                <td width="50%" valign="top" style="padding-right: 6px;">
+                                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border: 1px solid #e0e9f8; border-radius: 16px; background-color: #ffffff;">
+                                        <tr>
+                                            <td style="padding: 18px 18px 16px;">
+                                                <div style="color: #8a97ad; font-size: 13px; font-weight: 850;">HOSTED BY</div>
+                                                <div style="margin-top: 8px; color: #06122c; font-size: 15px; font-weight: 800;">
+                                                    <span style="color: #4f2f91; font-size: 16px;">&#128100;</span>
+                                                    <span th:text="${createdByName}">Campaign Admin</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                                <td width="50%" valign="top" style="padding-left: 6px;">
+                                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border: 1px solid #e0e9f8; border-radius: 16px; background-color: #ffffff;">
+                                        <tr>
+                                            <td style="padding: 18px 18px 16px;">
+                                                <div style="color: #8a97ad; font-size: 13px; font-weight: 850;">TIME</div>
+                                                <div style="margin-top: 8px; color: #06122c; font-size: 15px; font-weight: 800;">
+                                                    <span style="color: #4f2f91;">&#9200;</span>
+                                                    <span th:text="${startTime}">Start</span> - <span th:text="${endTime}">End</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
                     </td>
                 </tr>
 
                 <tr>
-                    <td style="padding: 0 34px 34px;">
-                        <div style="border-top: 1px solid #e5e7eb; padding-top: 18px; color: #64748b; font-size: 12px; line-height: 1.6;">
-                            If the button does not work, copy and paste this URL into your browser:<br>
-                            <a th:href="${meetingUrl}" th:text="${meetingUrl}" style="color: #2563eb; word-break: break-all;">Meeting link</a>
+                    <td style="padding: 0 32px 14px;">
+                        <a th:href="${meetingUrl}" style="display: block; background-color: #2658e9; color: #ffffff; padding: 18px 24px; border-radius: 16px; text-align: center; text-decoration: none; font-weight: 900; font-size: 20px; box-shadow: 0 18px 30px rgba(37, 88, 233, 0.28);">
+                            <span style="font-size: 16px;">&#128249;</span>
+                            Join the Webex Meetup
+                        </a>
+                    </td>
+                </tr>
+
+                <tr th:if="${linkToCampaign != null and !#strings.isEmpty(linkToCampaign)}">
+                    <td align="center" style="padding: 0 32px 22px;">
+                        <a th:href="${linkToCampaign}" style="display: inline-block; color: #1552d8; padding: 12px 24px; border-radius: 999px; text-decoration: none; font-weight: 850; font-size: 15px; border: 1px solid #c8dcff; background-color: #f7fbff;">Explore campaign details &rarr;</a>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding: 0 32px 28px;">
+                        <div style="color: #7b8ba8; font-size: 12px; line-height: 1.8;">
+                            Button not working? Paste this link:
+                            <a th:href="${meetingUrl}" th:text="${meetingUrl}" style="color: #1552d8; word-break: break-all;">Meeting link</a>
+                            <span th:if="${linkToCampaign != null and !#strings.isEmpty(linkToCampaign)}">
+                                <br>
+                                Campaign page:
+                                <a th:href="${linkToCampaign}" th:text="${linkToCampaign}" style="color: #1552d8; word-break: break-all;">Campaign link</a>
+                            </span>
                         </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td align="center" style="background-color: #f7f9fe; border-top: 1px solid #e3ebf8; padding: 24px 28px; color: #a5b3cc; font-size: 12px;">
+                        Together for a kinder community - mgmGives &#169; 2026
                     </td>
                 </tr>
             </table>

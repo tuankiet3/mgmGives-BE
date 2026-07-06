@@ -28,6 +28,7 @@ public class CampaignMeetingEmailEventListener {
                     event.meetingDescription(),
                     event.createdByName(),
                     event.meetingUrl(),
+                    event.campaignId(),
                     event.startTime(),
                     event.endTime()
             );

@@ -62,6 +62,7 @@ public class CampaignMeetingInvitationServiceImpl implements CampaignMeetingInvi
                     meeting.getDescription(),
                     getCreatedByName(meeting),
                     meeting.getMeetingUrl(),
+                    campaign.getId(),
                     format(meeting),
                     formatEnd(meeting)
             ));
