@@ -4,7 +4,6 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Data
 @Builder
@@ -22,7 +21,4 @@ public class CampaignResultResponse {
     private long donorCount;
     private long volunteerCount;
     private double goalPercent;
-
-    // Outcome media (context = RESULT)
-    private List<CampaignMediaResponse> resultMedias;
 }

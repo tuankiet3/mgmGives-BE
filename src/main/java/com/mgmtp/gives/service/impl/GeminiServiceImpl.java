@@ -109,8 +109,10 @@ public class GeminiServiceImpl implements GeminiService {
     private String buildPrompt(Campaign campaign, long totalRaised, long donorCount,
                                long volunteerCount, double goalPercent) {
         return String.format("""
-                You are a content writer for a charity campaign. \
-                Generate a result summary based on the following campaign information.
+                You are a content writer for a charity platform. \
+                Write a FINAL RESULT REPORT for a campaign that has already ended. \
+                Be honest and factual about the numbers. \
+                If donations or volunteers are 0, acknowledge it — do not speculate about the future.
 
                 Campaign information:
                 - Name: %s
@@ -122,9 +124,9 @@ public class GeminiServiceImpl implements GeminiService {
 
                 Return a JSON object with exactly these fields (write in English, naturally and sincerely):
                 {
-                  "resultSummary": "Campaign result summary (2-3 paragraphs, highlighting achievements and specific numbers)",
-                  "itemsSummary": "Summary of items or goods donated if any, otherwise leave as empty string",
-                  "acknowledgements": "Thank-you message to donors and volunteers (1-2 paragraphs)"
+                  "resultSummary": "A retrospective summary of what happened during the campaign, what was achieved, and an honest reflection. 2-3 paragraphs.",
+                  "itemsSummary": "Summary of non-monetary goods donated, or empty string if none.",
+                  "acknowledgements": "A closing thank-you to anyone who participated. If no one donated or volunteered, keep it brief and genuine."
                 }
                 """,
                 campaign.getTitle(),

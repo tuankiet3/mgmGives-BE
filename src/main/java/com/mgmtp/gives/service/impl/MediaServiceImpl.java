@@ -6,10 +6,13 @@ import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.CampaignMeeting;
 import com.mgmtp.gives.entity.CampaignMedia;
 import com.mgmtp.gives.entity.User;
+import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
+import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.UserRepository;
 import com.mgmtp.gives.service.MediaService;
@@ -35,6 +38,7 @@ import java.util.UUID;
 public class MediaServiceImpl implements MediaService {
 
     private final CampaignMediaRepository campaignMediaRepository;
+    private final CampaignMemberRepository campaignMemberRepository;
     private final CampaignRepository campaignRepository;
     private final UserRepository userRepository;
 
@@ -50,8 +54,8 @@ public class MediaServiceImpl implements MediaService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CAMPAIGN_NOT_FOUND,
                         "Campaign not found with ID: " + campaignId));
 
-        if (campaign.getUser() == null || !campaign.getUser().getId().equals(currentUser.getId())) {
-            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE, "Only the campaign creator can upload media");
+        if (!canManageCampaignMedia(campaign, currentUser)) {
+            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE, "Only campaign creator or admin can upload media");
         }
 
         String detectedType = MediaValidationUtil.detectCategory(file.getContentType());
@@ -121,8 +125,8 @@ public class MediaServiceImpl implements MediaService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CAMPAIGN_MEDIA_NOT_FOUND,
                         "Campaign media not found with ID: " + id));
 
-        if (media.getCampaign().getUser() == null || !media.getCampaign().getUser().getId().equals(currentUser.getId())) {
-            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE, "Only the campaign creator can delete media");
+        if (!canManageCampaignMedia(media.getCampaign(), currentUser)) {
+            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE, "Only campaign creator or admin can delete media");
         }
 
         if (media.isCover()) {
@@ -154,6 +158,13 @@ public class MediaServiceImpl implements MediaService {
         softDeleteMedia(media);
         return new CampaignMediaResponse(media.getId(), media.getUrl(), media.getMediaType(), media.isCover(),
                 media.getCaption(), media.getDisplayOrder(), media.getContext());
+    }
+
+    private boolean canManageCampaignMedia(Campaign campaign, User user) {
+        if (user.getRole() == UserRole.ADMIN) return true;
+        if (campaign.getUser() != null && campaign.getUser().getId().equals(user.getId())) return true;
+        return campaignMemberRepository.existsByCampaignIdAndUserIdAndRoleInCampaign(
+                campaign.getId(), user.getId(), CampaignMemberRole.CAMPAIGN_ADMIN);
     }
 
     private void softDeleteMedia(CampaignMedia media) {

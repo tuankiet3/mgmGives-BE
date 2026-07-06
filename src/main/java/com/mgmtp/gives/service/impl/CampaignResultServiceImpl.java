@@ -1,7 +1,6 @@
 package com.mgmtp.gives.service.impl;
 
 import com.mgmtp.gives.common.ErrorCode;
-import com.mgmtp.gives.dto.campaign.CampaignMediaResponse;
 import com.mgmtp.gives.dto.campaign.CampaignResultGenerateResponse;
 import com.mgmtp.gives.dto.campaign.CampaignResultRequest;
 import com.mgmtp.gives.dto.campaign.CampaignResultResponse;
@@ -9,7 +8,6 @@ import com.mgmtp.gives.dto.campaign.DonorNotificationInfo;
 import com.mgmtp.gives.dto.notification.CreateNotificationCommand;
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.Campaign;
-import com.mgmtp.gives.entity.CampaignMedia;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignStatus;
@@ -17,9 +15,7 @@ import com.mgmtp.gives.enums.NotificationType;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
-import com.mgmtp.gives.mapper.CampaignMediaMapper;
 import com.mgmtp.gives.repository.CampaignFollowerRepository;
-import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.DonationRepository;
@@ -53,9 +49,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
 
     private final CampaignRepository campaignRepository;
     private final CampaignMemberRepository campaignMemberRepository;
-    private final CampaignMediaRepository campaignMediaRepository;
     private final DonationRepository donationRepository;
-    private final CampaignMediaMapper campaignMediaMapper;
     private final GeminiService geminiService;
     private final NotificationService notificationService;
     private final EmailService emailService;
@@ -292,11 +286,6 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                 ? Math.min(100.0, (amountForGoal * 100.0) / campaign.getTarget())
                 : 0.0;
 
-        List<CampaignMedia> resultMedias = campaignMediaRepository.findByCampaignIdAndContextAndDeletedAtIsNull(
-                campaign.getId(), "RESULT");
-
-        List<CampaignMediaResponse> mediaResponses = campaignMediaMapper.toResponseList(resultMedias);
-
         return CampaignResultResponse.builder()
                 .campaignId(campaign.getId())
                 .resultSummary(campaign.getResultSummary())
@@ -310,7 +299,6 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                 .donorCount(donorCount)
                 .volunteerCount(volunteerCount)
                 .goalPercent(goalPercent)
-                .resultMedias(mediaResponses)
                 .build();
     }
 }
