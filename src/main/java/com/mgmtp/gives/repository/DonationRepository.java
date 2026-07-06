@@ -1,6 +1,7 @@
 package com.mgmtp.gives.repository;
 
 import com.mgmtp.gives.dto.campaign.DonorNotificationInfo;
+import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.Donation;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -44,6 +45,16 @@ public interface DonationRepository extends JpaRepository<Donation, Long>, JpaSp
     List<DonorNotificationInfo> findDonorNotificationInfoByCampaignId(
             @Param("campaignId") Long campaignId,
             @Param("status") DonationStatus status);
+
+    @Query("""
+            SELECT DISTINCT new com.mgmtp.gives.dto.notification.NotificationRecipient(
+                d.user.id,
+                d.user.email
+            )
+            FROM Donation d
+            WHERE d.campaign.id = :campaignId AND d.status = 'SUCCESSFUL' AND d.user IS NOT NULL
+            """)
+    List<NotificationRecipient> findDonorRecipientsByCampaignId(@Param("campaignId") Long campaignId);
 
     List<Donation> findByCampaignIdAndStatus(Long campaignId, DonationStatus status);
 

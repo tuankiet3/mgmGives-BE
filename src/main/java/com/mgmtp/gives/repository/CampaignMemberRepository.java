@@ -14,6 +14,16 @@ import java.util.Optional;
 public interface CampaignMemberRepository extends JpaRepository<CampaignMember, Long> {
     List<CampaignMember> findByCampaignId(Long campaignId);
 
+    @Query("""
+            SELECT DISTINCT new com.mgmtp.gives.dto.notification.NotificationRecipient(
+                cm.user.id,
+                cm.user.email
+            )
+            FROM CampaignMember cm
+            WHERE cm.campaign.id = :campaignId AND cm.user IS NOT NULL
+            """)
+    List<NotificationRecipient> findMemberRecipientsByCampaignId(@Param("campaignId") Long campaignId);
+
     Optional<CampaignMember> findByCampaignIdAndUserId(Long campaignId, Long userId);
 
     long deleteByCampaignIdAndUserId(Long campaignId, Long userId);
