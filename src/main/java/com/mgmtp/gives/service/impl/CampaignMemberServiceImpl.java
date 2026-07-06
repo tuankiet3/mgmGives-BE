@@ -7,6 +7,7 @@ import com.mgmtp.gives.entity.CampaignMember;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
@@ -90,5 +91,17 @@ public class CampaignMemberServiceImpl implements CampaignMemberService {
         } else {
             log.debug("Unjoin skipped because member record does not exist: userId={}, campaignId={}", user.getId(), campaignId);
         }
+    }
+
+    @Transactional(readOnly = true) @Override
+    public boolean canManageCampaign(Long campaignId, User user) {
+        if (user == null) {
+            return false;
+        }
+        if (user.getRole() == UserRole.ADMIN) {
+            return true;
+        }
+        return campaignMemberRepo.existsByCampaignIdAndUserIdAndRoleInCampaign(
+                campaignId, user.getId(), CampaignMemberRole.CAMPAIGN_ADMIN);
     }
 }

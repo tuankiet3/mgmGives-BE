@@ -15,12 +15,14 @@ import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
 import com.mgmtp.gives.mapper.CampaignMapper;
 import com.mgmtp.gives.enums.CampaignMemberRole;
+import com.mgmtp.gives.notification.publisher.CampaignNotificationPublisher;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.CategoryRepository;
 import com.mgmtp.gives.repository.CampaignFollowerRepository;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.DonationRepository;
+import com.mgmtp.gives.service.CampaignMemberService;
 import com.mgmtp.gives.service.CampaignService;
 import com.mgmtp.gives.util.HtmlSanitizerUtil;
 import com.mgmtp.gives.service.NotificationService;
@@ -58,7 +60,9 @@ public class CampaignServiceImpl implements CampaignService {
     private final CampaignFollowerRepository campaignFollowerRepository;
     private final NotificationService notificationService;
     private final CampaignMemberRepository campaignMemberRepository;
+    private final CampaignMemberService campaignMemberService;
     private final DonationRepository donationRepository;
+    private final CampaignNotificationPublisher campaignNotificationPublisher;
 
     @Value("${app.media.upload-dir}")
     private String uploadDir;
@@ -272,6 +276,32 @@ public class CampaignServiceImpl implements CampaignService {
         campaignRepository.delete(campaign);
         log.info("Campaign deleted successfully: id={}, title={}", id, campaign.getTitle());
         notificationService.broadcastDashboardUpdate();
+    }
+
+    @Override
+    @Transactional
+    public Campaign endCampaign(Long id, User currentUser) {
+        Campaign campaign = getCampaignByIdInternal(id);
+
+        if (!campaignMemberService.canManageCampaign(id, currentUser)) {
+            log.warn("End campaign denied: not campaign admin. campaignId={}, userId={}", id, currentUser.getId());
+            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE);
+        }
+
+        if (campaign.getStatus() != CampaignStatus.IN_PROGRESS) {
+            log.warn("End campaign denied: invalid status. campaignId={}, status={}", id, campaign.getStatus());
+            throw new AppException(ErrorCode.CAMPAIGN_NOT_IN_PROGRESS);
+        }
+
+        campaign.setStatus(CampaignStatus.COMPLETED);
+        campaign.setEndDate(LocalDateTime.now());
+        Campaign saved = campaignRepository.save(campaign);
+
+        campaignNotificationPublisher.publishCampaignStatusChanged(
+                saved, CampaignStatus.IN_PROGRESS, CampaignStatus.COMPLETED);
+        notificationService.broadcastDashboardUpdate();
+        log.info("Campaign ended manually: id={}, userId={}", id, currentUser.getId());
+        return saved;
     }
 
     @Override

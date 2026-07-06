@@ -7,4 +7,9 @@ public interface CampaignMemberService {
     CampaignMemberResponse joinCampaign(User user, Long campaignId);
 
     void unjoinCampaign(User user, Long campaignId);
+
+    /**
+     * @return true when the user is a system ADMIN or a CAMPAIGN_ADMIN member of the campaign
+     */
+    boolean canManageCampaign(Long campaignId, User user);
 }

@@ -15,13 +15,13 @@ import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.DonationType;
 import com.mgmtp.gives.enums.NotificationType;
-import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
 import com.mgmtp.gives.repository.CampaignFollowerRepository;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.DonationRepository;
+import com.mgmtp.gives.service.CampaignMemberService;
 import com.mgmtp.gives.service.CampaignResultService;
 import com.mgmtp.gives.service.EmailService;
 import com.mgmtp.gives.service.GeminiService;
@@ -57,6 +57,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
 
     private final CampaignRepository campaignRepository;
     private final CampaignMemberRepository campaignMemberRepository;
+    private final CampaignMemberService campaignMemberService;
     private final DonationRepository donationRepository;
     private final GeminiService geminiService;
     private final NotificationService notificationService;
@@ -336,10 +337,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
     }
 
     private void checkAuthorized(Campaign campaign, User currentUser) {
-        if (currentUser.getRole() == UserRole.ADMIN) return;
-        boolean isCampaignAdmin = campaignMemberRepository.existsByCampaignIdAndUserIdAndRoleInCampaign(
-                campaign.getId(), currentUser.getId(), CampaignMemberRole.CAMPAIGN_ADMIN);
-        if (!isCampaignAdmin) {
+        if (!campaignMemberService.canManageCampaign(campaign.getId(), currentUser)) {
             log.warn("Unauthorized result access: campaignId={}, userId={}", campaign.getId(), currentUser.getId());
             throw new AppException(ErrorCode.UNAUTHORIZED_RESULT_ACCESS);
         }

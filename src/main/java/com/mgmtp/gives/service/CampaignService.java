@@ -29,6 +29,8 @@ public interface CampaignService {
 
     void deleteCampaign(Long id, User currentUser);
 
+    Campaign endCampaign(Long id, User currentUser);
+
     void startApprovedCampaignsScheduled();
 
     void completeEndedCampaignsScheduled();

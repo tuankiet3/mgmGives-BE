@@ -93,6 +93,17 @@ public class CampaignController {
                                 "Campaign updated successfully");
         }
 
+        @PutMapping("/{id}/end")
+        @Operation(summary = "End a campaign", description = "Ends an IN_PROGRESS campaign immediately, setting its status to COMPLETED. Restricted to the campaign's Campaign Admin or ADMIN role.")
+        public ApiResponse<CampaignResponse> endCampaign(
+                        @Parameter(description = "The ID of the campaign to end", required = true) @PathVariable Long id,
+                        @AuthenticationPrincipal CustomUserDetails userDetails) {
+                log.info("REST request to end campaign: id={}, userId={}", id, userDetails.getUser().getId());
+                Campaign campaign = campaignService.endCampaign(id, userDetails.getUser());
+                return ApiResponse.success(campaignService.toResponse(campaign, userDetails.getUser()),
+                                "Campaign ended successfully");
+        }
+
         @DeleteMapping("/{id}")
         @Operation(summary = "Delete a campaign", description = "Removes a campaign by ID. Restricted to the creator, and only if status is PENDING or REJECTED.")
         public ApiResponse<Void> deleteCampaign(
