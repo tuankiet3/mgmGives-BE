@@ -18,11 +18,21 @@
         are now available!
     </p>
 
-    <p>
-        Thank you for your generous donation of
-        <strong>
-            <span th:text="${formattedAmount}"></span> VND
-        </strong>.
+    <p th:if="${!#strings.isEmpty(aiMessage)}"
+       style="white-space:pre-line;"
+       th:text="${aiMessage}">
+    </p>
+
+    <p th:if="${#strings.isEmpty(aiMessage)}">
+        <th:block th:if="${!#strings.isEmpty(formattedAmount)}">
+            Thank you for your generous donation of
+            <strong>
+                <span th:text="${formattedAmount}"></span> VND
+            </strong>.
+        </th:block>
+        <th:block th:if="${#strings.isEmpty(formattedAmount)}">
+            Thank you for your generous contribution.
+        </th:block>
         Together, we made it happen!
     </p>
 

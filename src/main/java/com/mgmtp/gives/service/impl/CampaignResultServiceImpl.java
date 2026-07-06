@@ -5,12 +5,15 @@ import com.mgmtp.gives.dto.campaign.CampaignResultGenerateResponse;
 import com.mgmtp.gives.dto.campaign.CampaignResultRequest;
 import com.mgmtp.gives.dto.campaign.CampaignResultResponse;
 import com.mgmtp.gives.dto.campaign.DonorNotificationInfo;
+import com.mgmtp.gives.dto.campaign.DonorThankYouContext;
 import com.mgmtp.gives.dto.notification.CreateNotificationCommand;
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.Campaign;
+import com.mgmtp.gives.entity.Donation;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.DonationType;
 import com.mgmtp.gives.enums.NotificationType;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.exception.AppException;
@@ -36,9 +39,12 @@ import com.mgmtp.gives.enums.DonationStatus;
 
 import java.text.NumberFormat;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -46,6 +52,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class CampaignResultServiceImpl implements CampaignResultService {
+
+    private static final String RESULT_EMAIL_SUBJECT_PREFIX = "Campaign Results: ";
 
     private final CampaignRepository campaignRepository;
     private final CampaignMemberRepository campaignMemberRepository;
@@ -178,7 +186,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
             for (User user : followerUsers) {
                 emailService.sendHtmlEmail(
                         user.getEmail(),
-                        "Campaign Results: " + campaignName,
+                        RESULT_EMAIL_SUBJECT_PREFIX + campaignName,
                         buildFollowerEmailBody(user.getFullName(), campaignName));
             }
         }
@@ -201,7 +209,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
             for (User user : volunteerUsers) {
                 emailService.sendHtmlEmail(
                         user.getEmail(),
-                        "Campaign Results: " + campaignName,
+                        RESULT_EMAIL_SUBJECT_PREFIX + campaignName,
                         buildVolunteerEmailBody(user.getFullName(), campaignName));
             }
         }
@@ -209,22 +217,85 @@ public class CampaignResultServiceImpl implements CampaignResultService {
         // --- Donors (personalized with donation amount) ---
         List<DonorNotificationInfo> donors =
                 donationRepository.findDonorNotificationInfoByCampaignId(campaign.getId(), DonationStatus.SUCCESSFUL);
+        Map<Long, String> aiThankYouMessages = generateDonorThankYouMessages(campaign);
         for (DonorNotificationInfo donor : donors) {
-            String formattedAmount = NumberFormat.getNumberInstance(Locale.US).format(donor.totalAmount());
+            // totalAmount is null for donors who only gave goods (GOODS donations carry no amount)
+            String formattedAmount = donor.totalAmount() != null && donor.totalAmount() > 0
+                    ? NumberFormat.getNumberInstance(Locale.US).format(donor.totalAmount())
+                    : null;
+            String donationThanks = formattedAmount != null
+                    ? "Thank you for your generous donation of " + formattedAmount + " VND — together, we made it happen!"
+                    : "Thank you for your generous contribution — together, we made it happen!";
             notificationService.createNotification(CreateNotificationCommand.builder()
                     .recipients(Set.of(new NotificationRecipient(donor.userId(), donor.email())))
                     .type(NotificationType.CAMPAIGN_RESULT_POSTED)
                     .title("Campaign Results Published")
-                    .message("The final results for \"" + campaignName + "\" are now available. "
-                            + "Thank you for your generous donation of " + formattedAmount + " VND — together, we made it happen!")
+                    .message("The final results for \"" + campaignName + "\" are now available. " + donationThanks)
                     .linkUrl(linkUrl)
                     .build());
 
             emailService.sendHtmlEmail(
                     donor.email(),
-                    "Campaign Results: " + campaignName,
-                    buildDonorEmailBody(donor.fullName(), campaignName, formattedAmount));
+                    RESULT_EMAIL_SUBJECT_PREFIX + campaignName,
+                    buildDonorEmailBody(donor.fullName(), campaignName, formattedAmount,
+                            aiThankYouMessages.get(donor.userId())));
         }
+    }
+
+    /**
+     * Builds per-donor contribution data from the database and asks the AI for personalized
+     * thank-you messages. Returns an empty map on any failure so emails fall back to the
+     * static template.
+     */
+    private Map<Long, String> generateDonorThankYouMessages(Campaign campaign) {
+        if (!geminiService.isConfigured()) {
+            return Map.of();
+        }
+        try {
+            List<Donation> donations =
+                    donationRepository.findByCampaignIdAndStatus(campaign.getId(), DonationStatus.SUCCESSFUL);
+            Map<Long, List<Donation>> byUser = donations.stream()
+                    .filter(d -> d.getUser() != null)
+                    .collect(Collectors.groupingBy(d -> d.getUser().getId(), LinkedHashMap::new, Collectors.toList()));
+
+            List<DonorThankYouContext> contexts = new ArrayList<>();
+            for (Map.Entry<Long, List<Donation>> entry : byUser.entrySet()) {
+                List<Donation> userDonations = entry.getValue();
+                long totalMoney = userDonations.stream()
+                        .filter(d -> d.getType() == DonationType.MONEY && d.getAmount() != null)
+                        .mapToLong(Donation::getAmount)
+                        .sum();
+                List<String> goodsItems = userDonations.stream()
+                        .filter(d -> d.getType() == DonationType.GOODS)
+                        .map(CampaignResultServiceImpl::describeGoods)
+                        .filter(s -> !s.isBlank())
+                        .toList();
+                contexts.add(new DonorThankYouContext(
+                        entry.getKey(),
+                        userDonations.get(0).getUser().getFullName(),
+                        totalMoney,
+                        userDonations.size(),
+                        goodsItems));
+            }
+
+            return geminiService.generateDonorThankYouMessages(campaign, contexts);
+        } catch (Exception e) {
+            log.warn("Falling back to static donor emails, AI generation failed: campaignId={}, error={}",
+                    campaign.getId(), e.getMessage());
+            return Map.of();
+        }
+    }
+
+    private static String describeGoods(Donation donation) {
+        StringBuilder sb = new StringBuilder();
+        if (donation.getGoodsCategory() != null && !donation.getGoodsCategory().isBlank()) {
+            sb.append(donation.getGoodsCategory());
+        }
+        if (donation.getDetail() != null && !donation.getDetail().isBlank()) {
+            if (sb.length() > 0) sb.append(" - ");
+            sb.append(donation.getDetail());
+        }
+        return sb.toString();
     }
 
     private String buildFollowerEmailBody(String fullName, String campaignName) {
@@ -241,12 +312,13 @@ public class CampaignResultServiceImpl implements CampaignResultService {
         return templateEngine.process("volunteer-result-notification", context);
     }
 
-    private String buildDonorEmailBody(String fullName, String campaignName, String formattedAmount) {
+    private String buildDonorEmailBody(String fullName, String campaignName, String formattedAmount, String aiMessage) {
         Context context = new Context();
 
         context.setVariable("fullName", fullName);
         context.setVariable("campaignName", campaignName);
         context.setVariable("formattedAmount", formattedAmount);
+        context.setVariable("aiMessage", aiMessage);
 
         return templateEngine.process(
                 "donor-result-notification",

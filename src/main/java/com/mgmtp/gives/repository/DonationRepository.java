@@ -45,6 +45,8 @@ public interface DonationRepository extends JpaRepository<Donation, Long>, JpaSp
             @Param("campaignId") Long campaignId,
             @Param("status") DonationStatus status);
 
+    List<Donation> findByCampaignIdAndStatus(Long campaignId, DonationStatus status);
+
     Optional<Donation> findByTransactionId(String transactionId);
 
     List<Donation> findByStatusAndTypeAndTransactionIdIsNotNull(com.mgmtp.gives.enums.DonationStatus status, com.mgmtp.gives.enums.DonationType type);
