@@ -3,6 +3,7 @@ package com.mgmtp.gives.dto.campaign;
 import com.mgmtp.gives.dto.category.CategoryResponse;
 import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.DonationMethod;
 import lombok.Builder;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -41,4 +42,9 @@ public class CampaignResponse {
     private boolean resultPosted;
     private LocalDateTime resultPublishedAt;
     private String resultPublishedByName;
+
+    private DonationMethod donationMethod;
+    private String qrImageUrl;
+    private String qrBankInfo;
+    private Boolean creatorHasPayOS;
 }

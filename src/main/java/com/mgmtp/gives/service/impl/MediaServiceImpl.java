@@ -321,4 +321,13 @@ public class MediaServiceImpl implements MediaService {
         userRepository.save(user);
         log.info("Avatar deleted: userId={}, file={}", currentUser.getId(), currentAvatar);
     }
+
+    @Override
+    @Transactional
+    public String uploadCampaignQr(MultipartFile file, User currentUser) {
+        MediaValidationUtil.validateFile(file, true);
+        String filename = storeFile(file, "campaign QR");
+        log.info("Campaign QR uploaded: userId={}, file={}", currentUser.getId(), filename);
+        return filename;
+    }
 }

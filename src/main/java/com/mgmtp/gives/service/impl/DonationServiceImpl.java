@@ -1,5 +1,6 @@
 package com.mgmtp.gives.service.impl;
 
+import com.mgmtp.gives.common.ErrorCode;
 import com.mgmtp.gives.dto.donation.*;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.Donation;
@@ -8,15 +9,15 @@ import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.DonationStatus;
 import com.mgmtp.gives.enums.DonationType;
 import com.mgmtp.gives.exception.AppException;
-import com.mgmtp.gives.common.ErrorCode;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
+import com.mgmtp.gives.notification.publisher.DonationNotificationPublisher;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.DonationRepository;
 import com.mgmtp.gives.security.CustomUserDetails;
 import com.mgmtp.gives.service.CampaignFollowerService;
+import com.mgmtp.gives.service.CampaignMemberService;
 import com.mgmtp.gives.service.DonationService;
 import com.mgmtp.gives.service.NotificationService;
-import com.mgmtp.gives.notification.publisher.DonationNotificationPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -48,6 +49,8 @@ public class DonationServiceImpl implements DonationService {
     private final CampaignFollowerService campaignFollowerService;
     private final DonationNotificationPublisher publisher;
     private final NotificationService notificationService;
+    private final CampaignMemberService campaignMemberService;
+    private final com.mgmtp.gives.repository.CampaignMemberRepository campaignMemberRepository;
     private final com.mgmtp.gives.service.PayOSClientProvider payOSClientProvider;
     private final org.springframework.context.ApplicationContext applicationContext;
 
@@ -84,6 +87,57 @@ public class DonationServiceImpl implements DonationService {
                         ? request.message().trim()
                         : null;
 
+        boolean isManualMoney = request.donationType() == DonationType.MONEY;
+        if (isManualMoney && campaign.getDonationMethod() == com.mgmtp.gives.enums.DonationMethod.PAYOS) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                    "This campaign only accepts PayOS online payments, not manual QR bank transfers.");
+        }
+        if (isManualMoney && !org.springframework.util.StringUtils.hasText(request.transactionId())) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Transaction ID / Reference Code is required for manual QR bank transfers.");
+        }
+        DonationStatus status = isManualMoney ? DonationStatus.PENDING : DonationStatus.SUCCESSFUL;
+        LocalDateTime confirmedAt = isManualMoney ? null : LocalDateTime.now();
+
+        // --- PayOS Transaction Verification for Manual QR Submissions ---
+        if (isManualMoney) {
+            try {
+                PayOS activePayOS = payOSClientProvider.getClientForCampaign(campaign);
+                String txId = request.transactionId().trim();
+                vn.payos.model.v2.paymentRequests.PaymentLink paymentLink = activePayOS.paymentRequests().get(txId);
+                if (paymentLink != null) {
+                    vn.payos.model.v2.paymentRequests.PaymentLinkStatus paymentStatus = paymentLink.getStatus();
+                    if (vn.payos.model.v2.paymentRequests.PaymentLinkStatus.PAID.equals(paymentStatus)) {
+                        // Transaction is genuinely paid on PayOS — auto-confirm immediately
+                        log.info("Manual QR transactionId={} verified as PAID on PayOS. Auto-confirming.", txId);
+                        status = DonationStatus.SUCCESSFUL;
+                        confirmedAt = LocalDateTime.now();
+                    } else if (vn.payos.model.v2.paymentRequests.PaymentLinkStatus.CANCELLED.equals(paymentStatus)
+                            || vn.payos.model.v2.paymentRequests.PaymentLinkStatus.EXPIRED.equals(paymentStatus)
+                            || vn.payos.model.v2.paymentRequests.PaymentLinkStatus.FAILED.equals(paymentStatus)) {
+                        // Transaction link is in a terminal failure state — reject immediately
+                        log.warn("Manual QR transactionId={} is in a non-payable state on PayOS: {}", txId, paymentStatus);
+                        throw new AppException(ErrorCode.VALIDATION_ERROR,
+                                "The transaction ID you provided (" + txId + ") has already been cancelled, expired, or failed on PayOS. Please check and try again.");
+                    } else {
+                        // Transaction exists but not yet PAID (still PENDING on PayOS side)
+                        log.info("Manual QR transactionId={} exists on PayOS but is not PAID yet (status={}). Saving as PENDING for admin review.", txId, paymentStatus);
+                        // status remains PENDING
+                    }
+                } else {
+                    // No matching PayOS payment link found for this transactionId —
+                    log.info("Manual QR transactionId={} not found on PayOS. Saving as PENDING for manual admin review.", txId);
+                }
+            } catch (AppException e) {
+                throw e;
+            } catch (Exception e) {
+                // PayOS is unavailable or the campaign has no PayOS connection —
+                // fall through gracefully: save as PENDING for manual admin review
+                log.warn("PayOS check skipped for manual QR transactionId={}: {} — saving as PENDING for admin review.",
+                        request.transactionId(), e.getMessage());
+            }
+        }
+        // --- End PayOS Verification ---
+
         Donation donation = Donation.builder()
                 .user(user)
                 .campaign(campaign)
@@ -91,8 +145,8 @@ public class DonationServiceImpl implements DonationService {
                 .amount(request.donationType() == DonationType.GOODS ? null : request.amount())
                 .detail(detailText)
                 .isAnonymous(request.anonymous())
-                .status(DonationStatus.SUCCESSFUL)
-                .confirmedAt(LocalDateTime.now())
+                .status(status)
+                .confirmedAt(confirmedAt)
                 .transactionId(request.transactionId())
                 .message(messageText)
                 .isMessageHidden(false)
@@ -104,14 +158,18 @@ public class DonationServiceImpl implements DonationService {
         Donation savedDonation = donationRepository.save(donation);
         campaignFollowerService.autoFollow(user.getId(), campaign.getId());
 
-        publisher.publishDonationConfirmedEvents(savedDonation);
+        if (status == DonationStatus.SUCCESSFUL) {
+            publisher.publishDonationConfirmedEvents(savedDonation);
+        } else {
+            sendPendingApprovalNotification(savedDonation);
+        }
         notificationService.broadcastDashboardUpdate();
 
         log.info(
-                "Donation created and auto-confirmed: donationId={}, campaignId={}, donorUserId={}",
+                "Donation created: donationId={}, campaignId={}, status={}",
                 savedDonation.getId(),
                 campaign.getId(),
-                user.getId());
+                status);
 
         return toResponse(savedDonation);
     }
@@ -152,10 +210,17 @@ public class DonationServiceImpl implements DonationService {
                         ErrorCode.DONATE_NOT_FOUND,
                         "Donation not found with ID: " + donationId));
 
+        if (donation.getStatus() == DonationStatus.SUCCESSFUL) {
+            return toAdminResponse(donation);
+        }
+
         donation.setStatus(DonationStatus.SUCCESSFUL);
         donation.setConfirmedBy(admin);
         donation.setConfirmedAt(LocalDateTime.now());
         Donation savedDonation = donationRepository.save(donation);
+
+        publisher.publishDonationConfirmedEvents(savedDonation);
+        notificationService.broadcastDashboardUpdate();
 
         return toAdminResponse(savedDonation);
     }
@@ -173,6 +238,11 @@ public class DonationServiceImpl implements DonationService {
             throw new AppException(
                     ErrorCode.CAMPAIGN_NOT_IN_PROGRESS,
                     "Cannot donate to this campaign because it is currently " + campaign.getStatus());
+        }
+
+        if (campaign.getDonationMethod() == com.mgmtp.gives.enums.DonationMethod.MANUAL_QR) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                    "This campaign does not accept PayOS payments.");
         }
 
         validateMoneyAmount(request.amount());
@@ -236,7 +306,7 @@ public class DonationServiceImpl implements DonationService {
             donation.setStatus(DonationStatus.FAILED);
             donationRepository.save(donation);
             throw new AppException(ErrorCode.VALIDATION_ERROR,
-                    "Failed to create payment link. Please check your PayOS credentials or try again later. Details: " + e.getMessage());
+                    "Failed to create PayOS payment link. Please ensure the campaign creator's PayOS integration credentials are valid and active.");
         }
     }
 
@@ -280,11 +350,7 @@ public class DonationServiceImpl implements DonationService {
                         ErrorCode.DONATE_NOT_FOUND,
                         "Donation not found with ID: " + donationId));
 
-        boolean isAdmin = currentUser.getRole() == com.mgmtp.gives.enums.UserRole.ADMIN;
-        boolean isCreator = donation.getCampaign().getUser() != null &&
-                donation.getCampaign().getUser().getId().equals(currentUser.getId());
-
-        if (!isAdmin && !isCreator) {
+        if (!campaignMemberService.canManageCampaign(donation.getCampaign().getId(), currentUser)) {
             throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE,
                     "Only Campaign Admin or global ADMIN can moderate donation messages.");
         }
@@ -387,7 +453,7 @@ public class DonationServiceImpl implements DonationService {
             throw e;
         } catch (Exception e) {
             log.error("Failed to check active payment status for donation ID: {}", donationId, e);
-            throw new AppException(ErrorCode.VALIDATION_ERROR, "Failed to connect to PayOS to verify transaction: " + e.getMessage());
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Failed to connect to PayOS to verify transaction. Please check your internet connection or try again later.");
         }
     }
 
@@ -485,6 +551,133 @@ public class DonationServiceImpl implements DonationService {
                 .deliveryMethod(donation.getDeliveryMethod())
                 .createdAt(donation.getCreatedAt())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public DonationResponse confirmCampaignDonation(Long donationId, User currentUser) {
+        log.info("User {} is confirming campaign donation ID: {}", currentUser.getEmail(), donationId);
+        Donation donation = donationRepository.findById(donationId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorCode.DONATE_NOT_FOUND,
+                        "Donation not found with ID: " + donationId));
+
+        if (!campaignMemberService.canManageCampaign(donation.getCampaign().getId(), currentUser)) {
+            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE,
+                    "Only Campaign Managers or global ADMIN can confirm manual QR donations.");
+        }
+
+        if (donation.getStatus() == DonationStatus.SUCCESSFUL) {
+            return toResponse(donation);
+        }
+
+        donation.setStatus(DonationStatus.SUCCESSFUL);
+        donation.setConfirmedBy(currentUser);
+        donation.setConfirmedAt(LocalDateTime.now());
+        Donation savedDonation = donationRepository.save(donation);
+
+        publisher.publishDonationConfirmedEvents(savedDonation);
+        notificationService.broadcastDashboardUpdate();
+
+        return toResponse(savedDonation);
+    }
+
+    @Override
+    @Transactional
+    public DonationResponse rejectCampaignDonation(Long donationId, String reason, User currentUser) {
+        log.info("User {} is rejecting campaign donation ID: {} with reason: {}", currentUser.getEmail(), donationId, reason);
+        Donation donation = donationRepository.findById(donationId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorCode.DONATE_NOT_FOUND,
+                        "Donation not found with ID: " + donationId));
+
+        if (!campaignMemberService.canManageCampaign(donation.getCampaign().getId(), currentUser)) {
+            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE,
+                    "Only Campaign Managers or global ADMIN can reject manual QR donations.");
+        }
+
+        if (donation.getStatus() == DonationStatus.FAILED) {
+            return toResponse(donation);
+        }
+
+        String finalReason = (reason != null && !reason.trim().isEmpty()) ? reason.trim() : "Invalid transaction details";
+
+        donation.setStatus(DonationStatus.FAILED);
+        donation.setRejectReason(finalReason);
+        donation.setUpdatedAt(LocalDateTime.now());
+        Donation savedDonation = donationRepository.save(donation);
+
+        notificationService.broadcastDashboardUpdate();
+        sendRejectionNotifications(savedDonation, finalReason);
+
+        return toResponse(savedDonation);
+    }
+
+    private void sendRejectionNotifications(Donation savedDonation, String reason) {
+        String amountStr = formatVnd(savedDonation.getAmount());
+        String campaignTitle = savedDonation.getCampaign().getTitle();
+        String linkUrl = "/campaigns/" + savedDonation.getCampaign().getId();
+
+        // Notify the donor
+        if (savedDonation.getUser() != null) {
+            sendNotification(
+                savedDonation.getUser(),
+                "Donation Rejected",
+                String.format("Your donation of %s VND for campaign '%s' was rejected by the campaign admin. Reason: %s", amountStr, campaignTitle, reason),
+                linkUrl + "?rejectedDonationId=" + savedDonation.getId()
+            );
+        }
+    }
+
+    private void sendPendingApprovalNotification(Donation savedDonation) {
+        String amountStr = formatVnd(savedDonation.getAmount());
+        String donorName = savedDonation.isAnonymous() ? "Anonymous" : (savedDonation.getUser() != null ? savedDonation.getUser().getFullName() : "Anonymous");
+        String campaignTitle = savedDonation.getCampaign().getTitle();
+        String linkUrl = "/campaigns/" + savedDonation.getCampaign().getId() + "/approvals";
+        String message = String.format("Donor '%s' has submitted a manual donation of %s VND for your campaign '%s' and is pending your approval.", donorName, amountStr, campaignTitle);
+
+        // Notify campaign creator
+        if (savedDonation.getCampaign().getUser() != null) {
+            sendNotification(
+                savedDonation.getCampaign().getUser(),
+                "New Pending Donation",
+                message,
+                linkUrl
+            );
+        }
+
+        // Also notify all CAMPAIGN_ADMIN members (avoiding double-notifying the creator)
+        Long creatorId = savedDonation.getCampaign().getUser() != null ? savedDonation.getCampaign().getUser().getId() : null;
+        java.util.List<com.mgmtp.gives.entity.User> campaignAdmins = campaignMemberRepository.findUsersByCampaignIdAndRole(
+                savedDonation.getCampaign().getId(), com.mgmtp.gives.enums.CampaignMemberRole.CAMPAIGN_ADMIN);
+        for (com.mgmtp.gives.entity.User admin : campaignAdmins) {
+            if (!admin.getId().equals(creatorId)) {
+                sendNotification(admin, "New Pending Donation", message, linkUrl);
+            }
+        }
+    }
+
+    private String formatVnd(Long amount) {
+        if (amount == null) return "0";
+        return java.text.NumberFormat.getNumberInstance(java.util.Locale.GERMANY).format(amount);
+    }
+
+    private void sendNotification(User recipientUser, String title, String message, String linkUrl) {
+        try {
+            com.mgmtp.gives.dto.notification.NotificationRecipient recipient =
+                    new com.mgmtp.gives.dto.notification.NotificationRecipient(recipientUser.getId(), recipientUser.getEmail());
+            com.mgmtp.gives.dto.notification.CreateNotificationCommand command =
+                    com.mgmtp.gives.dto.notification.CreateNotificationCommand.builder()
+                            .recipients(java.util.Set.of(recipient))
+                            .type(com.mgmtp.gives.enums.NotificationType.DONATION)
+                            .title(title)
+                            .message(message)
+                            .linkUrl(linkUrl)
+                            .build();
+            notificationService.createNotification(command);
+        } catch (Exception e) {
+            log.error("Failed to send notification to user: {}", recipientUser.getEmail(), e);
+        }
     }
 
     private void validateMoneyAmount(Long amount) {

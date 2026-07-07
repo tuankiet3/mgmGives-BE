@@ -69,6 +69,9 @@ class DonationServiceImplTest {
     @Mock
     private org.springframework.context.ApplicationContext applicationContext;
 
+    @Mock
+    private CampaignMemberService campaignMemberService;
+
     @InjectMocks
     private DonationServiceImpl donationService;
 
@@ -287,10 +290,62 @@ class DonationServiceImplTest {
         setupMockSecurityContext(1L, UserRole.USER);
         testDonation.setStatus(DonationStatus.SUCCESSFUL);
         when(donationRepository.findById(10L)).thenReturn(Optional.of(testDonation));
-
         DonationResponse response = donationService.verifyPayOSUserTransaction(10L);
 
         assertNotNull(response);
         verifyNoInteractions(payOS);
+    }
+
+    @Test
+    void confirmCampaignDonation_Success() {
+        when(donationRepository.findById(10L)).thenReturn(Optional.of(testDonation));
+        when(campaignMemberService.canManageCampaign(1L, testUser)).thenReturn(true);
+        when(donationRepository.save(any(Donation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DonationResponse response = donationService.confirmCampaignDonation(10L, testUser);
+
+        assertNotNull(response);
+        assertEquals(DonationStatus.SUCCESSFUL, testDonation.getStatus());
+        assertEquals(testUser, testDonation.getConfirmedBy());
+        assertNotNull(testDonation.getConfirmedAt());
+        verify(publisher).publishDonationConfirmedEvents(any(Donation.class));
+        verify(notificationService).broadcastDashboardUpdate();
+    }
+
+    @Test
+    void confirmCampaignDonation_Unauthorized() {
+        when(donationRepository.findById(10L)).thenReturn(Optional.of(testDonation));
+        when(campaignMemberService.canManageCampaign(1L, testUser)).thenReturn(false);
+
+        AppException exception = assertThrows(AppException.class, () ->
+                donationService.confirmCampaignDonation(10L, testUser));
+
+        assertEquals(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE, exception.getErrorCode());
+    }
+
+    @Test
+    void rejectCampaignDonation_Success() {
+        testDonation.setAmount(100000L);
+        when(donationRepository.findById(10L)).thenReturn(Optional.of(testDonation));
+        when(campaignMemberService.canManageCampaign(1L, testUser)).thenReturn(true);
+        when(donationRepository.save(any(Donation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DonationResponse response = donationService.rejectCampaignDonation(10L, "Invalid signature", testUser);
+
+        assertNotNull(response);
+        assertEquals(DonationStatus.FAILED, testDonation.getStatus());
+        assertEquals("Invalid signature", testDonation.getRejectReason());
+        verify(notificationService).broadcastDashboardUpdate();
+    }
+
+    @Test
+    void rejectCampaignDonation_Unauthorized() {
+        when(donationRepository.findById(10L)).thenReturn(Optional.of(testDonation));
+        when(campaignMemberService.canManageCampaign(1L, testUser)).thenReturn(false);
+
+        AppException exception = assertThrows(AppException.class, () ->
+                donationService.rejectCampaignDonation(10L, "Reason", testUser));
+
+        assertEquals(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE, exception.getErrorCode());
     }
 }

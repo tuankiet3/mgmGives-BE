@@ -44,6 +44,10 @@ public class NotificationCommandFactoryImpl implements NotificationCommandFactor
                         event.donorUserId()
                 );
 
+        if (event.confirmedById() != null) {
+            recipients.removeIf(r -> r.userId().equals(event.confirmedById()));
+        }
+
         recipients.forEach(recipient -> log.info("Recipient: {}", recipient.userId()));
 
         log.info(

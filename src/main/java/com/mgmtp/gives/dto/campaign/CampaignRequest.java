@@ -2,6 +2,7 @@ package com.mgmtp.gives.dto.campaign;
 
 import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.DonationMethod;
 import jakarta.validation.constraints.*;
 import java.time.LocalDateTime;
 import java.util.Set;
@@ -19,6 +20,23 @@ public record CampaignRequest(
         LocalDateTime startDate,
         LocalDateTime endDate,
         CampaignPriority priority,
-        CampaignStatus status
+        CampaignStatus status,
+        DonationMethod donationMethod,
+        String qrImageUrl,
+        String qrBankInfo
 ) {
+    public CampaignRequest(
+            String title,
+            String description,
+            Set<Long> categories,
+            Boolean acceptsMoney,
+            Boolean acceptsGoods,
+            Long target,
+            LocalDateTime startDate,
+            LocalDateTime endDate,
+            CampaignPriority priority,
+            CampaignStatus status
+    ) {
+        this(title, description, categories, acceptsMoney, acceptsGoods, target, startDate, endDate, priority, status, DonationMethod.PAYOS, null, null);
+    }
 }

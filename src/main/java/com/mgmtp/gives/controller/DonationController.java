@@ -80,4 +80,21 @@ public class DonationController {
         DonationResponse donation = donationService.hideDonationMessage(id, hidden, userDetails.getUser());
         return ApiResponse.success(donation, "Message status updated successfully");
     }
+
+    @PatchMapping("/{id}/confirm")
+    @Operation(summary = "Confirm a donation", description = "Allows the campaign creator or global admin to confirm a pending manual QR donation.")
+    public ApiResponse<DonationResponse> confirmDonation(@PathVariable Long id,
+                                                         @AuthenticationPrincipal CustomUserDetails userDetails) {
+        DonationResponse donation = donationService.confirmCampaignDonation(id, userDetails.getUser());
+        return ApiResponse.success(donation, "Donation confirmed successfully");
+    }
+
+    @PatchMapping("/{id}/reject")
+    @Operation(summary = "Reject a donation", description = "Allows the campaign creator or global admin to reject a pending manual QR donation with a reason.")
+    public ApiResponse<DonationResponse> rejectDonation(@PathVariable Long id,
+                                                        @RequestParam(required = false) String reason,
+                                                        @AuthenticationPrincipal CustomUserDetails userDetails) {
+        DonationResponse donation = donationService.rejectCampaignDonation(id, reason, userDetails.getUser());
+        return ApiResponse.success(donation, "Donation rejected successfully");
+    }
 }

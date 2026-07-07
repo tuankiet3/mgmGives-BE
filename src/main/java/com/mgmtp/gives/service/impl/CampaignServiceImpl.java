@@ -15,6 +15,10 @@ import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
 import com.mgmtp.gives.mapper.CampaignMapper;
 import com.mgmtp.gives.enums.CampaignMemberRole;
+import com.mgmtp.gives.enums.DonationMethod;
+import com.mgmtp.gives.entity.CampaignQrMedia;
+import com.mgmtp.gives.repository.CampaignQrMediaRepository;
+import com.mgmtp.gives.repository.UserPayOSConnectionRepository;
 import com.mgmtp.gives.notification.publisher.CampaignNotificationPublisher;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
@@ -62,6 +66,8 @@ public class CampaignServiceImpl implements CampaignService {
     private final CampaignMemberRepository campaignMemberRepository;
     private final CampaignMemberService campaignMemberService;
     private final DonationRepository donationRepository;
+    private final CampaignQrMediaRepository campaignQrMediaRepository;
+    private final UserPayOSConnectionRepository userPayOSConnectionRepository;
     private final CampaignNotificationPublisher campaignNotificationPublisher;
 
     @Value("${app.media.upload-dir}")
@@ -104,16 +110,32 @@ public class CampaignServiceImpl implements CampaignService {
                 .priority(request.priority() != null ? request.priority() : CampaignPriority.NORMAL)
                 .acceptsMoney(request.acceptsMoney() != null ? request.acceptsMoney() : true)
                 .acceptsGoods(request.acceptsGoods() != null ? request.acceptsGoods() : true)
+                .donationMethod(request.donationMethod() != null ? request.donationMethod() : DonationMethod.PAYOS)
+                .qrBankInfo(request.qrBankInfo())
                 .status(status)
                 .user(currentUser)
                 .categories(categories)
                 .build();
 
         Campaign saved = campaignRepository.save(campaign);
+        handleQrMediaUpsert(saved, request.qrImageUrl());
         assert currentUser != null;
         log.info("Campaign created: id={}, title={}, userId={}", saved.getId(), saved.getTitle(), currentUser.getId());
         notificationService.broadcastDashboardUpdate();
         return saved;
+    }
+
+    private void handleQrMediaUpsert(Campaign campaign, String qrImageUrl) {
+        if (qrImageUrl != null && !qrImageUrl.isBlank()) {
+            CampaignQrMedia qrMedia = campaignQrMediaRepository
+                    .findByCampaignId(campaign.getId())
+                    .orElseGet(() -> CampaignQrMedia.builder().campaign(campaign).build());
+            qrMedia.setUrl(qrImageUrl.trim());
+            campaignQrMediaRepository.save(qrMedia);
+        } else {
+            campaignQrMediaRepository.findByCampaignId(campaign.getId())
+                    .ifPresent(campaignQrMediaRepository::delete);
+        }
     }
 
     @Override
@@ -224,8 +246,11 @@ public class CampaignServiceImpl implements CampaignService {
         campaign.setAcceptsGoods(request.acceptsGoods() != null ? request.acceptsGoods() : campaign.isAcceptsGoods());
         campaign.setCategories(categories);
         campaign.setStatus(newStatus);
+        campaign.setDonationMethod(request.donationMethod() != null ? request.donationMethod() : campaign.getDonationMethod());
+        campaign.setQrBankInfo(request.qrBankInfo());
 
         Campaign saved = campaignRepository.save(campaign);
+        handleQrMediaUpsert(saved, request.qrImageUrl());
         log.info("Campaign updated: id={}, status={}, userId={}", saved.getId(), saved.getStatus(),
                 currentUser.getId());
         notificationService.broadcastDashboardUpdate();
@@ -375,6 +400,13 @@ public class CampaignServiceImpl implements CampaignService {
             log.warn("Pending campaign validation failed: target amount <= 0. target={}", request.target());
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Target amount must be positive");
         }
+        if (money) {
+            DonationMethod method = request.donationMethod() != null ? request.donationMethod() : DonationMethod.PAYOS;
+            if ((method == DonationMethod.MANUAL_QR || method == DonationMethod.HYBRID)
+                    && (request.qrImageUrl() == null || request.qrImageUrl().isBlank())) {
+                throw new AppException(ErrorCode.VALIDATION_ERROR, "A QR image is required for Manual QR or Hybrid donation methods.");
+            }
+        }
         if (request.startDate() == null) {
             log.warn("Pending campaign validation failed: start date is null");
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Start date is required for submission");
@@ -478,6 +510,19 @@ public class CampaignServiceImpl implements CampaignService {
             response.setIsFollowed(false);
         }
 
+        // 5. Donation Config fields
+        response.setDonationMethod(campaign.getDonationMethod());
+        response.setQrBankInfo(campaign.getQrBankInfo());
+        String qrImageUrl = campaignQrMediaRepository
+                .findByCampaignId(campaign.getId())
+                .map(CampaignQrMedia::getUrl)
+                .orElse(null);
+        response.setQrImageUrl(qrImageUrl);
+
+        boolean creatorHasPayOS = campaign.getUser() != null && userPayOSConnectionRepository
+                .existsByUserId(campaign.getUser().getId());
+        response.setCreatorHasPayOS(creatorHasPayOS);
+
         return response;
     }
 
@@ -495,6 +540,26 @@ public class CampaignServiceImpl implements CampaignService {
                         m -> m.getCampaign().getId(),
                         CampaignMedia::getUrl,
                         (existing, replacement) -> existing));
+
+        // 1b. Batch fetch QR images
+        List<CampaignQrMedia> qrMedias = campaignQrMediaRepository.findByCampaignIdIn(campaignIds);
+        java.util.Map<Long, String> qrImageMap = qrMedias.stream()
+                .collect(Collectors.toMap(
+                        m -> m.getCampaign().getId(),
+                        CampaignQrMedia::getUrl,
+                        (existing, replacement) -> existing));
+
+        // 1c. Batch fetch creator PayOS statuses
+        List<Long> creatorIds = campaigns.stream()
+                .map(Campaign::getUser)
+                .filter(java.util.Objects::nonNull)
+                .map(User::getId)
+                .distinct()
+                .toList();
+        java.util.Set<Long> creatorsWithPayOS = creatorIds.isEmpty() ? java.util.Collections.emptySet()
+                : userPayOSConnectionRepository.findByUserIdIn(creatorIds).stream()
+                        .map(conn -> conn.getUser().getId())
+                        .collect(Collectors.toSet());
 
         // 2. Map and enrich each campaign
         boolean isAdmin = currentUser != null && currentUser.getRole() == UserRole.ADMIN;
@@ -519,6 +584,13 @@ public class CampaignServiceImpl implements CampaignService {
                 response.setIsJoined(false);
                 response.setIsFollowed(false);
             }
+
+            response.setDonationMethod(campaign.getDonationMethod());
+            response.setQrBankInfo(campaign.getQrBankInfo());
+            response.setQrImageUrl(qrImageMap.get(campaign.getId()));
+            boolean hasPayOS = campaign.getUser() != null && creatorsWithPayOS.contains(campaign.getUser().getId());
+            response.setCreatorHasPayOS(hasPayOS);
+
             return response;
         }).toList();
     }

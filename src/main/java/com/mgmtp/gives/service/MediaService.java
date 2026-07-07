@@ -26,4 +26,6 @@ public interface MediaService {
     String uploadAvatar(MultipartFile file, User currentUser);
 
     void deleteAvatar(User currentUser);
+
+    String uploadCampaignQr(MultipartFile file, User currentUser);
 }

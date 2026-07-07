@@ -63,6 +63,16 @@ public class MediaController {
         return ApiResponse.success(filename, "Avatar uploaded successfully");
     }
 
+    @PostMapping(value = "/upload/campaign-qr", consumes = MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Upload campaign QR image", description = "Uploads an image file and returns the stored filename.")
+    public ApiResponse<String> uploadCampaignQr(
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        String filename = mediaService.uploadCampaignQr(file, userDetails.getUser());
+        return ApiResponse.success(filename, "Campaign QR uploaded successfully");
+    }
+
     @PatchMapping("/{id}/campaign/restore")
     @Operation(summary = "Restore campaign media", description = "Restores a soft-deleted campaign media record. Must be within 14 days of deletion.")
     public ApiResponse<CampaignMediaResponse> restoreCampaignMedia(@PathVariable Long id) {

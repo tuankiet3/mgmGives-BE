@@ -13,4 +13,6 @@ public interface UserPayOSConnectionRepository extends JpaRepository<UserPayOSCo
     boolean existsByUserId(Long userId);
 
     void deleteByUserId(Long userId);
+
+    java.util.List<UserPayOSConnection> findByUserIdIn(java.util.List<Long> userIds);
 }

@@ -94,10 +94,7 @@ public class AuthController {
     }
 
     @GetMapping("/refresh")
-    @Operation(
-            summary = "Refresh access token",
-            description = "Generates a new access token using the refresh token from the HttpOnly cookie."
-    )
+    @Operation(summary = "Refresh access token", description = "Generates a new access token using the refresh token from the HttpOnly cookie.")
     public ResponseEntity<Void> refresh(HttpServletRequest request, HttpServletResponse response) {
         refreshTokenService.refresh(request, response);
         return ResponseEntity.noContent().build();
@@ -108,7 +105,8 @@ public class AuthController {
     public ApiResponse<UserInfoResponse> updateProfile(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @Valid @RequestBody UpdateProfileRequest request) {
-        return ApiResponse.success(service.updateProfile(userDetails.getUsername(), request), "Profile updated successfully");
+        return ApiResponse.success(service.updateProfile(userDetails.getUsername(), request),
+                "Profile updated successfully");
     }
 
     @PutMapping("/change-password")

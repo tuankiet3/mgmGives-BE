@@ -32,4 +32,8 @@ public interface DonationService {
     DonationResponse verifyPayOSUserTransaction(Long donationId);
 
     DonationResponse hideDonationMessage(Long donationId, boolean hidden, User currentUser);
+
+    DonationResponse confirmCampaignDonation(Long donationId, User currentUser);
+
+    DonationResponse rejectCampaignDonation(Long donationId, String reason, User currentUser);
 }

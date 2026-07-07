@@ -4,7 +4,6 @@ import com.mgmtp.gives.dto.campaign.CampaignResponse;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.DonationStatus;
-import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.DonationRepository;
 import org.mapstruct.Context;
@@ -38,6 +37,8 @@ public abstract class CampaignMapper {
     @Mapping(target = "resultPosted", source = "resultPosted")
     @Mapping(target = "resultPublishedAt", source = "resultPublishedAt")
     @Mapping(target = "resultPublishedByName", expression = "java(campaign.getResultPublishedBy() != null ? campaign.getResultPublishedBy().getFullName() : null)")
+    @Mapping(target = "qrImageUrl", ignore = true)
+    @Mapping(target = "creatorHasPayOS", ignore = true)
     public abstract CampaignResponse toResponse(Campaign campaign, @Context Long currentUserId, @Context boolean isSystemAdmin);
 
     protected Long calculateCurrentRaised(Campaign campaign) {

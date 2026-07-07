@@ -12,9 +12,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private static final String[] ALLOWED_ORIGINS = {
             "http://localhost:3000",
+            "http://localhost:5173",
             "http://mgm-gives.mgm-edv.de:3000",
             "http://mgm-gives.mgm-edv.de:3001",
-            "http://mgm-gives.mgm-edv.de:3002"
+            "http://mgm-gives.mgm-edv.de:3002",
+            "http://mgm-gives.mgm-edv.de"
     };
 
     @Override

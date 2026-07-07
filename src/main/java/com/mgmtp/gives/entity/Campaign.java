@@ -2,6 +2,7 @@ package com.mgmtp.gives.entity;
 
 import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.DonationMethod;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -36,6 +37,18 @@ public class Campaign extends BaseEntity {
     @Builder.Default
     @Column(name = "accepts_goods")
     private boolean acceptsGoods = true;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "donation_method", columnDefinition = "donation_method")
+    @Builder.Default
+    private DonationMethod donationMethod = DonationMethod.PAYOS;
+
+    @Column(name = "qr_bank_info", columnDefinition = "TEXT")
+    private String qrBankInfo;
+
+    @OneToOne(mappedBy = "campaign", cascade = CascadeType.ALL, orphanRemoval = true)
+    private CampaignQrMedia qrMedia;
 
     @ManyToOne
     @JoinColumn(name = "user_id")

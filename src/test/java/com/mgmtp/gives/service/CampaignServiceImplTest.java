@@ -20,6 +20,8 @@ import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.DonationRepository;
 import com.mgmtp.gives.service.impl.CampaignServiceImpl;
 import com.mgmtp.gives.service.NotificationService;
+import com.mgmtp.gives.repository.CampaignQrMediaRepository;
+import com.mgmtp.gives.repository.UserPayOSConnectionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -68,6 +70,12 @@ class CampaignServiceImplTest {
 
     @Mock
     private DonationRepository donationRepository;
+ 
+    @Mock
+    private CampaignQrMediaRepository campaignQrMediaRepository;
+
+    @Mock
+    private UserPayOSConnectionRepository userPayOSConnectionRepository;
 
     @InjectMocks
     private CampaignServiceImpl campaignService;
@@ -682,5 +690,59 @@ class CampaignServiceImplTest {
         when(donationRepository.countDistinctDonorsByCampaignIdAndStatusSuccessful(1L)).thenReturn(10L);
         long result = campaignService.getDonorsCount(1L);
         assertEquals(10L, result);
+    }
+
+    @Test
+    void createCampaign_ManualQR_MissingQrImage_ThrowsException() {
+        CampaignRequest request = new CampaignRequest(
+                "Water Project",
+                "Description",
+                Set.of(10L),
+                true,
+                true,
+                5000L,
+                LocalDateTime.now().plusDays(1),
+                LocalDateTime.now().plusDays(10),
+                CampaignPriority.HIGH,
+                CampaignStatus.PENDING,
+                com.mgmtp.gives.enums.DonationMethod.MANUAL_QR,
+                null,
+                "Bank Info"
+        );
+
+        assertThrows(AppException.class, () -> campaignService.createCampaign(request, testUser));
+    }
+
+    @Test
+    void createCampaign_ManualQR_WithQrImage_Success() {
+        CampaignRequest request = new CampaignRequest(
+                "Water Project",
+                "Description",
+                Set.of(10L),
+                true,
+                true,
+                5000L,
+                LocalDateTime.now().plusDays(1),
+                LocalDateTime.now().plusDays(10),
+                CampaignPriority.HIGH,
+                CampaignStatus.PENDING,
+                com.mgmtp.gives.enums.DonationMethod.MANUAL_QR,
+                "http://example.com/qr.png",
+                "Bank Info"
+        );
+
+        when(categoryRepository.findAllById(anySet())).thenReturn(List.of(testCategory));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(invocation -> {
+            Campaign saved = invocation.getArgument(0);
+            saved.setId(100L);
+            return saved;
+        });
+
+        Campaign result = campaignService.createCampaign(request, testUser);
+
+        assertNotNull(result);
+        assertEquals(com.mgmtp.gives.enums.DonationMethod.MANUAL_QR, result.getDonationMethod());
+        assertEquals("Bank Info", result.getQrBankInfo());
+        verify(campaignQrMediaRepository, times(1)).save(any(com.mgmtp.gives.entity.CampaignQrMedia.class));
     }
 }

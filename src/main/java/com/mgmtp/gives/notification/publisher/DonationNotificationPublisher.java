@@ -41,7 +41,8 @@ public class DonationNotificationPublisher {
                         donation.isAnonymous(),
                         donation.getType(),
                         donation.getAmount(),
-                        donation.getDetail()
+                        donation.getDetail(),
+                        donation.getConfirmedBy() != null ? donation.getConfirmedBy().getId() : null
                 )
         );
     }

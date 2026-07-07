@@ -11,6 +11,7 @@ public record CampaignDonationConfirmedEvent(
         boolean anonymous,
         DonationType donationType,
         Long amount,
-        String goodsDescription
+        String goodsDescription,
+        Long confirmedById
 ) {
 }

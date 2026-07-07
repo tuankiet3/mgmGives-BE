@@ -89,6 +89,11 @@ public class PayOSIntegrationServiceImpl implements PayOSIntegrationService {
 
     private void verifyPayOSCredentials(PayOSConnectionRequest request) {
         try {
+            if (request.clientId() == null || request.clientId().trim().isEmpty() ||
+                request.apiKey() == null || request.apiKey().trim().isEmpty() ||
+                request.checksumKey() == null || request.checksumKey().trim().isEmpty()) {
+                throw new IllegalArgumentException("Client ID, API Key, and Checksum Key must not be empty.");
+            }
             PayOS testPayOS = new PayOS(request.clientId().trim(), request.apiKey().trim(), request.checksumKey().trim());
             testPayOS.paymentRequests().get(1L);
             log.info("Credentials verification: Connection verified (found payment link).");
@@ -103,6 +108,7 @@ public class PayOSIntegrationServiceImpl implements PayOSIntegrationService {
                 log.info("Credentials verification: Connection verified (Payment link not found is expected).");
                 return;
             }
+            log.error("PayOS Credentials validation failed", e);
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Invalid PayOS credentials or service unreachable. Details: " + msg);
         }
     }

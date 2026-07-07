@@ -41,6 +41,9 @@ public class DonationScheduledTasks {
         if (!pendingDonations.isEmpty()) {
             log.info("Found {} PENDING PayOS donations to verify.", pendingDonations.size());
             for (Donation donation : pendingDonations) {
+                if (donation.getCampaign().getDonationMethod() == com.mgmtp.gives.enums.DonationMethod.MANUAL_QR) {
+                    continue; // Skip manual QR campaigns
+                }
                 try {
                     String paymentLinkId = donation.getTransactionId();
                     PayOS activePayOS = payOSClientProvider.getClientForCampaign(donation.getCampaign());
@@ -81,6 +84,9 @@ public class DonationScheduledTasks {
             if (!oldPendingDonations.isEmpty()) {
                 log.info("Found {} old PENDING PayOS donations to expire.", oldPendingDonations.size());
                 for (Donation donation : oldPendingDonations) {
+                    if (donation.getCampaign().getDonationMethod() == com.mgmtp.gives.enums.DonationMethod.MANUAL_QR) {
+                        continue; // Skip manual QR campaigns from auto-expiring
+                    }
                     log.info("Auto-expiring stale PENDING donation ID: {}", donation.getId());
                     donation.setStatus(DonationStatus.FAILED);
                     donation.setUpdatedAt(LocalDateTime.now());
