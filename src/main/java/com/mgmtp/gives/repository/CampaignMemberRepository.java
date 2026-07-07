@@ -4,6 +4,8 @@ import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.CampaignMember;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignMemberRole;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -33,6 +35,21 @@ public interface CampaignMemberRepository extends JpaRepository<CampaignMember, 
     boolean existsByCampaignIdAndUserIdAndRoleInCampaign(Long campaignId, Long userId, CampaignMemberRole role);
 
     long countByCampaignIdAndRoleInCampaign(Long campaignId, CampaignMemberRole role);
+
+    @Query(
+            value = """
+                    SELECT cm
+                    FROM CampaignMember cm
+                    JOIN FETCH cm.campaign
+                    WHERE cm.user.id = :userId
+                    """,
+            countQuery = """
+                    SELECT COUNT(cm)
+                    FROM CampaignMember cm
+                    WHERE cm.user.id = :userId
+                    """
+    )
+    Page<CampaignMember> findAllByUserIdWithCampaign(@Param("userId") Long userId, Pageable pageable);
 
     @Query("""
             SELECT new com.mgmtp.gives.dto.notification.NotificationRecipient(

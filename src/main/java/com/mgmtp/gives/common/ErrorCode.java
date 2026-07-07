@@ -46,6 +46,7 @@ public enum ErrorCode {
     GEMINI_API_ERROR(2014, "Failed to generate result draft with AI", HttpStatus.INTERNAL_SERVER_ERROR),
     INVALID_CAMPAIGN_STATUS_FOR_REVIEW(2015, "Campaign is not in a reviewable state", HttpStatus.BAD_REQUEST),
     UNAUTHORIZED_ANNOUNCEMENT_ACCESS(2016, "You do not have permission to manage announcements for this campaign", HttpStatus.FORBIDDEN),
+    CAMPAIGN_ADMIN_CANNOT_LEAVE(2018, "Campaign admins cannot leave the campaign", HttpStatus.FORBIDDEN),
     ANNOUNCEMENT_NOT_FOUND(2017, "Announcement not found", HttpStatus.NOT_FOUND),
 
     CAMPAIGN_MEDIA_NOT_FOUND(3001, "Campaign media not found", HttpStatus.NOT_FOUND),

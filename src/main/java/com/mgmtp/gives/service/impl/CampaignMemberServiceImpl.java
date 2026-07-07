@@ -1,7 +1,9 @@
 package com.mgmtp.gives.service.impl;
 
 import com.mgmtp.gives.common.ErrorCode;
+import com.mgmtp.gives.common.PageResponse;
 import com.mgmtp.gives.dto.campaign_member.CampaignMemberResponse;
+import com.mgmtp.gives.dto.campaign_member.JoinedCampaignResponse;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.CampaignMember;
 import com.mgmtp.gives.entity.User;
@@ -9,6 +11,7 @@ import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.exception.AppException;
+import com.mgmtp.gives.mapper.CampaignMemberMapper;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.service.CampaignFollowerService;
@@ -17,6 +20,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +33,7 @@ public class CampaignMemberServiceImpl implements CampaignMemberService {
     private final CampaignMemberRepository campaignMemberRepo;
     private final CampaignRepository campaignRepo;
     private final CampaignFollowerService campaignFollowerService;
+    private final CampaignMemberMapper campaignMemberMapper;
 
     @Transactional @Override
     public CampaignMemberResponse joinCampaign(User user, Long campaignId) {
@@ -82,8 +88,21 @@ public class CampaignMemberServiceImpl implements CampaignMemberService {
         );
     }
 
+    @Transactional(readOnly = true) @Override
+    public PageResponse<JoinedCampaignResponse> getJoinedCampaigns(Long userId, Pageable pageable) {
+        Page<CampaignMember> page = campaignMemberRepo.findAllByUserIdWithCampaign(userId, pageable);
+        Page<JoinedCampaignResponse> response = page.map(campaignMemberMapper::toJoinedResponse);
+        return PageResponse.of(response, response.getContent());
+    }
+
     @Transactional @Override
     public void unjoinCampaign(User user, Long campaignId) {
+        boolean isAdmin = campaignMemberRepo.existsByCampaignIdAndUserIdAndRoleInCampaign(
+                campaignId, user.getId(), CampaignMemberRole.CAMPAIGN_ADMIN);
+        if (isAdmin) {
+            throw new AppException(ErrorCode.CAMPAIGN_ADMIN_CANNOT_LEAVE);
+        }
+
         long deleted = campaignMemberRepo.deleteByCampaignIdAndUserId(campaignId, user.getId());
 
         if (deleted > 0) {
