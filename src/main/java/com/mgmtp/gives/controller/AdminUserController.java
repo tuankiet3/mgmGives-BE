@@ -2,6 +2,7 @@ package com.mgmtp.gives.controller;
 
 import com.mgmtp.gives.common.ApiResponse;
 import com.mgmtp.gives.common.PageResponse;
+import com.mgmtp.gives.dto.user.AdminBulkImportUserResponse;
 import com.mgmtp.gives.dto.user.AdminCreateUserRequest;
 import com.mgmtp.gives.dto.user.AdminUpdateUserRequest;
 import com.mgmtp.gives.dto.user.AdminUserResponse;
@@ -16,6 +17,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -61,6 +64,18 @@ public class AdminUserController {
     public ApiResponse<?> createUser(@Valid @RequestBody AdminCreateUserRequest request) {
         AdminUserResponse user = adminUserService.createUser(request);
         return ApiResponse.success(user, "User Created Successfully");
+    }
+
+    @PostMapping(value = "/import-csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+            summary = "Import users from CSV",
+            description = "Creates users from a CSV file with headers: email,fullName,phone,password,role,status."
+    )
+    public ApiResponse<?> importUsersFromCsv(
+            @Parameter(description = "CSV file containing users to create", required = true)
+            @RequestParam("file") MultipartFile file) {
+        AdminBulkImportUserResponse result = adminUserService.importUsersFromCsv(file);
+        return ApiResponse.success(result, "Users Imported Successfully");
     }
 
     @PutMapping("/{id}")

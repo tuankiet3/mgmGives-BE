@@ -160,6 +160,13 @@
             <version>20240325.1</version>
         </dependency>
 
+        <!-- CSV parsing -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>1.10.0</version>
+        </dependency>
+
         <!-- PayOS Java SDK -->
         <dependency>
             <groupId>vn.payos</groupId>
