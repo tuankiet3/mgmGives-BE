@@ -100,16 +100,20 @@ public class PayOSIntegrationServiceImpl implements PayOSIntegrationService {
         } catch (Exception e) {
             String msg = e.getMessage();
             log.info("Credentials check result message: {}", msg);
+            // PayOS returns a "not found" error for order ID 1 when credentials are valid —
             if (msg != null && (
                     msg.contains("Không tìm thấy") ||
+                    msg.contains("Mã thanh toán không tồn tại") ||
                     msg.contains("Payment link not found") ||
+                    msg.contains("Payment not found") ||
                     msg.contains("20")
             )) {
-                log.info("Credentials verification: Connection verified (Payment link not found is expected).");
+                log.info("Credentials verification: Connection verified (payment not found is expected for test order ID).");
                 return;
             }
-            log.error("PayOS Credentials validation failed", e);
-            throw new AppException(ErrorCode.VALIDATION_ERROR, "Invalid PayOS credentials or service unreachable. Details: " + msg);
+            log.error("PayOS credentials validation failed: {}", msg, e);
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                    "Invalid PayOS credentials or service unreachable. Please double-check your Client ID, API Key, and Checksum Key.");
         }
     }
 }
