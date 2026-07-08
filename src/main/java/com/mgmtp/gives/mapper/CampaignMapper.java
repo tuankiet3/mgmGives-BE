@@ -3,7 +3,6 @@ package com.mgmtp.gives.mapper;
 import com.mgmtp.gives.dto.campaign.CampaignResponse;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.enums.CampaignMemberRole;
-import com.mgmtp.gives.enums.DonationStatus;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.DonationRepository;
 import org.mapstruct.Context;
@@ -39,18 +38,21 @@ public abstract class CampaignMapper {
     @Mapping(target = "resultPublishedByName", expression = "java(campaign.getResultPublishedBy() != null ? campaign.getResultPublishedBy().getFullName() : null)")
     @Mapping(target = "qrImageUrl", ignore = true)
     @Mapping(target = "creatorHasPayOS", ignore = true)
-    public abstract CampaignResponse toResponse(Campaign campaign, @Context Long currentUserId, @Context boolean isSystemAdmin);
+    public abstract CampaignResponse toResponse(Campaign campaign, @Context Long currentUserId,
+            @Context boolean isSystemAdmin);
 
     protected Long calculateCurrentRaised(Campaign campaign) {
         if (campaign == null || campaign.getId() == null) {
             return 0L;
         }
-        return donationRepository.sumAmountByCampaignIdAndStatusNotFailed(campaign.getId(), DonationStatus.FAILED);
+        return donationRepository.sumConfirmedAmountByCampaignId(campaign.getId());
     }
 
     protected boolean resolveIsCampaignAdmin(Campaign campaign, Long currentUserId, boolean isSystemAdmin) {
-        if (isSystemAdmin) return true;
-        if (currentUserId == null || campaign == null || campaign.getId() == null) return false;
+        if (isSystemAdmin)
+            return true;
+        if (currentUserId == null || campaign == null || campaign.getId() == null)
+            return false;
         return campaignMemberRepository.existsByCampaignIdAndUserIdAndRoleInCampaign(
                 campaign.getId(), currentUserId, CampaignMemberRole.CAMPAIGN_ADMIN);
     }

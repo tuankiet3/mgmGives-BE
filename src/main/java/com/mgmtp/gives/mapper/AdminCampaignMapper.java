@@ -4,7 +4,7 @@ import com.mgmtp.gives.dto.campaign.AdminCampaignResponse;
 import com.mgmtp.gives.dto.campaign.CampaignOwnerResponse;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.repository.DonationRepository;
-import com.mgmtp.gives.enums.DonationStatus;
+
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;
@@ -35,6 +35,6 @@ public abstract class AdminCampaignMapper {
         if (campaign == null || campaign.getId() == null) {
             return 0L;
         }
-        return donationRepository.sumAmountByCampaignIdAndStatusNotFailed(campaign.getId(), DonationStatus.FAILED);
+        return donationRepository.sumConfirmedAmountByCampaignId(campaign.getId());
     }
 }
