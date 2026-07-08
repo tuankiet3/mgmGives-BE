@@ -29,5 +29,9 @@ public interface CampaignMediaRepository extends JpaRepository<CampaignMedia, Lo
     List<CampaignMedia> findCoverImagesByCampaignIds(@Param("campaignIds") List<Long> campaignIds);
     Optional<CampaignMedia> findByUrl(String url);
 
+    List<CampaignMedia> findByAnnouncementIdAndDeletedAtIsNullOrderByDisplayOrderAscIdAsc(Long announcementId);
+
+    List<CampaignMedia> findByAnnouncementIdInAndDeletedAtIsNullOrderByDisplayOrderAscIdAsc(List<Long> announcementIds);
+
     List<CampaignMedia> findByDeletedAtNotNullAndDeletedAtBefore(LocalDateTime cutoff);
 }

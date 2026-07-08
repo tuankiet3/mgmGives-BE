@@ -2,6 +2,7 @@ package com.mgmtp.gives.dto.announcement;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.List;
 
 public record CreateAnnouncementRequest(
         @NotBlank(message = "Title is required")
@@ -12,6 +13,8 @@ public record CreateAnnouncementRequest(
         @Size(min = 1, max = 5000, message = "Content must be between 1 and 5000 characters")
         String content,
 
-        AudienceFilter audienceFilter
+        AudienceFilter audienceFilter,
+
+        List<Long> mediaIds
 ) {
 }

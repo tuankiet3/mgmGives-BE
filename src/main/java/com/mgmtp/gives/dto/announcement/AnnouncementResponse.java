@@ -1,6 +1,8 @@
 package com.mgmtp.gives.dto.announcement;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import com.mgmtp.gives.dto.campaign.CampaignMediaResponse;
 
 public record AnnouncementResponse(
         Long id,
@@ -9,7 +11,8 @@ public record AnnouncementResponse(
         String content,
         UserSummary createdBy,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        List<CampaignMediaResponse> media
 ) {
     public record UserSummary(
             Long id,

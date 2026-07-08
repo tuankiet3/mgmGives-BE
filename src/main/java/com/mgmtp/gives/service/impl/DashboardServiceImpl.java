@@ -9,7 +9,6 @@ import com.mgmtp.gives.entity.Donation;
 import com.mgmtp.gives.entity.Notification;
 import com.mgmtp.gives.entity.Announcement;
 import com.mgmtp.gives.entity.User;
-import com.mgmtp.gives.enums.AnnouncementStatus;
 import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.DonationType;
 import com.mgmtp.gives.enums.UserRole;
@@ -124,7 +123,7 @@ public class DashboardServiceImpl implements DashboardService {
         }
 
         // Fetch published announcements
-        List<Announcement> announcements = announcementRepository.findByStatusOrderByPublishedAtDesc(AnnouncementStatus.PUBLISHED);
+        List<Announcement> announcements = announcementRepository.findByOrderByPublishedAtDesc();
         for (Announcement a : announcements) {
             activities.add(ActivityDTO.builder()
                     .id("ANN-" + a.getId())
