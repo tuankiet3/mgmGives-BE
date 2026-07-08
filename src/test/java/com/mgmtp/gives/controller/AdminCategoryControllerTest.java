@@ -1,6 +1,7 @@
 package com.mgmtp.gives.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mgmtp.gives.common.MailProps;
 import com.mgmtp.gives.config.SecurityConfig;
 import com.mgmtp.gives.dto.category.AdminCategoryResponse;
 import com.mgmtp.gives.dto.category.AdminCreateCategoryRequest;
@@ -9,11 +10,7 @@ import com.mgmtp.gives.dto.category.CategoryDeleteCheckResponse;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.enums.UserStatus;
-import com.mgmtp.gives.security.CustomUserDetails;
-import com.mgmtp.gives.security.CustomUserDetailsService;
-import com.mgmtp.gives.security.JwtAuthenticationFilter;
-import com.mgmtp.gives.security.JwtService;
-import com.mgmtp.gives.security.JwtAuthenticationEntryPoint;
+import com.mgmtp.gives.security.*;
 import com.mgmtp.gives.service.AdminCategoryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +38,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(AdminCategoryController.class)
 @Import({SecurityConfig.class, JwtAuthenticationFilter.class, JwtAuthenticationEntryPoint.class})
 class AdminCategoryControllerTest {
+
+    @MockitoBean
+    private OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+
+    @MockitoBean
+    private MailProps mailProps;
 
     @Autowired
     private MockMvc mockMvc;

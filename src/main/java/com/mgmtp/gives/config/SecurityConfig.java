@@ -1,7 +1,9 @@
 package com.mgmtp.gives.config;
 
+import com.mgmtp.gives.common.MailProps;
 import com.mgmtp.gives.security.JwtAuthenticationFilter;
 import com.mgmtp.gives.security.JwtAuthenticationEntryPoint;
+import com.mgmtp.gives.security.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,6 +30,8 @@ import java.util.List;
 public class SecurityConfig {
     private final JwtAuthenticationFilter jwtFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+    private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+    private final MailProps mailProps;
     private static final String[] PUBLIC_ENDPOINTS = {
             "/api/auth/register",
             "/api/auth/login",
@@ -35,6 +39,8 @@ public class SecurityConfig {
             "/api/auth/forgot-password",
             "/api/auth/reset-password",
             "/api/auth/refresh",
+            "/oauth2/**",
+            "/login/oauth2/**",
             "/api/webex/oauth/callback",
             "/api/integrations/webex/oauth/callback",
             "/v3/api-docs/**",
@@ -60,6 +66,11 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(jwtAuthenticationEntryPoint))
+                .oauth2Login(oauth2 -> oauth2
+                        .successHandler(oAuth2LoginSuccessHandler)
+                        .failureHandler((request, response, exception) ->
+                                response.sendRedirect(mailProps.getFrontendUrl() + "/login?oauthError=true"))
+                )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/media/**").permitAll()
