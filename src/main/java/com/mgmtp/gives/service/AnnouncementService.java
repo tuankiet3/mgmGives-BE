@@ -27,5 +27,5 @@ public interface AnnouncementService {
 
     String sanitizeContent(String content);
 
-    Set<NotificationRecipient> resolveAudience(Campaign campaign, AudienceFilter filter);
+    Set<NotificationRecipient> resolveAudience(Campaign campaign, AudienceFilter filter, User publisher);
 }

@@ -25,6 +25,7 @@ import com.mgmtp.gives.repository.DonationRepository;
 import com.mgmtp.gives.service.AnnouncementService;
 import com.mgmtp.gives.service.NotificationService;
 import com.mgmtp.gives.util.HtmlSanitizerUtil;
+import org.jsoup.Jsoup;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
@@ -241,7 +242,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
 
     @Override
     @Transactional(readOnly = true)
-    public Set<NotificationRecipient> resolveAudience(Campaign campaign, AudienceFilter filter) {
+    public Set<NotificationRecipient> resolveAudience(Campaign campaign, AudienceFilter filter, User publisher) {
         AudienceFilter effectiveFilter = filter == null ? new AudienceFilter(true, true, true) : filter;
         boolean includeAll = effectiveFilter.shouldIncludeAll();
         Map<Long, NotificationRecipient> recipients = new LinkedHashMap<>();
@@ -259,6 +260,10 @@ public class AnnouncementServiceImpl implements AnnouncementService {
         if (includeAll || Boolean.TRUE.equals(effectiveFilter.includeDonors())) {
             donationRepository.findDonorRecipientsByCampaignId(campaign.getId())
                     .forEach(recipient -> recipients.putIfAbsent(recipient.userId(), recipient));
+        }
+
+        if (publisher != null) {
+            recipients.remove(publisher.getId());
         }
 
         log.info("Resolved announcement audience: campaignId={}, recipientCount={}",
@@ -296,13 +301,30 @@ public class AnnouncementServiceImpl implements AnnouncementService {
         });
     }
 
+    private String getPlainTextSnippet(String html) {
+        if (html == null) {
+            return "";
+        }
+        String text = Jsoup.parse(html).text();
+        if (text.length() > 120) {
+            return text.substring(0, 117) + "...";
+        }
+        return text;
+    }
+
     private void sendAnnouncementNotifications(Announcement announcement, AudienceFilter filter) {
-        Set<NotificationRecipient> recipients = resolveAudience(announcement.getCampaign(), filter);
+        Set<NotificationRecipient> recipients = resolveAudience(announcement.getCampaign(), filter, announcement.getCreatedBy());
+        String snippet = getPlainTextSnippet(announcement.getContent());
+        String finalMessage = announcement.getTitle();
+        if (!snippet.isEmpty()) {
+            finalMessage = announcement.getTitle() + " - " + snippet;
+        }
+
         notificationService.createNotification(CreateNotificationCommand.builder()
                 .recipients(recipients)
                 .type(NotificationType.CAMPAIGN_ANNOUNCEMENT)
-                .title(announcement.getCampaign().getTitle())
-                .message(announcement.getTitle())
+                .title("New announcement in \"" + announcement.getCampaign().getTitle() + "\"")
+                .message(finalMessage)
                 .linkUrl("/campaigns/" + announcement.getCampaign().getId() + "/announcements/" + announcement.getId())
                 .build());
     }

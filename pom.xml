@@ -164,6 +164,12 @@
             <artifactId>owasp-java-html-sanitizer</artifactId>
             <version>20240325.1</version>
         </dependency>
+        <!-- JSoup HTML Parser -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.18.3</version>
+        </dependency>
 
         <!-- CSV parsing -->
         <dependency>
