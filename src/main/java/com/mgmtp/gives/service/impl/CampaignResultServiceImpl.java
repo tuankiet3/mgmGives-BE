@@ -1,6 +1,7 @@
 package com.mgmtp.gives.service.impl;
 
 import com.mgmtp.gives.common.ErrorCode;
+import com.mgmtp.gives.dto.campaign.CampaignResultDraftContext;
 import com.mgmtp.gives.dto.campaign.CampaignResultGenerateResponse;
 import com.mgmtp.gives.dto.campaign.CampaignResultRequest;
 import com.mgmtp.gives.dto.campaign.CampaignResultResponse;
@@ -8,7 +9,9 @@ import com.mgmtp.gives.dto.campaign.DonorNotificationInfo;
 import com.mgmtp.gives.dto.campaign.DonorThankYouContext;
 import com.mgmtp.gives.dto.notification.CreateNotificationCommand;
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
+import com.mgmtp.gives.entity.Announcement;
 import com.mgmtp.gives.entity.Campaign;
+import com.mgmtp.gives.entity.Category;
 import com.mgmtp.gives.entity.Donation;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignMemberRole;
@@ -17,6 +20,7 @@ import com.mgmtp.gives.enums.DonationType;
 import com.mgmtp.gives.enums.NotificationType;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
+import com.mgmtp.gives.repository.AnnouncementRepository;
 import com.mgmtp.gives.repository.CampaignFollowerRepository;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
@@ -39,7 +43,10 @@ import com.mgmtp.gives.enums.DonationStatus;
 
 import java.text.NumberFormat;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -54,11 +61,13 @@ import java.util.stream.Collectors;
 public class CampaignResultServiceImpl implements CampaignResultService {
 
     private static final String RESULT_EMAIL_SUBJECT_PREFIX = "Campaign Results: ";
+    private static final DateTimeFormatter ANNOUNCEMENT_DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy");
 
     private final CampaignRepository campaignRepository;
     private final CampaignMemberRepository campaignMemberRepository;
     private final CampaignMemberService campaignMemberService;
     private final DonationRepository donationRepository;
+    private final AnnouncementRepository announcementRepository;
     private final GeminiService geminiService;
     private final NotificationService notificationService;
     private final EmailService emailService;
@@ -163,7 +172,79 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                 ? Math.min(100.0, (confirmedTotal * 100.0) / campaign.getTarget())
                 : 0.0;
 
-        return geminiService.generateCampaignResultDraft(campaign, confirmedTotal, donorCount, volunteerCount, goalPercent);
+        List<Donation> donations = donationRepository.findByCampaignIdAndStatus(campaignId, DonationStatus.SUCCESSFUL);
+
+        List<String> goodsDescriptions = donations.stream()
+                .filter(d -> d.getType() == DonationType.GOODS)
+                .map(CampaignResultServiceImpl::describeGoods)
+                .filter(s -> !s.isBlank())
+                .distinct()
+                .toList();
+
+        long moneyDonationCount = donations.stream().filter(d -> d.getType() == DonationType.MONEY).count();
+        long goodsDonationCount = donations.stream().filter(d -> d.getType() == DonationType.GOODS).count();
+
+        List<String> categories = campaign.getCategories().stream()
+                .map(Category::getName)
+                .filter(name -> name != null && !name.isBlank())
+                .toList();
+
+        Integer durationDays = campaign.getStartDate() != null && campaign.getEndDate() != null
+                ? (int) ChronoUnit.DAYS.between(campaign.getStartDate().toLocalDate(), campaign.getEndDate().toLocalDate())
+                : null;
+
+        List<String> announcements = announcementRepository
+                .findByCampaignIdOrderByPublishedAtAsc(campaignId)
+                .stream()
+                .map(CampaignResultServiceImpl::describeAnnouncement)
+                .toList();
+
+        return geminiService.generateCampaignResultDraft(campaign, new CampaignResultDraftContext(
+                confirmedTotal, donorCount, volunteerCount, goalPercent,
+                categories, durationDays, moneyDonationCount, goodsDonationCount,
+                announcements, goodsDescriptions, buildBiggestDonorDescription(donations)));
+    }
+
+    private static String describeAnnouncement(Announcement announcement) {
+        String date = announcement.getPublishedAt() != null
+                ? announcement.getPublishedAt().format(ANNOUNCEMENT_DATE_FORMAT)
+                : "date unknown";
+        return String.format("%s (%s)", announcement.getTitle(), date);
+    }
+
+    /**
+     * Honors the single non-anonymous donor who gave the most money. If that donor also
+     * donated goods, those are included so they are credited for everything they gave.
+     * Goods-only donors (no money) are never named here.
+     *
+     * @return a display string, or null if there is no eligible donor
+     */
+    private static String buildBiggestDonorDescription(List<Donation> donations) {
+        record Contributor(String name, long moneyTotal, List<String> goodsItems) {}
+
+        Map<Long, List<Donation>> byUser = donations.stream()
+                .filter(d -> d.getUser() != null && !d.isAnonymous())
+                .collect(Collectors.groupingBy(d -> d.getUser().getId(), LinkedHashMap::new, Collectors.toList()));
+
+        return byUser.values().stream()
+                .map(userDonations -> new Contributor(
+                        userDonations.get(0).getUser().getFullName(),
+                        userDonations.stream()
+                                .filter(d -> d.getType() == DonationType.MONEY && d.getAmount() != null)
+                                .mapToLong(Donation::getAmount)
+                                .sum(),
+                        userDonations.stream()
+                                .filter(d -> d.getType() == DonationType.GOODS)
+                                .map(CampaignResultServiceImpl::describeGoods)
+                                .filter(s -> !s.isBlank())
+                                .distinct()
+                                .toList()))
+                .filter(c -> c.moneyTotal() > 0)
+                .max(Comparator.comparingLong(Contributor::moneyTotal))
+                .map(c -> c.goodsItems().isEmpty()
+                        ? String.format("%s (%,d VND)", c.name(), c.moneyTotal())
+                        : String.format("%s (%,d VND; goods: %s)", c.name(), c.moneyTotal(), String.join(", ", c.goodsItems())))
+                .orElse(null);
     }
 
     private void sendResultNotifications(Campaign campaign) {
