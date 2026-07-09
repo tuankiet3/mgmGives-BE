@@ -3,6 +3,9 @@ package com.mgmtp.gives.controller;
 import com.mgmtp.gives.common.ApiResponse;
 import com.mgmtp.gives.common.PageResponse;
 import com.mgmtp.gives.dto.campaign_follower.FollowedCampaignResponse;
+import com.mgmtp.gives.dto.campaign_follower.CampaignFollowerFilterCriteria;
+import com.mgmtp.gives.enums.CampaignPriority;
+import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.security.CustomUserDetails;
 import com.mgmtp.gives.service.CampaignFollowerService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,10 +36,13 @@ public class CampaignFollowerController {
     )
     public ResponseEntity<?> getFollowedCampaigns(
             @AuthenticationPrincipal CustomUserDetails customUserDetails,
+            @ModelAttribute CampaignFollowerFilterCriteria criteria,
             @PageableDefault(size = 10, sort = "followedAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
         Long userId = customUserDetails.getUser().getId();
-        PageResponse<FollowedCampaignResponse> result = service.getFollowedCampaigns(userId, pageable);
+
+        PageResponse<FollowedCampaignResponse> result =
+                service.getFollowedCampaigns(userId, criteria, pageable);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 

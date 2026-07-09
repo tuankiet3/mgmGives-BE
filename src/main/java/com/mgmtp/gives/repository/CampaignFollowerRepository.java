@@ -3,6 +3,8 @@ package com.mgmtp.gives.repository;
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.CampaignFollower;
 import com.mgmtp.gives.entity.User;
+import com.mgmtp.gives.enums.CampaignPriority;
+import com.mgmtp.gives.enums.CampaignStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -34,7 +36,8 @@ public interface CampaignFollowerRepository extends JpaRepository<CampaignFollow
             value = """
                 SELECT cf
                 FROM CampaignFollower cf
-                JOIN FETCH cf.campaign
+                JOIN FETCH cf.campaign c
+                LEFT JOIN FETCH c.medias m
                 WHERE cf.user.id = :userId
                 """,
             countQuery = """
@@ -45,6 +48,40 @@ public interface CampaignFollowerRepository extends JpaRepository<CampaignFollow
     )
     Page<CampaignFollower> findAllByUserIdWithCampaign(
             @Param("userId") Long userId,
+            Pageable pageable
+    );
+
+    @Query(
+            value = """
+                SELECT cf
+                FROM CampaignFollower cf
+                JOIN FETCH cf.campaign c
+                LEFT JOIN FETCH c.medias m
+                WHERE cf.user.id = :userId
+                  AND (:keyword = '' OR LOWER(c.title) LIKE CONCAT('%', LOWER(:keyword), '%'))
+                  AND (CAST(:status AS string) IS NULL OR c.status = :status)
+                  AND (CAST(:priority AS string) IS NULL OR c.priority = :priority)
+                  AND (:hasCategories = false OR EXISTS (SELECT cat FROM c.categories cat WHERE cat.id IN :categoryIds))
+                """,
+            countQuery = """
+                SELECT COUNT(cf)
+                FROM CampaignFollower cf
+                JOIN cf.campaign c
+                WHERE cf.user.id = :userId
+                  AND (:keyword = '' OR LOWER(c.title) LIKE CONCAT('%', LOWER(:keyword), '%'))
+                  AND (CAST(:status AS string) IS NULL OR c.status = :status)
+                  AND (CAST(:priority AS string) IS NULL OR c.priority = :priority)
+                  AND (:hasCategories = false OR EXISTS (SELECT cat FROM c.categories cat WHERE cat.id IN :categoryIds))
+                """
+    )
+    Page<CampaignFollower> findAllByUserIdWithFilters(
+            @Param("userId") Long userId,
+            @Param("keyword") String keyword,
+            @Param("status") CampaignStatus status,
+            @Param("priority") CampaignPriority priority,
+            @Param("hasCategories") boolean hasCategories,
+            @Param("categoryIds") List<Long> categoryIds,
+            @Param("categoryCount") long categoryCount,
             Pageable pageable
     );
 

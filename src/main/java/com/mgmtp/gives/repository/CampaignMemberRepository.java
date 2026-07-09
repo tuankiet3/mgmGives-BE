@@ -14,62 +14,63 @@ import java.util.List;
 import java.util.Optional;
 
 public interface CampaignMemberRepository extends JpaRepository<CampaignMember, Long> {
-    List<CampaignMember> findByCampaignId(Long campaignId);
+        List<CampaignMember> findByCampaignId(Long campaignId);
 
-    @Query("""
-            SELECT DISTINCT new com.mgmtp.gives.dto.notification.NotificationRecipient(
-                cm.user.id,
-                cm.user.email
-            )
-            FROM CampaignMember cm
-            WHERE cm.campaign.id = :campaignId AND cm.user IS NOT NULL
-            """)
-    List<NotificationRecipient> findMemberRecipientsByCampaignId(@Param("campaignId") Long campaignId);
+        @Query("""
+                        SELECT DISTINCT new com.mgmtp.gives.dto.notification.NotificationRecipient(
+                            cm.user.id,
+                            cm.user.email
+                        )
+                        FROM CampaignMember cm
+                        WHERE cm.campaign.id = :campaignId AND cm.user IS NOT NULL
+                        """)
+        List<NotificationRecipient> findMemberRecipientsByCampaignId(@Param("campaignId") Long campaignId);
 
-    Optional<CampaignMember> findByCampaignIdAndUserId(Long campaignId, Long userId);
+        Optional<CampaignMember> findByCampaignIdAndUserId(Long campaignId, Long userId);
 
-    long deleteByCampaignIdAndUserId(Long campaignId, Long userId);
+        long deleteByCampaignIdAndUserId(Long campaignId, Long userId);
 
-    boolean existsByCampaignIdAndUserId(Long campaignId, Long userId);
+        boolean existsByCampaignIdAndUserId(Long campaignId, Long userId);
 
-    boolean existsByCampaignIdAndUserIdAndRoleInCampaign(Long campaignId, Long userId, CampaignMemberRole role);
+        boolean existsByCampaignIdAndUserIdAndRoleInCampaign(Long campaignId, Long userId, CampaignMemberRole role);
 
-    long countByCampaignIdAndRoleInCampaign(Long campaignId, CampaignMemberRole role);
+        long countByCampaignIdAndRoleInCampaign(Long campaignId, CampaignMemberRole role);
 
-    @Query(
-            value = """
-                    SELECT cm
-                    FROM CampaignMember cm
-                    JOIN FETCH cm.campaign
-                    WHERE cm.user.id = :userId
-                    """,
-            countQuery = """
-                    SELECT COUNT(cm)
-                    FROM CampaignMember cm
-                    WHERE cm.user.id = :userId
-                    """
-    )
-    Page<CampaignMember> findAllByUserIdWithCampaign(@Param("userId") Long userId, Pageable pageable);
+        @Query(value = """
+                        SELECT cm
+                        FROM CampaignMember cm
+                        JOIN FETCH cm.campaign
+                        WHERE cm.user.id = :userId
+                        """, countQuery = """
+                        SELECT COUNT(cm)
+                        FROM CampaignMember cm
+                        WHERE cm.user.id = :userId
+                        """)
+        Page<CampaignMember> findAllByUserIdWithCampaign(@Param("userId") Long userId, Pageable pageable);
 
-    @Query("""
-            SELECT new com.mgmtp.gives.dto.notification.NotificationRecipient(
-                cm.user.id,
-                cm.user.email
-            )
-            FROM CampaignMember cm
-            WHERE cm.campaign.id = :campaignId AND cm.roleInCampaign = :role
-            """)
-    List<NotificationRecipient> findRecipientsByCampaignIdAndRole(
-            @Param("campaignId") Long campaignId,
-            @Param("role") CampaignMemberRole role);
+        @Query("SELECT cm.campaign.id, COUNT(cm.id) FROM CampaignMember cm WHERE cm.campaign.id IN :campaignIds AND cm.roleInCampaign = :role GROUP BY cm.campaign.id")
+        List<Object[]> countByCampaignIdsAndRoleInCampaign(@Param("campaignIds") List<Long> campaignIds,
+                        @Param("role") CampaignMemberRole role);
 
-    @Query("""
-            SELECT cm.user
-            FROM CampaignMember cm
-            WHERE cm.campaign.id = :campaignId AND cm.roleInCampaign = :role
-            """)
-    List<User> findUsersByCampaignIdAndRole(
-            @Param("campaignId") Long campaignId,
-            @Param("role") CampaignMemberRole role);
+        @Query("""
+                        SELECT new com.mgmtp.gives.dto.notification.NotificationRecipient(
+                            cm.user.id,
+                            cm.user.email
+                        )
+                        FROM CampaignMember cm
+                        WHERE cm.campaign.id = :campaignId AND cm.roleInCampaign = :role
+                        """)
+        List<NotificationRecipient> findRecipientsByCampaignIdAndRole(
+                        @Param("campaignId") Long campaignId,
+                        @Param("role") CampaignMemberRole role);
+
+        @Query("""
+                        SELECT cm.user
+                        FROM CampaignMember cm
+                        WHERE cm.campaign.id = :campaignId AND cm.roleInCampaign = :role
+                        """)
+        List<User> findUsersByCampaignIdAndRole(
+                        @Param("campaignId") Long campaignId,
+                        @Param("role") CampaignMemberRole role);
 
 }

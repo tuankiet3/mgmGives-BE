@@ -31,6 +31,12 @@ public interface DonationRepository extends JpaRepository<Donation, Long>, JpaSp
     @Query("SELECT COUNT(DISTINCT d.user.id) FROM Donation d WHERE d.campaign.id = :campaignId AND d.status = 'SUCCESSFUL'")
     long countDistinctDonorsByCampaignId(@Param("campaignId") Long campaignId);
 
+    @Query("SELECT d.campaign.id, COALESCE(SUM(d.amount), 0) FROM Donation d WHERE d.campaign.id IN :campaignIds AND d.status = 'SUCCESSFUL' GROUP BY d.campaign.id")
+    List<Object[]> sumConfirmedAmountByCampaignIds(@Param("campaignIds") List<Long> campaignIds);
+
+    @Query("SELECT d.campaign.id, COUNT(DISTINCT d.user.id) FROM Donation d WHERE d.campaign.id IN :campaignIds AND d.status = 'SUCCESSFUL' GROUP BY d.campaign.id")
+    List<Object[]> countDistinctDonorsByCampaignIds(@Param("campaignIds") List<Long> campaignIds);
+
     @Query("SELECT COUNT(DISTINCT d.user.id) FROM Donation d WHERE d.campaign.id = :campaignId AND d.status = 'SUCCESSFUL'")
     long countDistinctDonorsByCampaignIdAndStatusConfirmed(@Param("campaignId") Long campaignId);
 

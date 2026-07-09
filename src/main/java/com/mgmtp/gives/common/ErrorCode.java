@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 @Getter
 public enum ErrorCode {
     UNCATEGORIZED_ERROR(9999, "Uncategorized error", HttpStatus.INTERNAL_SERVER_ERROR),
+    INVALID_ENUM_VALUE(9998, "Invalid filter value provided", HttpStatus.BAD_REQUEST),
 
     USER_NOT_FOUND(1001, "User not found", HttpStatus.NOT_FOUND),
     ROLE_NOT_FOUND(1005, "Role not found", HttpStatus.NOT_FOUND),
