@@ -522,7 +522,8 @@ public class DonationServiceImpl implements DonationService {
             boolean isAdmin = currentUser.getRole() == com.mgmtp.gives.enums.UserRole.ADMIN;
             boolean isCreator = donation.getCampaign().getUser() != null &&
                     donation.getCampaign().getUser().getId().equals(currentUser.getId());
-            if (isAdmin || isCreator) {
+            boolean isDonor = donation.getUser() != null && donation.getUser().getId().equals(currentUser.getId());
+            if (isAdmin || isCreator || isDonor) {
                 canSeeHidden = true;
             }
         }
@@ -532,13 +533,18 @@ public class DonationServiceImpl implements DonationService {
             displayedMessage = null;
         }
 
+        String amountStr = null;
+        if (donation.getAmount() != null) {
+            amountStr = canSeeHidden ? donation.getAmount().toString() : null;
+        }
+
         return DonationResponse.builder()
                 .id(donation.getId())
                 .campaignId(donation.getCampaign().getId())
                 .campaignName(donation.getCampaign().getTitle())
                 .donorName(donorName)
                 .type(donation.getType())
-                .amount(donation.getAmount())
+                .amount(amountStr)
                 .detail(donation.getDetail())
                 .isAnonymous(donation.isAnonymous())
                 .status(donation.getStatus())

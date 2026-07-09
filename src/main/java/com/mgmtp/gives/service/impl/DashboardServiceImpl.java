@@ -17,9 +17,14 @@ import com.mgmtp.gives.repository.AnnouncementRepository;
 import com.mgmtp.gives.repository.CampaignFollowerRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.DonationRepository;
+import com.mgmtp.gives.entity.CampaignMedia;
+import com.mgmtp.gives.enums.DonationStatus;
+import com.mgmtp.gives.enums.NotificationType;
+import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.NotificationRepository;
 import com.mgmtp.gives.service.DashboardService;
 import lombok.RequiredArgsConstructor;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -44,16 +49,17 @@ public class DashboardServiceImpl implements DashboardService {
     private final AnnouncementRepository announcementRepository;
     private final CampaignFollowerRepository campaignFollowerRepository;
     private final CampaignMapper campaignMapper;
+    private final CampaignMediaRepository campaignMediaRepository;
 
     @Override
     @Transactional(readOnly = true)
     public DashboardOverviewResponse getDashboardOverview(User currentUser) {
         log.info("Generating dashboard overview for user: {}", currentUser.getEmail());
 
-        // 1. Total donated amount of current user (MONEY type, all statuses)
+        // 1. Total donated amount of current user (MONEY type, successful status)
         List<Donation> userDonations = donationRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getId());
         long totalDonatedAmount = userDonations.stream()
-                .filter(d -> d.getType() == DonationType.MONEY)
+                .filter(d -> d.getType() == DonationType.MONEY && d.getStatus() == DonationStatus.SUCCESSFUL)
                 .mapToLong(d -> d.getAmount() != null ? d.getAmount() : 0L)
                 .sum();
 
@@ -80,16 +86,30 @@ public class DashboardServiceImpl implements DashboardService {
                 Sort.Order.asc("endDate")
         ));
         boolean isAdmin = currentUser.getRole() == UserRole.ADMIN;
-        List<CampaignResponse> recommendedCampaigns = campaignRepository.findAll(activeCampaignSpec, recommendedPageable)
-                .getContent()
-                .stream()
-                .map(campaign -> campaignMapper.toResponse(campaign, currentUser.getId(), isAdmin))
+        
+        List<Campaign> campaigns = campaignRepository.findAll(activeCampaignSpec, recommendedPageable).getContent();
+        List<Long> campaignIds = campaigns.stream().map(Campaign::getId).toList();
+        List<CampaignMedia> coverImages = campaignIds.isEmpty()
+                ? List.of()
+                : campaignMediaRepository.findCoverImagesByCampaignIds(campaignIds);
+        java.util.Map<Long, String> coverImageMap = coverImages.stream()
+                .collect(Collectors.toMap(
+                        m -> m.getCampaign().getId(),
+                        CampaignMedia::getUrl,
+                        (existing, replacement) -> existing));
+
+        List<CampaignResponse> recommendedCampaigns = campaigns.stream()
+                .map(campaign -> {
+                    CampaignResponse response = campaignMapper.toResponse(campaign, currentUser.getId(), isAdmin);
+                    response.setCoverImageUrl(coverImageMap.get(campaign.getId()));
+                    return response;
+                })
                 .toList();
 
         // 5. Get Recent Donations (Top 5)
         List<DonationResponse> recentDonations = userDonations.stream()
                 .limit(5)
-                .map(this::mapToDonationResponse)
+                .map(d -> mapToDonationResponse(d, currentUser))
                 .toList();
 
         // 6. Get Recent Activities (Combine Notifications & Announcements)
@@ -110,11 +130,19 @@ public class DashboardServiceImpl implements DashboardService {
         List<ActivityDTO> activities = new ArrayList<>();
 
         // Fetch user notifications
-        List<Notification> notifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getId());
+        List<Notification> notifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getId(), PageRequest.of(0, 10)).getContent();
         for (Notification n : notifications) {
+            String type = "NOTIFICATION";
+            if (n.getType() == NotificationType.DONATION ||
+                n.getType() == NotificationType.DONATION_CONFIRMED ||
+                n.getType() == NotificationType.CAMPAIGN_DONATION_CONFIRMED ||
+                (n.getTitle() != null && n.getTitle().toLowerCase().contains("donation")) ||
+                (n.getMessage() != null && n.getMessage().toLowerCase().contains("donation"))) {
+                type = "DONATION";
+            }
             activities.add(ActivityDTO.builder()
                     .id("NOTI-" + n.getId())
-                    .type("NOTIFICATION")
+                    .type(type)
                     .title(n.getTitle())
                     .message(n.getMessage())
                     .linkUrl(n.getLinkUrl())
@@ -123,7 +151,7 @@ public class DashboardServiceImpl implements DashboardService {
         }
 
         // Fetch published announcements
-        List<Announcement> announcements = announcementRepository.findByOrderByPublishedAtDesc();
+        List<Announcement> announcements = announcementRepository.findByOrderByPublishedAtDesc(PageRequest.of(0, 10)).getContent();
         for (Announcement a : announcements) {
             activities.add(ActivityDTO.builder()
                     .id("ANN-" + a.getId())
@@ -145,18 +173,28 @@ public class DashboardServiceImpl implements DashboardService {
                 .toList();
     }
 
-    private DonationResponse mapToDonationResponse(Donation donation) {
+    private DonationResponse mapToDonationResponse(Donation donation, User currentUser) {
         String donorName = "Anonymous";
         if (!donation.isAnonymous() && donation.getUser() != null) {
             donorName = donation.getUser().getFullName();
         }
+        
+        boolean isAdmin = currentUser.getRole() == com.mgmtp.gives.enums.UserRole.ADMIN;
+        boolean isCreator = donation.getCampaign().getUser() != null &&
+                donation.getCampaign().getUser().getId().equals(currentUser.getId());
+        boolean isDonor = donation.getUser() != null && donation.getUser().getId().equals(currentUser.getId());
+        String amountStr = null;
+        if (donation.getAmount() != null) {
+            amountStr = (isAdmin || isCreator || isDonor) ? donation.getAmount().toString() : null;
+        }
+
         return DonationResponse.builder()
                 .id(donation.getId())
                 .campaignId(donation.getCampaign().getId())
                 .campaignName(donation.getCampaign().getTitle())
                 .donorName(donorName)
                 .type(donation.getType())
-                .amount(donation.getAmount())
+                .amount(amountStr)
                 .detail(donation.getDetail())
                 .isAnonymous(donation.isAnonymous())
                 .status(donation.getStatus())

@@ -12,5 +12,7 @@ import java.util.List;
 public interface AnnouncementRepository extends JpaRepository<Announcement, Long> {
     List<Announcement> findByOrderByPublishedAtDesc();
 
+    Page<Announcement> findByOrderByPublishedAtDesc(Pageable pageable);
+
     Page<Announcement> findByCampaignId(Long campaignId, Pageable pageable);
 }
