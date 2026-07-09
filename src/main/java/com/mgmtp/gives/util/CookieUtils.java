@@ -47,25 +47,47 @@ public class CookieUtils {
 
 
     private static void addCookie(HttpServletResponse response, String token, String name, long maxAgeMillis) {
+        boolean isSecure = checkIsSecure();
         ResponseCookie cookie = ResponseCookie.from(name, token)
                 .httpOnly(true)
-                .secure(false)
+                .secure(isSecure)
                 .path("/")
                 .maxAge(maxAgeMillis / 1000)
-                .sameSite("Lax")
+                .sameSite(isSecure ? "None" : "Lax")
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
 
     private static void clearCookie(HttpServletResponse response, String name) {
+        boolean isSecure = checkIsSecure();
         ResponseCookie cookie = ResponseCookie.from(name, "")
                 .httpOnly(true)
-                .secure(false)
+                .secure(isSecure)
                 .path("/")
                 .maxAge(0)
-                .sameSite("Lax")
+                .sameSite(isSecure ? "None" : "Lax")
                 .build();
 
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    private static boolean checkIsSecure() {
+        try {
+            org.springframework.web.context.request.RequestAttributes attrs = 
+                    org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+            if (attrs instanceof org.springframework.web.context.request.ServletRequestAttributes) {
+                HttpServletRequest request = ((org.springframework.web.context.request.ServletRequestAttributes) attrs).getRequest();
+                String origin = request.getHeader("Origin");
+                String xForwardedProto = request.getHeader("X-Forwarded-Proto");
+                
+                // If it is ngrok HTTPS, or headers indicate HTTPS
+                return "https".equalsIgnoreCase(xForwardedProto) 
+                        || (origin != null && origin.startsWith("https://"))
+                        || request.isSecure();
+            }
+        } catch (Exception e) {
+            // Fallback if request context is not available (e.g. during startup or non-web threads)
+        }
+        return false;
     }
 }

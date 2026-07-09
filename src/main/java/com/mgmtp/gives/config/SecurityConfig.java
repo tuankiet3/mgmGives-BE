@@ -56,7 +56,9 @@ public class SecurityConfig {
             "http://mgm-gives.mgm-edv.de:3000",
             "http://mgm-gives.mgm-edv.de:3001",
             "http://mgm-gives.mgm-edv.de:3002",
-            "http://mgm-gives.mgm-edv.de"
+            "http://mgm-gives.mgm-edv.de",
+            "https://*.ngrok-free.app",
+            "https://*.ngrok.io"
     };
 
     @Bean
@@ -84,7 +86,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(ALLOWED_ORIGINS));
+        configuration.setAllowedOriginPatterns(List.of(ALLOWED_ORIGINS));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Content-Type", "Authorization"));
         configuration.setAllowCredentials(true);
