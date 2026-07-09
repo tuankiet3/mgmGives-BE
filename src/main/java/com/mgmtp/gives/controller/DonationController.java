@@ -5,6 +5,7 @@ import com.mgmtp.gives.dto.donation.DonationRequest;
 import com.mgmtp.gives.dto.donation.DonationResponse;
 import com.mgmtp.gives.dto.donation.PayOSRequest;
 import com.mgmtp.gives.dto.donation.PayOSResponse;
+import com.mgmtp.gives.dto.donation.RejectRequest;
 import com.mgmtp.gives.security.CustomUserDetails;
 import com.mgmtp.gives.service.DonationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -92,9 +93,9 @@ public class DonationController {
     @PatchMapping("/{id}/reject")
     @Operation(summary = "Reject a donation", description = "Allows the campaign creator or global admin to reject a pending manual QR donation with a reason.")
     public ApiResponse<DonationResponse> rejectDonation(@PathVariable Long id,
-                                                        @RequestParam(required = false) String reason,
+                                                        @Valid @RequestBody RejectRequest request,
                                                         @AuthenticationPrincipal CustomUserDetails userDetails) {
-        DonationResponse donation = donationService.rejectCampaignDonation(id, reason, userDetails.getUser());
+        DonationResponse donation = donationService.rejectCampaignDonation(id, request.reason(), userDetails.getUser());
         return ApiResponse.success(donation, "Donation rejected successfully");
     }
 }
