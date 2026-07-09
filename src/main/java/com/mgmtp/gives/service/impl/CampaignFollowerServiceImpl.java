@@ -66,8 +66,10 @@ public class CampaignFollowerServiceImpl implements CampaignFollowerService {
         java.util.List<Long> categoryIds = criteria.getCategoryIds();
 
         boolean hasCategories = categoryIds != null && !categoryIds.isEmpty();
-        java.util.List<Long> sanitizedCategoryIds = hasCategories ? categoryIds : java.util.List.of(-1L);
-        long categoryCount = hasCategories ? categoryIds.size() : 0L;
+        java.util.List<Long> sanitizedCategoryIds = hasCategories
+                ? categoryIds.stream().distinct().toList()
+                : java.util.List.of(-1L);
+        long categoryCount = hasCategories ? sanitizedCategoryIds.size() : 0L;
 
         Page<CampaignFollower> page = campaignFollowerRepo.findAllByUserIdWithFilters(
                 userId, normalizedKeyword, status, priority, hasCategories, sanitizedCategoryIds, categoryCount, pageable);

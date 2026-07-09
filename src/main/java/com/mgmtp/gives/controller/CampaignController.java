@@ -82,7 +82,7 @@ public class CampaignController {
         }
 
         @PutMapping("/{id}")
-        @Operation(summary = "Update campaign details", description = "Allows updating campaign information. Restricted to owner or ADMIN role.")
+        @Operation(summary = "Update campaign details", description = "Allows updating campaign information. Restricted to the Campaign Creator or users with the campaign_admin role for that specific campaign. Campaign must be in DRAFT, PENDING, or REJECTED status.")
         public ApiResponse<CampaignResponse> updateCampaign(
                         @Parameter(description = "The ID of the campaign to update", required = true) @PathVariable Long id,
                         @Valid @RequestBody CampaignRequest request,
@@ -94,7 +94,7 @@ public class CampaignController {
         }
 
         @PutMapping("/{id}/end")
-        @Operation(summary = "End a campaign", description = "Ends an IN_PROGRESS campaign immediately, setting its status to COMPLETED. Restricted to the campaign's Campaign Admin or ADMIN role.")
+        @Operation(summary = "End a campaign", description = "Ends an IN_PROGRESS campaign immediately, setting its status to COMPLETED. Restricted to the campaign's Campaign Admin (campaign_admin member role) only.")
         public ApiResponse<CampaignResponse> endCampaign(
                         @Parameter(description = "The ID of the campaign to end", required = true) @PathVariable Long id,
                         @AuthenticationPrincipal CustomUserDetails userDetails) {
@@ -105,7 +105,7 @@ public class CampaignController {
         }
 
         @DeleteMapping("/{id}")
-        @Operation(summary = "Delete a campaign", description = "Removes a campaign by ID. Restricted to the creator, and only if status is PENDING or REJECTED.")
+        @Operation(summary = "Delete a campaign", description = "Removes a campaign by ID. Restricted to the Campaign Creator only. Campaign must be in PENDING, REJECTED, or DRAFT status.")
         public ApiResponse<Void> deleteCampaign(
                         @Parameter(description = "The ID of the campaign to delete", required = true) @PathVariable Long id,
                         @AuthenticationPrincipal CustomUserDetails userDetails) {

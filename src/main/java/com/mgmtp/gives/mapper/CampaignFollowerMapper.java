@@ -28,6 +28,9 @@ public abstract class CampaignFollowerMapper {
     @Mapping(target = "followedAt", source = "followedAt")
     @Mapping(target = "coverImageUrl", ignore = true)
     @Mapping(target = "categories", source = "campaign.categories")
+    @Mapping(target = "currentRaised", ignore = true)
+    @Mapping(target = "donorsCount", ignore = true)
+    @Mapping(target = "volunteersCount", ignore = true)
     public abstract FollowedCampaignResponse toResponse(CampaignFollower campaignFollower, 
             @org.mapstruct.Context com.mgmtp.gives.dto.campaign_follower.CampaignAggregatesContext context);
 

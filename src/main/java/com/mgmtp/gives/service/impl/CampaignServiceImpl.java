@@ -191,25 +191,25 @@ public class CampaignServiceImpl implements CampaignService {
         log.info("Updating campaign: id={}, userId={}", id, currentUser.getId());
         Campaign campaign = getCampaignById(id, currentUser);
 
-        boolean isAdmin = currentUser.getRole() == UserRole.ADMIN;
         boolean isCreator = campaign.getUser() != null && campaign.getUser().getId().equals(currentUser.getId());
+        boolean isCampaignAdmin = campaignMemberService.canManageCampaign(id, currentUser);
 
-        if (!isAdmin && !isCreator) {
-            log.warn("Update campaign denied: not admin/creator. campaignId={}, userId={}", id, currentUser.getId());
+        if (!isCreator && !isCampaignAdmin) {
+            log.warn("Update campaign denied: not creator/campaign_admin. campaignId={}, userId={}", id, currentUser.getId());
             throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE);
         }
 
-        if (!isAdmin && campaign.getStatus() != CampaignStatus.DRAFT
+        if (campaign.getStatus() != CampaignStatus.DRAFT
                 && campaign.getStatus() != CampaignStatus.REJECTED
                 && campaign.getStatus() != CampaignStatus.PENDING) {
-            log.warn("Update campaign denied: invalid status for non-admin. campaignId={}, status={}, userId={}",
+            log.warn("Update campaign denied: invalid status. campaignId={}, status={}, userId={}",
                     id, campaign.getStatus(), currentUser.getId());
             throw new AppException(ErrorCode.INVALID_CAMPAIGN_STATUS_FOR_UPDATE);
         }
 
         CampaignStatus newStatus = request.status();
         if (newStatus == null) {
-            if (!isAdmin && campaign.getStatus() == CampaignStatus.REJECTED) {
+            if (campaign.getStatus() == CampaignStatus.REJECTED) {
                 newStatus = CampaignStatus.PENDING;
                 log.info(
                         "No status requested for rejected campaign update; auto-transitioning back to PENDING. campaignId={}",
@@ -219,12 +219,12 @@ public class CampaignServiceImpl implements CampaignService {
             }
         }
 
-        if (!isAdmin && newStatus != CampaignStatus.DRAFT && newStatus != CampaignStatus.PENDING) {
+        if (newStatus != CampaignStatus.DRAFT && newStatus != CampaignStatus.PENDING) {
             log.warn(
-                    "Update campaign validation failed: status {} not allowed for regular user. campaignId={}, userId={}",
+                    "Update campaign validation failed: status {} not allowed. campaignId={}, userId={}",
                     newStatus, id, currentUser.getId());
             throw new AppException(ErrorCode.VALIDATION_ERROR,
-                    "Regular users can only set status to DRAFT or PENDING.");
+                    "Campaign can only be set to DRAFT or PENDING status.");
         }
 
         if (newStatus == CampaignStatus.PENDING) {

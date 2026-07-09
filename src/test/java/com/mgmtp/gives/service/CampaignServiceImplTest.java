@@ -77,6 +77,9 @@ class CampaignServiceImplTest {
     @Mock
     private UserPayOSConnectionRepository userPayOSConnectionRepository;
 
+    @Mock
+    private CampaignMemberService campaignMemberService;
+
     @InjectMocks
     private CampaignServiceImpl campaignService;
 
@@ -391,22 +394,20 @@ class CampaignServiceImplTest {
     }
 
     @Test
-    void updateCampaign_Success_ByAdmin_ApprovedStatus() {
+    void updateCampaign_InvalidStatus_ByAdmin_ApprovedStatus_ThrowsException() {
         Campaign existing = new Campaign();
         existing.setId(100L);
         existing.setUser(testUser);
         existing.setStatus(CampaignStatus.APPROVED); // Approved status
 
         when(campaignRepository.findById(100L)).thenReturn(Optional.of(existing));
-        when(categoryRepository.findAllById(anySet())).thenReturn(List.of(testCategory));
-        when(campaignRepository.save(any(Campaign.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(campaignMemberService.canManageCampaign(100L, testAdmin)).thenReturn(true);
 
-        // Admin updates an approved campaign
-        Campaign result = campaignService.updateCampaign(100L, validRequest, testAdmin);
+        AppException exception = assertThrows(AppException.class,
+                () -> campaignService.updateCampaign(100L, validRequest, testAdmin));
 
-        assertNotNull(result);
-        assertEquals("Kon Tum Water Project", result.getTitle());
-        verify(campaignRepository, times(1)).save(any(Campaign.class));
+        assertEquals(ErrorCode.INVALID_CAMPAIGN_STATUS_FOR_UPDATE, exception.getErrorCode());
+        verify(campaignRepository, never()).save(any(Campaign.class));
     }
 
     @Test
@@ -421,6 +422,7 @@ class CampaignServiceImplTest {
         existing.setStatus(CampaignStatus.IN_PROGRESS);
 
         when(campaignRepository.findById(100L)).thenReturn(Optional.of(existing));
+        when(campaignMemberService.canManageCampaign(100L, otherUser)).thenReturn(false);
 
         AppException exception = assertThrows(AppException.class,
                 () -> campaignService.updateCampaign(100L, validRequest, otherUser));
@@ -581,13 +583,14 @@ class CampaignServiceImplTest {
     }
 
     @Test
-    void updateCampaign_KeepRejectedStatus_WhenRejectedAndUpdatedByAdmin() {
+    void updateCampaign_ResetStatusToPending_WhenRejectedAndUpdatedByAdmin() {
         Campaign existing = new Campaign();
         existing.setId(100L);
         existing.setUser(testUser);
         existing.setStatus(CampaignStatus.REJECTED);
 
         when(campaignRepository.findById(100L)).thenReturn(Optional.of(existing));
+        when(campaignMemberService.canManageCampaign(100L, testAdmin)).thenReturn(true);
         when(categoryRepository.findAllById(anySet())).thenReturn(List.of(testCategory));
         when(campaignRepository.save(any(Campaign.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -607,7 +610,7 @@ class CampaignServiceImplTest {
         Campaign result = campaignService.updateCampaign(100L, adminRequest, testAdmin);
 
         assertNotNull(result);
-        assertEquals(CampaignStatus.REJECTED, result.getStatus());
+        assertEquals(CampaignStatus.PENDING, result.getStatus());
         verify(campaignRepository, times(1)).save(any(Campaign.class));
     }
 

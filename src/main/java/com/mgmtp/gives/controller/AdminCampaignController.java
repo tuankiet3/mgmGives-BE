@@ -24,6 +24,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -42,16 +43,29 @@ public class AdminCampaignController {
         @Operation(summary = "List campaigns for review", description = "Lists campaigns filtered by status, category, and keyword. Sorted newest first by default.")
         public ApiResponse<PageResponse<AdminCampaignResponse>> getCampaigns(
                         @Parameter(description = "Campaign status to filter by") @RequestParam(required = false) CampaignStatus status,
-                        @Parameter(description = "Category ID to filter by") @RequestParam(required = false) List<Long> categoryIds,
+                        @Parameter(description = "Category ID to filter by") @RequestParam(value = "categoryId", required = false) List<Long> categoryId,
+                        @Parameter(description = "Category IDs to filter by") @RequestParam(required = false) List<Long> categoryIds,
                         @Parameter(description = "Keyword to search by") @RequestParam(required = false) String keyword,
                         @ParameterObject @PageableDefault(page = 0, size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-                log.info("REST admin request to list campaigns: status={}, categoryId={}, keyword={}", status,
-                                categoryIds, keyword);
-                Page<Campaign> page = adminCampaignService.getCampaigns(status, categoryIds, keyword, pageable);
+                List<Long> mergedCategoryIds = mergeCategoryIds(categoryId, categoryIds);
+                log.info("REST admin request to list campaigns: status={}, categoryIds={}, keyword={}", status,
+                                mergedCategoryIds, keyword);
+                Page<Campaign> page = adminCampaignService.getCampaigns(status, mergedCategoryIds, keyword, pageable);
                 List<AdminCampaignResponse> dtoList = page.getContent().stream()
                                 .map(adminCampaignMapper::toAdminResponse)
                                 .collect(Collectors.toList());
                 return ApiResponse.success(PageResponse.of(page, dtoList));
+        }
+
+        private List<Long> mergeCategoryIds(List<Long> categoryId, List<Long> categoryIds) {
+                List<Long> merged = new ArrayList<>();
+                if (categoryId != null) {
+                        merged.addAll(categoryId);
+                }
+                if (categoryIds != null) {
+                        merged.addAll(categoryIds);
+                }
+                return merged.stream().distinct().toList();
         }
 
         @GetMapping("/{id}")

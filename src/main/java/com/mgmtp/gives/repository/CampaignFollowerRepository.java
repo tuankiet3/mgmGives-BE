@@ -61,7 +61,11 @@ public interface CampaignFollowerRepository extends JpaRepository<CampaignFollow
                   AND (:keyword = '' OR LOWER(c.title) LIKE CONCAT('%', LOWER(:keyword), '%'))
                   AND (CAST(:status AS string) IS NULL OR c.status = :status)
                   AND (CAST(:priority AS string) IS NULL OR c.priority = :priority)
-                  AND (:hasCategories = false OR EXISTS (SELECT cat FROM c.categories cat WHERE cat.id IN :categoryIds))
+                  AND (:hasCategories = false OR (
+                      SELECT COUNT(DISTINCT cat.id)
+                      FROM c.categories cat
+                      WHERE cat.id IN :categoryIds
+                  ) = :categoryCount)
                 """,
             countQuery = """
                 SELECT COUNT(cf)
@@ -71,7 +75,11 @@ public interface CampaignFollowerRepository extends JpaRepository<CampaignFollow
                   AND (:keyword = '' OR LOWER(c.title) LIKE CONCAT('%', LOWER(:keyword), '%'))
                   AND (CAST(:status AS string) IS NULL OR c.status = :status)
                   AND (CAST(:priority AS string) IS NULL OR c.priority = :priority)
-                  AND (:hasCategories = false OR EXISTS (SELECT cat FROM c.categories cat WHERE cat.id IN :categoryIds))
+                  AND (:hasCategories = false OR (
+                      SELECT COUNT(DISTINCT cat.id)
+                      FROM c.categories cat
+                      WHERE cat.id IN :categoryIds
+                  ) = :categoryCount)
                 """
     )
     Page<CampaignFollower> findAllByUserIdWithFilters(

@@ -85,7 +85,7 @@ public final class CampaignSpecifications {
 
     public static Specification<Campaign> isNotFollowedBy(User currentUser) {
         return (root, query, cb) -> {
-            if (currentUser == null || currentUser.getRole() == UserRole.ADMIN) {
+            if (currentUser == null) {
                 return null;
             }
             jakarta.persistence.criteria.Subquery<Long> subquery = query.subquery(Long.class);
