@@ -2,6 +2,9 @@ package com.mgmtp.gives.service.impl;
 
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.UserPayOSConnection;
+import com.mgmtp.gives.common.ErrorCode;
+import com.mgmtp.gives.enums.DonationMethod;
+import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.repository.UserPayOSConnectionRepository;
 import com.mgmtp.gives.service.PayOSClientProvider;
 import com.mgmtp.gives.service.TokenCryptoService;
@@ -33,6 +36,10 @@ public class PayOSClientProviderImpl implements PayOSClientProvider {
                 String apiKey = tokenCryptoService.decrypt(conn.getApiKey()).trim();
                 String checksumKey = tokenCryptoService.decrypt(conn.getChecksumKey()).trim();
                 return new PayOS(clientId, apiKey, checksumKey);
+            } else if (campaign.getDonationMethod() == DonationMethod.PAYOS || campaign.getDonationMethod() == DonationMethod.HYBRID) {
+                log.warn("Campaign owner {} does not have custom PayOS credentials connected", campaign.getUser().getEmail());
+                throw new AppException(ErrorCode.VALIDATION_ERROR,
+                        "Campaign owner does not have a connected PayOS account.");
             }
         }
         log.info("Using global system-wide PayOS credentials");

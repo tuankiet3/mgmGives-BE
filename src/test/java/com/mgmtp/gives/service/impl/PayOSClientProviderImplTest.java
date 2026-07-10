@@ -1,8 +1,11 @@
 package com.mgmtp.gives.service.impl;
 
+import com.mgmtp.gives.common.ErrorCode;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.entity.UserPayOSConnection;
+import com.mgmtp.gives.enums.DonationMethod;
+import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.repository.UserPayOSConnectionRepository;
 import com.mgmtp.gives.service.TokenCryptoService;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,7 +67,20 @@ class PayOSClientProviderImplTest {
     }
 
     @Test
-    void getClientForCampaign_UseDefaultFallback_WhenNoConnectionFound() {
+    void getClientForCampaign_ThrowsException_WhenNoConnectionFound() {
+        testCampaign.setDonationMethod(DonationMethod.PAYOS);
+        when(userPayOSConnectionRepository.findByUserId(1L)).thenReturn(Optional.empty());
+
+        AppException exception = assertThrows(AppException.class, () ->
+                payOSClientProvider.getClientForCampaign(testCampaign));
+
+        assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains("Campaign owner does not have a connected PayOS account."));
+    }
+
+    @Test
+    void getClientForCampaign_UseDefaultFallback_WhenNoConnectionFoundAndManualQR() {
+        testCampaign.setDonationMethod(DonationMethod.MANUAL_QR);
         when(userPayOSConnectionRepository.findByUserId(1L)).thenReturn(Optional.empty());
         PayOS client = payOSClientProvider.getClientForCampaign(testCampaign);
         assertSame(defaultPayOS, client);

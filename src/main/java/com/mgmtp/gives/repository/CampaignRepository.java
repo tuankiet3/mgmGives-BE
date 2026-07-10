@@ -3,6 +3,7 @@ package com.mgmtp.gives.repository;
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.DonationMethod;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -53,6 +54,12 @@ public interface CampaignRepository extends JpaRepository<Campaign, Long>, JpaSp
 
     long countByStatus(CampaignStatus status);
     long countByStatusIn(Collection<CampaignStatus> statuses);
+
+    boolean existsByUserIdAndStatusInAndDonationMethodIn(
+            Long userId,
+            Collection<CampaignStatus> statuses,
+            Collection<DonationMethod> donationMethods
+    );
 
     @Query("SELECT COUNT(c) FROM Campaign c JOIN c.categories cat WHERE cat.id = :categoryId")
     long countCampaignsByCategoryId(@Param("categoryId") Long categoryId);

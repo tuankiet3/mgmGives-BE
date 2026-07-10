@@ -6,6 +6,7 @@ import com.mgmtp.gives.dto.integration.PayOSConnectionStatusResponse;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.entity.UserPayOSConnection;
 import com.mgmtp.gives.exception.AppException;
+import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.UserPayOSConnectionRepository;
 import com.mgmtp.gives.service.NotificationService;
 import com.mgmtp.gives.service.TokenCryptoService;
@@ -34,6 +35,9 @@ class PayOSIntegrationServiceImplTest {
 
     @Mock
     private NotificationService notificationService;
+
+    @Mock
+    private CampaignRepository campaignRepository;
 
     @InjectMocks
     private PayOSIntegrationServiceImpl payOSIntegrationService;
@@ -82,10 +86,24 @@ class PayOSIntegrationServiceImplTest {
 
     @Test
     void disconnect_DeletesConnectionAndSendsNotification() {
+        when(campaignRepository.existsByUserIdAndStatusInAndDonationMethodIn(eq(1L), any(), any())).thenReturn(false);
+
         payOSIntegrationService.disconnect(testUser);
 
         verify(userPayOSConnectionRepository).deleteByUserId(1L);
         verify(notificationService).createNotification(any());
+    }
+
+    @Test
+    void disconnect_ThrowsException_WhenActiveCampaignsExist() {
+        when(campaignRepository.existsByUserIdAndStatusInAndDonationMethodIn(eq(1L), any(), any())).thenReturn(true);
+
+        AppException exception = assertThrows(AppException.class, () ->
+                payOSIntegrationService.disconnect(testUser));
+
+        assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains("Cannot disconnect PayOS while you have active or pending campaigns"));
+        verifyNoInteractions(userPayOSConnectionRepository);
     }
 
     @Test

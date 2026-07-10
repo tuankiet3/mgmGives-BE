@@ -6,6 +6,9 @@ import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.entity.UserPayOSConnection;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.common.ErrorCode;
+import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.DonationMethod;
+import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.UserPayOSConnectionRepository;
 import com.mgmtp.gives.service.PayOSIntegrationService;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +28,7 @@ public class PayOSIntegrationServiceImpl implements PayOSIntegrationService {
     private final UserPayOSConnectionRepository userPayOSConnectionRepository;
     private final com.mgmtp.gives.service.TokenCryptoService tokenCryptoService;
     private final com.mgmtp.gives.service.NotificationService notificationService;
+    private final CampaignRepository campaignRepository;
 
     @Override
     public PayOSConnectionStatusResponse getStatus(User user) {
@@ -65,6 +69,18 @@ public class PayOSIntegrationServiceImpl implements PayOSIntegrationService {
     @Transactional
     public void disconnect(User user) {
         log.info("Disconnecting PayOS for user: {}", user.getEmail());
+
+        boolean hasActiveCampaigns = campaignRepository.existsByUserIdAndStatusInAndDonationMethodIn(
+                user.getId(),
+                java.util.List.of(CampaignStatus.PENDING, CampaignStatus.APPROVED, CampaignStatus.IN_PROGRESS),
+                java.util.List.of(DonationMethod.PAYOS, DonationMethod.HYBRID)
+        );
+
+        if (hasActiveCampaigns) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                    "Cannot disconnect PayOS while you have active or pending campaigns using PayOS/Hybrid payments.");
+        }
+
         userPayOSConnectionRepository.deleteByUserId(user.getId());
         sendPayOSNotification(user, "PayOS Disconnected", "You have disconnected your PayOS account.");
     }
