@@ -17,14 +17,31 @@ public final class MediaValidationUtil {
             "video/mp4", "video/quicktime", "video/x-msvideo", "video/webm"
     );
 
+    private static final Set<String> DOCUMENT_TYPES = Set.of(
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "text/plain"
+    );
+
     private static final long MAX_IMAGE_SIZE = 5L * 1024 * 1024;
     private static final long MAX_VIDEO_SIZE = 50L * 1024 * 1024;
+    private static final long MAX_DOCUMENT_SIZE = 10L * 1024 * 1024;
 
     private MediaValidationUtil() {}
 
     public static String detectCategory(String contentType) {
         if (IMAGE_TYPES.contains(contentType)) return "IMAGE";
         if (VIDEO_TYPES.contains(contentType)) return "VIDEO";
+        throw new AppException(ErrorCode.UNSUPPORTED_FILE_TYPE);
+    }
+
+    public static String detectTaskFileCategory(String contentType) {
+        if (IMAGE_TYPES.contains(contentType)) return "IMAGE";
+        if (VIDEO_TYPES.contains(contentType)) return "VIDEO";
+        if (DOCUMENT_TYPES.contains(contentType)) return "DOCUMENT";
         throw new AppException(ErrorCode.UNSUPPORTED_FILE_TYPE);
     }
 
@@ -37,6 +54,51 @@ public final class MediaValidationUtil {
         }
 
         long maxSize = "IMAGE".equals(category) ? MAX_IMAGE_SIZE : MAX_VIDEO_SIZE;
+        if (file.getSize() > maxSize) {
+            throw new AppException(ErrorCode.FILE_SIZE_EXCEEDED);
+        }
+
+        if ("IMAGE".equals(category)) {
+            validateImageMagicBytes(file, contentType);
+        }
+    }
+
+    private static void validateTaskFileExtension(String cleanPath, String category) {
+        int lastDot = cleanPath.lastIndexOf('.');
+        if (lastDot == -1) {
+            throw new AppException(ErrorCode.UNSUPPORTED_FILE_TYPE);
+        }
+        String ext = cleanPath.substring(lastDot + 1).toLowerCase();
+        boolean validExt = switch (category) {
+            case "IMAGE" -> Set.of("jpg", "jpeg", "png", "webp").contains(ext);
+            case "VIDEO" -> Set.of("mp4", "mov", "avi", "webm").contains(ext);
+            case "DOCUMENT" -> Set.of("pdf", "doc", "docx", "xls", "xlsx", "txt").contains(ext);
+            default -> false;
+        };
+        if (!validExt) {
+            throw new AppException(ErrorCode.UNSUPPORTED_FILE_TYPE);
+        }
+    }
+
+    public static void validateTaskFile(MultipartFile file) {
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename == null || originalFilename.isBlank()) {
+            throw new AppException(ErrorCode.UNSUPPORTED_FILE_TYPE);
+        }
+
+        // Check for Path Traversal
+        String cleanPath = org.springframework.util.StringUtils.cleanPath(originalFilename);
+        if (cleanPath.contains("..") || cleanPath.startsWith("/") || cleanPath.contains(":\\")) {
+            throw new AppException(ErrorCode.PATH_TRAVERSAL_DETECTED);
+        }
+
+        String contentType = file.getContentType();
+        String category = detectTaskFileCategory(contentType);
+
+        // Validate File Extension against Category
+        validateTaskFileExtension(cleanPath, category);
+
+        long maxSize = "DOCUMENT".equals(category) ? MAX_DOCUMENT_SIZE : ("IMAGE".equals(category) ? MAX_IMAGE_SIZE : MAX_VIDEO_SIZE);
         if (file.getSize() > maxSize) {
             throw new AppException(ErrorCode.FILE_SIZE_EXCEEDED);
         }

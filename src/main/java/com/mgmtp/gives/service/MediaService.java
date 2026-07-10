@@ -28,4 +28,8 @@ public interface MediaService {
     void deleteAvatar(User currentUser);
 
     String uploadCampaignQr(MultipartFile file, User currentUser);
+
+    String uploadTaskFile(MultipartFile file);
+
+    void softDeleteTaskFile(String storedFilename);
 }

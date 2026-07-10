@@ -330,4 +330,33 @@ public class MediaServiceImpl implements MediaService {
         log.info("Campaign QR uploaded: userId={}, file={}", currentUser.getId(), filename);
         return filename;
     }
+
+    @Override
+    public String uploadTaskFile(MultipartFile file) {
+        MediaValidationUtil.validateTaskFile(file);
+        String filename = storeFile(file, "task attachment");
+        log.info("Task attachment stored: file={}", filename);
+        return filename;
+    }
+
+    @Override
+    public void softDeleteTaskFile(String storedFilename) {
+        if (storedFilename == null || storedFilename.isBlank()) {
+            return;
+        }
+        Path source = Paths.get(uploadDir).resolve(storedFilename);
+        Path trashDir = Paths.get(uploadDir).resolve("trash");
+        Path target = trashDir.resolve(storedFilename);
+        try {
+            if (Files.exists(source)) {
+                Files.createDirectories(trashDir);
+                Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+                log.info("Task attachment moved to trash: file={}", storedFilename);
+            } else {
+                log.warn("Task attachment file not found on disk during soft delete: file={}", storedFilename);
+            }
+        } catch (IOException e) {
+            log.error("Failed to move task attachment file to trash: file={}", storedFilename, e);
+        }
+    }
 }

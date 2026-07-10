@@ -64,7 +64,21 @@ public enum ErrorCode {
     WEBEX_CONNECTION_NOT_FOUND(4003, "Webex connection not found", HttpStatus.NOT_FOUND),
     MEETING_TIME_CONFLICT(4004, "This campaign already has a meeting scheduled during this time", HttpStatus.CONFLICT),
     DONATE_NOT_FOUND(3010, "Donate not found", HttpStatus.NOT_FOUND),
-    NOTIFICATION_NOT_FOUND(3011, "Notification not found", HttpStatus.NOT_FOUND);
+    NOTIFICATION_NOT_FOUND(3011, "Notification not found", HttpStatus.NOT_FOUND),
+
+    TASK_NOT_FOUND(5001, "Task not found", HttpStatus.NOT_FOUND),
+    UNAUTHORIZED_TASK_ACCESS(5002, "You do not have permission to manage tasks for this campaign", HttpStatus.FORBIDDEN),
+    UNAUTHORIZED_TASK_STATUS_UPDATE(5003, "You do not have permission to update this task's status", HttpStatus.FORBIDDEN),
+    INVALID_TASK_ASSIGNEES(5004, "One or more assignees are not members of this campaign", HttpStatus.BAD_REQUEST),
+    INVALID_TASK_LABELS(5005, "One or more labels do not belong to this campaign", HttpStatus.BAD_REQUEST),
+    SELF_ASSIGN_NOT_ALLOWED(5006, "Campaign admin cannot self-assign tasks", HttpStatus.BAD_REQUEST),
+    LABEL_NOT_FOUND(5007, "Label not found", HttpStatus.NOT_FOUND),
+    UNAUTHORIZED_LABEL_ACCESS(5008, "You do not have permission to manage labels for this campaign", HttpStatus.FORBIDDEN),
+    TASK_DUE_DATE_IN_PAST(5009, "Task due date must be in the future", HttpStatus.BAD_REQUEST),
+    TASK_ALREADY_ASSIGNED(5010, "User is already assigned to this task", HttpStatus.BAD_REQUEST),
+    TASK_DUE_DATE_BEFORE_CAMPAIGN_START(5011, "Task due date cannot be before campaign start date", HttpStatus.BAD_REQUEST),
+    TASK_DUE_DATE_AFTER_CAMPAIGN_END(5012, "Task due date cannot be after campaign end date", HttpStatus.BAD_REQUEST),
+    ASSIGNEE_NOT_FOUND(5013, "Assignee not found in this task", HttpStatus.NOT_FOUND);
 
     private final int code;
     private final String message;

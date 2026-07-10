@@ -43,6 +43,26 @@ public class CampaignTask extends BaseEntity {
     private LocalDateTime updatedAt;
 
     @Builder.Default
+    @Column(name = "is_archived")
+    private boolean isArchived = false;
+
+    @Builder.Default
     @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
     private java.util.Set<TaskAssignment> assignments = new java.util.HashSet<>();
+
+    @Builder.Default
+    @ManyToMany
+    @JoinTable(
+            name = "task_labels",
+            joinColumns = @JoinColumn(name = "task_id"),
+            inverseJoinColumns = @JoinColumn(name = "label_id")
+    )
+    private java.util.Set<CampaignTaskLabel> labels = new java.util.HashSet<>();
+
+    @Builder.Default
+    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
+    private java.util.Set<TaskAttachment> attachments = new java.util.HashSet<>();
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 }

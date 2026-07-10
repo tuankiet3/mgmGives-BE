@@ -105,6 +105,10 @@ public class Campaign extends BaseEntity {
 
     @Builder.Default
     @OneToMany(mappedBy = "campaign", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<CampaignTaskLabel> labels = new HashSet<>();
+
+    @Builder.Default
+    @OneToMany(mappedBy = "campaign", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<CampaignMember> members = new HashSet<>();
 
     @Builder.Default
