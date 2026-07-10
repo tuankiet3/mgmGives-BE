@@ -15,7 +15,7 @@ public class DonationResponse {
     private String campaignName;
     private String donorName;
     private DonationType type;
-    private String amount;
+    private Long amount;
     private String detail;
     
     @JsonProperty("isAnonymous")

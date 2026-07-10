@@ -183,10 +183,7 @@ public class DashboardServiceImpl implements DashboardService {
         boolean isCreator = donation.getCampaign().getUser() != null &&
                 donation.getCampaign().getUser().getId().equals(currentUser.getId());
         boolean isDonor = donation.getUser() != null && donation.getUser().getId().equals(currentUser.getId());
-        String amountStr = null;
-        if (donation.getAmount() != null) {
-            amountStr = (isAdmin || isCreator || isDonor) ? donation.getAmount().toString() : null;
-        }
+        Long amountVal = (isAdmin || isCreator || isDonor) ? donation.getAmount() : null;
 
         return DonationResponse.builder()
                 .id(donation.getId())
@@ -194,7 +191,7 @@ public class DashboardServiceImpl implements DashboardService {
                 .campaignName(donation.getCampaign().getTitle())
                 .donorName(donorName)
                 .type(donation.getType())
-                .amount(amountStr)
+                .amount(amountVal)
                 .detail(donation.getDetail())
                 .isAnonymous(donation.isAnonymous())
                 .status(donation.getStatus())

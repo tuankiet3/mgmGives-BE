@@ -533,10 +533,7 @@ public class DonationServiceImpl implements DonationService {
             displayedMessage = null;
         }
 
-        String amountStr = null;
-        if (donation.getAmount() != null) {
-            amountStr = canSeeHidden ? donation.getAmount().toString() : null;
-        }
+        Long amountVal = canSeeHidden ? donation.getAmount() : null;
 
         return DonationResponse.builder()
                 .id(donation.getId())
@@ -544,7 +541,7 @@ public class DonationServiceImpl implements DonationService {
                 .campaignName(donation.getCampaign().getTitle())
                 .donorName(donorName)
                 .type(donation.getType())
-                .amount(amountStr)
+                .amount(amountVal)
                 .detail(donation.getDetail())
                 .isAnonymous(donation.isAnonymous())
                 .status(donation.getStatus())
