@@ -97,4 +97,19 @@ public final class CampaignSpecifications {
             return cb.not(cb.exists(subquery));
         };
     }
+
+    public static Specification<Campaign> isFollowedBy(User currentUser) {
+        return (root, query, cb) -> {
+            if (currentUser == null) {
+                return cb.disjunction();
+            }
+            jakarta.persistence.criteria.Subquery<Long> subquery = query.subquery(Long.class);
+            jakarta.persistence.criteria.Root<CampaignFollower> subRoot = subquery.from(CampaignFollower.class);
+            subquery.select(subRoot.get("campaign").get("id"));
+            subquery.where(cb.and(
+                    cb.equal(subRoot.get("campaign").get("id"), root.get("id")),
+                    cb.equal(subRoot.get("user").get("id"), currentUser.getId())));
+            return cb.exists(subquery);
+        };
+    }
 }

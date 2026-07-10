@@ -141,9 +141,15 @@ public class CampaignServiceImpl implements CampaignService {
     @Override
     @Transactional(readOnly = true)
     public Page<Campaign> getAllCampaigns(CampaignStatus status, CampaignPriority priority, List<Long> categoryIds,
-            Long userId, String keyword, User currentUser, Pageable pageable) {
-        log.info("Fetching campaigns: status={}, priority={}, categoryIds={}, userId={}, keyword={}",
-                status, priority, categoryIds, userId, keyword);
+            Long userId, String keyword, Boolean isFollowing, User currentUser, Pageable pageable) {
+        log.info("Fetching campaigns: status={}, priority={}, categoryIds={}, userId={}, keyword={}, isFollowing={}",
+                status, priority, categoryIds, userId, keyword, isFollowing);
+
+        Specification<Campaign> followSpec = null;
+        if (Boolean.TRUE.equals(isFollowing)) {
+            followSpec = isFollowedBy(currentUser);
+        }
+
         Specification<Campaign> spec = Specification.allOf(
                 hasStatus(status),
                 hasPriority(priority),
@@ -151,7 +157,7 @@ public class CampaignServiceImpl implements CampaignService {
                 hasCategories(categoryIds),
                 matchesKeyword(keyword),
                 isVisibleTo(currentUser),
-                isNotFollowedBy(currentUser));
+                followSpec);
 
         return campaignRepository.findAll(spec, pageable);
     }

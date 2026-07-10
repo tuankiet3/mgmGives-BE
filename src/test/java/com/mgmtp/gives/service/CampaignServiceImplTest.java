@@ -626,6 +626,27 @@ class CampaignServiceImplTest {
                 List.of(10L),
                 1L,
                 "keyword",
+                null,
+                testUser,
+                PageRequest.of(0, 10));
+
+        assertNotNull(result);
+        verify(campaignRepository, times(1)).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void getAllCampaigns_isFollowing_True_Success() {
+        Page<Campaign> page = new PageImpl<>(Collections.emptyList());
+        when(campaignRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
+
+        Page<Campaign> result = campaignService.getAllCampaigns(
+                CampaignStatus.APPROVED,
+                CampaignPriority.HIGH,
+                List.of(10L),
+                1L,
+                "keyword",
+                true,
                 testUser,
                 PageRequest.of(0, 10));
 

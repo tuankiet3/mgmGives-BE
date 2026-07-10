@@ -57,12 +57,13 @@ public class CampaignController {
                         @RequestParam(value = "categoryId", required = false) List<Long> categoryIds,
                         @RequestParam(required = false) Long userId,
                         @RequestParam(required = false) String keyword,
+                        @RequestParam(required = false) Boolean isFollowing,
                         @AuthenticationPrincipal CustomUserDetails userDetails,
                         @ParameterObject @PageableDefault(page = 0, size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-                log.info("REST request to get campaigns list: status={}, priority={}, keyword={}", status, priority,
-                                keyword);
+                log.info("REST request to get campaigns list: status={}, priority={}, keyword={}, isFollowing={}", status, priority,
+                                keyword, isFollowing);
                 Page<Campaign> campaignPage = campaignService.getAllCampaigns(status, priority, categoryIds, userId,
-                                keyword,
+                                keyword, isFollowing,
                                 userDetails.getUser(), pageable);
                 List<CampaignResponse> dtoList = campaignService.toResponseList(campaignPage.getContent(),
                                 userDetails.getUser());

@@ -193,7 +193,7 @@ class CampaignControllerTest {
         @Test
         void getAllCampaigns_Success_Authenticated() throws Exception {
                 Page<Campaign> page = new PageImpl<>(Collections.emptyList(), PageRequest.of(0, 10), 0);
-                when(campaignService.getAllCampaigns(any(), any(), any(), any(), any(), any(User.class),
+                when(campaignService.getAllCampaigns(any(), any(), any(), any(), any(), any(), any(User.class),
                                 any(Pageable.class)))
                                 .thenReturn(page);
 
@@ -201,6 +201,23 @@ class CampaignControllerTest {
                                 .with(user(regularUserDetails))
                                 .param("page", "0")
                                 .param("size", "10"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success").value(true))
+                                .andExpect(jsonPath("$.result.content").isArray());
+        }
+
+        @Test
+        void getAllCampaigns_WithIsFollowing_Success_Authenticated() throws Exception {
+                Page<Campaign> page = new PageImpl<>(Collections.emptyList(), PageRequest.of(0, 9), 0);
+                when(campaignService.getAllCampaigns(any(), any(), any(), any(), any(), eq(true), any(User.class),
+                                any(Pageable.class)))
+                                .thenReturn(page);
+
+                mockMvc.perform(get("/api/campaigns")
+                                .with(user(regularUserDetails))
+                                .param("page", "0")
+                                .param("size", "9")
+                                .param("isFollowing", "true"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.success").value(true))
                                 .andExpect(jsonPath("$.result.content").isArray());

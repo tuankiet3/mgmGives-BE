@@ -20,6 +20,7 @@ public interface CampaignService {
             List<Long> categoryIds,
             Long userId,
             String keyword,
+            Boolean isFollowing,
             User currentUser,
             Pageable pageable);
 
