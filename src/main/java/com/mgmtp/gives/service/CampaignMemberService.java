@@ -1,6 +1,7 @@
 package com.mgmtp.gives.service;
 
 import com.mgmtp.gives.common.PageResponse;
+import com.mgmtp.gives.dto.campaign_member.CampaignMemberFilterCriteria;
 import com.mgmtp.gives.dto.campaign_member.CampaignMemberResponse;
 import com.mgmtp.gives.dto.campaign_member.JoinedCampaignResponse;
 import com.mgmtp.gives.entity.User;
@@ -16,5 +17,5 @@ public interface CampaignMemberService {
      */
     boolean canManageCampaign(Long campaignId, User user);
 
-    PageResponse<JoinedCampaignResponse> getJoinedCampaigns(Long userId, Pageable pageable);
+    PageResponse<JoinedCampaignResponse> getJoinedCampaigns(Long userId, CampaignMemberFilterCriteria criteria, Pageable pageable);
 }

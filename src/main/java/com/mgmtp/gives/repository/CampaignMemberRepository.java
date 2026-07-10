@@ -4,6 +4,8 @@ import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.CampaignMember;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignMemberRole;
+import com.mgmtp.gives.enums.CampaignPriority;
+import com.mgmtp.gives.enums.CampaignStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -39,14 +41,31 @@ public interface CampaignMemberRepository extends JpaRepository<CampaignMember, 
         @Query(value = """
                         SELECT cm
                         FROM CampaignMember cm
-                        JOIN FETCH cm.campaign
+                        JOIN FETCH cm.campaign c
                         WHERE cm.user.id = :userId
+                          AND (:keyword = '' OR LOWER(c.title) LIKE CONCAT('%', LOWER(:keyword), '%'))
+                          AND (CAST(:status AS string) IS NULL OR c.status = :status)
+                          AND (CAST(:priority AS string) IS NULL OR c.priority = :priority)
+                          AND (:hasCategories = false OR (SELECT COUNT(cat) FROM c.categories cat WHERE cat.id IN :categoryIds) = :categoryCount)
                         """, countQuery = """
                         SELECT COUNT(cm)
                         FROM CampaignMember cm
+                        JOIN cm.campaign c
                         WHERE cm.user.id = :userId
+                          AND (:keyword = '' OR LOWER(c.title) LIKE CONCAT('%', LOWER(:keyword), '%'))
+                          AND (CAST(:status AS string) IS NULL OR c.status = :status)
+                          AND (CAST(:priority AS string) IS NULL OR c.priority = :priority)
+                          AND (:hasCategories = false OR (SELECT COUNT(cat) FROM c.categories cat WHERE cat.id IN :categoryIds) = :categoryCount)
                         """)
-        Page<CampaignMember> findAllByUserIdWithCampaign(@Param("userId") Long userId, Pageable pageable);
+        Page<CampaignMember> findAllByUserIdWithFilters(
+                        @Param("userId") Long userId,
+                        @Param("keyword") String keyword,
+                        @Param("status") CampaignStatus status,
+                        @Param("priority") CampaignPriority priority,
+                        @Param("hasCategories") boolean hasCategories,
+                        @Param("categoryIds") List<Long> categoryIds,
+                        @Param("categoryCount") long categoryCount,
+                        Pageable pageable);
 
         @Query("SELECT cm.campaign.id, COUNT(cm.id) FROM CampaignMember cm WHERE cm.campaign.id IN :campaignIds AND cm.roleInCampaign = :role GROUP BY cm.campaign.id")
         List<Object[]> countByCampaignIdsAndRoleInCampaign(@Param("campaignIds") List<Long> campaignIds,

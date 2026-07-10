@@ -2,6 +2,7 @@ package com.mgmtp.gives.controller;
 
 import com.mgmtp.gives.common.ApiResponse;
 import com.mgmtp.gives.common.PageResponse;
+import com.mgmtp.gives.dto.campaign_member.CampaignMemberFilterCriteria;
 import com.mgmtp.gives.dto.campaign_member.CampaignMemberResponse;
 import com.mgmtp.gives.dto.campaign_member.JoinedCampaignResponse;
 import com.mgmtp.gives.security.CustomUserDetails;
@@ -32,10 +33,11 @@ public class CampaignMemberController {
     )
     public ResponseEntity<?> getJoinedCampaigns(
             @AuthenticationPrincipal CustomUserDetails customUserDetails,
+            @ModelAttribute CampaignMemberFilterCriteria criteria,
             @PageableDefault(size = 10, sort = "joinedAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
         Long userId = customUserDetails.getUser().getId();
-        PageResponse<JoinedCampaignResponse> result = service.getJoinedCampaigns(userId, pageable);
+        PageResponse<JoinedCampaignResponse> result = service.getJoinedCampaigns(userId, criteria, pageable);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
