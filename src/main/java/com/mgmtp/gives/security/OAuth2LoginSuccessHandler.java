@@ -67,7 +67,8 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         CookieUtils.addAccessTokenCookie(response, accessToken, jwtProps.getAccessTokenExpiration());
         CookieUtils.addRefreshCookie(response, refreshToken, jwtProps.getRefreshTokenExpiration());
 
-        response.sendRedirect(mailProps.getFrontendUrl());
+        String redirectPath = UserRole.ADMIN.equals(user.getRole()) ? "/admin" : "/dashboard";
+        response.sendRedirect(mailProps.getFrontendUrl() + redirectPath);
     }
 
     private User createOAuthUser(OAuth2User oauthUser, String email) {
