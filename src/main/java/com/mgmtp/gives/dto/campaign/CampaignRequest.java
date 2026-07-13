@@ -23,7 +23,10 @@ public record CampaignRequest(
         CampaignStatus status,
         DonationMethod donationMethod,
         String qrImageUrl,
-        String qrBankInfo
+        String qrBankInfo,
+        String bankName,
+        String bankAccountNumber,
+        String bankAccountHolderName
 ) {
     public CampaignRequest(
             String title,
@@ -37,6 +40,6 @@ public record CampaignRequest(
             CampaignPriority priority,
             CampaignStatus status
     ) {
-        this(title, description, categories, acceptsMoney, acceptsGoods, target, startDate, endDate, priority, status, DonationMethod.PAYOS, null, null);
+        this(title, description, categories, acceptsMoney, acceptsGoods, target, startDate, endDate, priority, status, DonationMethod.PAYOS, null, null, null, null, null);
     }
 }

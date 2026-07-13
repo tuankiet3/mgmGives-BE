@@ -111,7 +111,7 @@ class CampaignServiceImplTest {
                 Set.of(10L),
                 true,
                 true,
-                5000L,
+                5000000L,
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(10),
                 CampaignPriority.HIGH,
@@ -123,7 +123,7 @@ class CampaignServiceImplTest {
                 Set.of(10L),
                 true,
                 true,
-                5000L,
+                5000000L,
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(10),
                 CampaignPriority.HIGH,
@@ -185,7 +185,7 @@ class CampaignServiceImplTest {
                 Set.of(10L),
                 true,
                 true,
-                5000L,
+                5000000L,
                 LocalDateTime.now().plusDays(5),
                 LocalDateTime.now().plusDays(2), // End date is before start date
                 CampaignPriority.HIGH,
@@ -208,7 +208,7 @@ class CampaignServiceImplTest {
                 Set.of(10L),
                 true,
                 true,
-                5000L,
+                5000000L,
                 sameTime,
                 sameTime, // End date equals start date
                 CampaignPriority.HIGH,
@@ -229,7 +229,7 @@ class CampaignServiceImplTest {
                 Set.of(10L),
                 true,
                 true,
-                5000L,
+                5000000L,
                 LocalDateTime.now().minusDays(1), // Start date in the past
                 LocalDateTime.now().plusDays(5),
                 CampaignPriority.HIGH,
@@ -717,42 +717,48 @@ class CampaignServiceImplTest {
     }
 
     @Test
-    void createCampaign_ManualQR_MissingQrImage_ThrowsException() {
+    void createCampaign_ManualQR_MissingBankDetails_ThrowsException() {
         CampaignRequest request = new CampaignRequest(
                 "Water Project",
                 "Description",
                 Set.of(10L),
                 true,
                 true,
-                5000L,
+                5000000L,
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(10),
                 CampaignPriority.HIGH,
                 CampaignStatus.PENDING,
                 com.mgmtp.gives.enums.DonationMethod.MANUAL_QR,
                 null,
-                "Bank Info"
+                "Bank Info",
+                null, // missing bankName
+                "123456789",
+                "NGUYEN VAN A"
         );
 
         assertThrows(AppException.class, () -> campaignService.createCampaign(request, testUser));
     }
 
     @Test
-    void createCampaign_ManualQR_WithQrImage_Success() {
+    void createCampaign_ManualQR_WithBankDetails_Success() {
         CampaignRequest request = new CampaignRequest(
                 "Water Project",
                 "Description",
                 Set.of(10L),
                 true,
                 true,
-                5000L,
+                5000000L,
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(10),
                 CampaignPriority.HIGH,
                 CampaignStatus.PENDING,
                 com.mgmtp.gives.enums.DonationMethod.MANUAL_QR,
                 "http://example.com/qr.png",
-                "Bank Info"
+                "Bank Info",
+                "MBBank",
+                "123456789",
+                "NGUYEN VAN A"
         );
 
         when(categoryRepository.findAllById(anySet())).thenReturn(List.of(testCategory));
@@ -767,6 +773,9 @@ class CampaignServiceImplTest {
         assertNotNull(result);
         assertEquals(com.mgmtp.gives.enums.DonationMethod.MANUAL_QR, result.getDonationMethod());
         assertEquals("Bank Info", result.getQrBankInfo());
+        assertEquals("MBBank", result.getBankName());
+        assertEquals("123456789", result.getBankAccountNumber());
+        assertEquals("NGUYEN VAN A", result.getBankAccountHolderName());
         verify(campaignQrMediaRepository, times(1)).save(any(com.mgmtp.gives.entity.CampaignQrMedia.class));
     }
 }

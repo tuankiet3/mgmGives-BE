@@ -112,6 +112,9 @@ public class CampaignServiceImpl implements CampaignService {
                 .acceptsGoods(request.acceptsGoods() != null ? request.acceptsGoods() : true)
                 .donationMethod(request.donationMethod() != null ? request.donationMethod() : DonationMethod.PAYOS)
                 .qrBankInfo(request.qrBankInfo())
+                .bankName(request.bankName())
+                .bankAccountNumber(request.bankAccountNumber())
+                .bankAccountHolderName(request.bankAccountHolderName())
                 .status(status)
                 .user(currentUser)
                 .categories(categories)
@@ -254,6 +257,9 @@ public class CampaignServiceImpl implements CampaignService {
         campaign.setStatus(newStatus);
         campaign.setDonationMethod(request.donationMethod() != null ? request.donationMethod() : campaign.getDonationMethod());
         campaign.setQrBankInfo(request.qrBankInfo());
+        campaign.setBankName(request.bankName());
+        campaign.setBankAccountNumber(request.bankAccountNumber());
+        campaign.setBankAccountHolderName(request.bankAccountHolderName());
 
         Campaign saved = campaignRepository.save(campaign);
         handleQrMediaUpsert(saved, request.qrImageUrl());
@@ -402,15 +408,22 @@ public class CampaignServiceImpl implements CampaignService {
             log.warn("Pending campaign validation failed: target is null");
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Target amount is required for submission");
         }
-        if (money && request.target() <= 0) {
-            log.warn("Pending campaign validation failed: target amount <= 0. target={}", request.target());
-            throw new AppException(ErrorCode.VALIDATION_ERROR, "Target amount must be positive");
+        if (money && request.target() < 500000) {
+            log.warn("Pending campaign validation failed: target amount < 500000. target={}", request.target());
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Target amount must be at least 500,000");
         }
         if (money) {
             DonationMethod method = request.donationMethod() != null ? request.donationMethod() : DonationMethod.PAYOS;
-            if ((method == DonationMethod.MANUAL_QR || method == DonationMethod.HYBRID)
-                    && (request.qrImageUrl() == null || request.qrImageUrl().isBlank())) {
-                throw new AppException(ErrorCode.VALIDATION_ERROR, "A QR image is required for Manual QR or Hybrid donation methods.");
+            if (method == DonationMethod.MANUAL_QR || method == DonationMethod.HYBRID) {
+                if (request.bankName() == null || request.bankName().isBlank()) {
+                    throw new AppException(ErrorCode.VALIDATION_ERROR, "Bank name is required for Manual QR or Hybrid donation methods.");
+                }
+                if (request.bankAccountNumber() == null || request.bankAccountNumber().isBlank()) {
+                    throw new AppException(ErrorCode.VALIDATION_ERROR, "Bank account number is required for Manual QR or Hybrid donation methods.");
+                }
+                if (request.bankAccountHolderName() == null || request.bankAccountHolderName().isBlank()) {
+                    throw new AppException(ErrorCode.VALIDATION_ERROR, "Bank account holder name is required for Manual QR or Hybrid donation methods.");
+                }
             }
         }
         if (request.startDate() == null) {
@@ -519,6 +532,9 @@ public class CampaignServiceImpl implements CampaignService {
         // 5. Donation Config fields
         response.setDonationMethod(campaign.getDonationMethod());
         response.setQrBankInfo(campaign.getQrBankInfo());
+        response.setBankName(campaign.getBankName());
+        response.setBankAccountNumber(campaign.getBankAccountNumber());
+        response.setBankAccountHolderName(campaign.getBankAccountHolderName());
         String qrImageUrl = campaignQrMediaRepository
                 .findByCampaignId(campaign.getId())
                 .map(CampaignQrMedia::getUrl)

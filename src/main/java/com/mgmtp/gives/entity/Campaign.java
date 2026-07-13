@@ -47,6 +47,15 @@ public class Campaign extends BaseEntity {
     @Column(name = "qr_bank_info", columnDefinition = "TEXT")
     private String qrBankInfo;
 
+    @Column(name = "bank_name")
+    private String bankName;
+
+    @Column(name = "bank_account_number")
+    private String bankAccountNumber;
+
+    @Column(name = "bank_account_holder_name")
+    private String bankAccountHolderName;
+
     @OneToOne(mappedBy = "campaign", cascade = CascadeType.ALL, orphanRemoval = true)
     private CampaignQrMedia qrMedia;
 
