@@ -27,6 +27,8 @@ public interface CampaignMeetingService {
             User currentUser
     );
 
+    CampaignMeetingResponse updateMeetingStatus(Long campaignId, Long meetingId, User currentUser);
+
     List<CampaignMeetingRecipientResponse> getMeetingRecipients(Long campaignId, User currentUser);
 
     List<CampaignMeetingRecipientResponse> getInvitedMembers(Long campaignId, Long meetingId, User currentUser);

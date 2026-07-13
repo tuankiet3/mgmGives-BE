@@ -8,5 +8,7 @@ public interface WebexMeetingClient {
 
     WebexMeetingResult updateMeeting(String meetingId, WebexCreateMeetingCommand command, String accessToken);
 
+    WebexMeetingResult getMeeting(String meetingId, String accessToken);
+
     void cancelMeeting(String meetingId, String accessToken);
 }

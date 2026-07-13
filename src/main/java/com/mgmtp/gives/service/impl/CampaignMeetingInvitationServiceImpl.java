@@ -4,6 +4,7 @@ import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.CampaignMeeting;
 import com.mgmtp.gives.entity.CampaignMember;
 import com.mgmtp.gives.entity.User;
+import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.UserStatus;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.event.campaign_meeting.CampaignMeetingCancellationEmailEvent;
@@ -121,6 +122,7 @@ public class CampaignMeetingInvitationServiceImpl implements CampaignMeetingInvi
         Set<String> seenEmails = new HashSet<>();
         return campaignMemberRepository.findByCampaignId(campaignId)
                 .stream()
+                .filter(member -> !member.getRoleInCampaign().equals(CampaignMemberRole.CAMPAIGN_ADMIN))
                 .map(CampaignMember::getUser)
                 .filter(user -> user != null && user.getStatus() == UserStatus.ACTIVE)
                 .filter(user -> StringUtils.hasText(user.getEmail()))

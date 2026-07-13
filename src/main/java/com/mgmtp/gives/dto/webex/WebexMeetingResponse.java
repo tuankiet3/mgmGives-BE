@@ -9,6 +9,8 @@ public record WebexMeetingResponse(
         String title,
         String start,
         String end,
-        String timezone
+        String timezone,
+        String state,
+        String meetingType
 ) {
 }

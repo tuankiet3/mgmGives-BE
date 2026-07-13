@@ -9,6 +9,8 @@ import com.mgmtp.gives.dto.webex.WebexMeetingResult;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.service.WebexMeetingClient;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -21,6 +23,7 @@ import java.time.format.DateTimeFormatter;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class WebexMeetingClientImpl implements WebexMeetingClient {
     private final WebexProps webexProps;
     private final RestClient restClient;
@@ -45,18 +48,8 @@ public class WebexMeetingClientImpl implements WebexMeetingClient {
                     .retrieve()
                     .body(WebexMeetingResponse.class);
 
-            if (response == null || !StringUtils.hasText(response.id()) || !StringUtils.hasText(response.webLink())) {
-                throw new AppException(ErrorCode.UNCATEGORIZED_ERROR, "Webex did not return a valid meeting link");
-            }
+            return getWebexMeetingResult(response);
 
-            return new WebexMeetingResult(
-                    response.id(),
-                    response.webLink(),
-                    response.title(),
-                    response.start(),
-                    response.end(),
-                    response.timezone()
-            );
         } catch (RestClientResponseException ex) {
             throw new AppException(
                     ErrorCode.UNCATEGORIZED_ERROR,
@@ -89,24 +82,64 @@ public class WebexMeetingClientImpl implements WebexMeetingClient {
                     .retrieve()
                     .body(WebexMeetingResponse.class);
 
-            if (response == null || !StringUtils.hasText(response.id()) || !StringUtils.hasText(response.webLink())) {
-                throw new AppException(ErrorCode.UNCATEGORIZED_ERROR, "Webex did not return a valid updated meeting");
-            }
+            return getWebexMeetingResult(response);
 
-            return new WebexMeetingResult(
-                    response.id(),
-                    response.webLink(),
-                    response.title(),
-                    response.start(),
-                    response.end(),
-                    response.timezone()
-            );
         } catch (RestClientResponseException ex) {
             throw new AppException(
                     ErrorCode.UNCATEGORIZED_ERROR,
                     "Failed to update Webex meeting: " + ex.getResponseBodyAsString()
             );
         }
+    }
+
+    @Override
+    public WebexMeetingResult getMeeting(String meetingId, String accessToken) {
+        if (!StringUtils.hasText(meetingId)) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Webex meeting ID is required");
+        }
+
+        try {
+            WebexMeetingResponse response = restClient
+                    .get()
+                    .uri(webexProps.getApiBaseUrl() + "/meetings/{meetingId}", meetingId)
+                    .headers(headers -> headers.setBearerAuth(accessToken))
+                    .retrieve()
+                    .body(WebexMeetingResponse.class);
+
+            log.info(
+                    "Fetched Webex meeting: id={}, type={}, state={}, start={}, end={}",
+                    response.id(),
+                    response.meetingType(),
+                    response.state(),
+                    response.start(),
+                    response.end()
+            );
+
+            return getWebexMeetingResult(response);
+        } catch (RestClientResponseException ex) {
+            throw new AppException(
+                    ErrorCode.UNCATEGORIZED_ERROR,
+                    "Failed to get Webex meeting: " + ex.getResponseBodyAsString()
+            );
+        }
+    }
+
+    @NonNull
+    private WebexMeetingResult getWebexMeetingResult(WebexMeetingResponse response) {
+        if (response == null || !StringUtils.hasText(response.id()) || !StringUtils.hasText(response.webLink())) {
+            throw new AppException(ErrorCode.UNCATEGORIZED_ERROR, "Webex did not return a valid updated meeting");
+        }
+
+        return new WebexMeetingResult(
+                response.id(),
+                response.webLink(),
+                response.title(),
+                response.start(),
+                response.end(),
+                response.timezone(),
+                response.state(),
+                response.meetingType()
+        );
     }
 
     @Override
@@ -129,6 +162,8 @@ public class WebexMeetingClientImpl implements WebexMeetingClient {
             );
         }
     }
+
+
 
     private String formatWebexDateTime(LocalDateTime dateTime) {
         ZoneId zoneId = ZoneId.of(webexProps.getTimeZone());

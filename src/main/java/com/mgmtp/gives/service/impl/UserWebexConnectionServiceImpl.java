@@ -35,6 +35,7 @@ import java.util.Base64;
 public class UserWebexConnectionServiceImpl implements UserWebexConnectionService {
     private static final int STATE_TTL_MINUTES = 10;
     private static final int TOKEN_REFRESH_SKEW_SECONDS = 60;
+    private static final String DEFAULT_WEBEX_RETURN_TO = "/integration-settings";
 
     private final WebexProps webexProps;
     private final MailProps mailProps;
@@ -46,18 +47,21 @@ public class UserWebexConnectionServiceImpl implements UserWebexConnectionServic
 
     @Override
     @Transactional
-    public WebexAuthorizeUrlResponse createAuthorizeUrl(User currentUser) {
+    public WebexAuthorizeUrlResponse createAuthorizeUrl(User currentUser, String returnTo) {
         if (currentUser == null || currentUser.getId() == null) {
             throw new AppException(ErrorCode.UNAUTHORIZED, "User must be authenticated");
         }
 
         String state = generateState();
+        String safeReturnTo = safeLocalReturnTo(returnTo);
         webexOAuthStateRepository.save(WebexOAuthState.builder()
                 .state(state)
                 .user(currentUser)
+                .returnTo(safeReturnTo)
                 .expiresAt(LocalDateTime.now().plusMinutes(STATE_TTL_MINUTES))
                 .build());
-        log.info("Created Webex OAuth state. userId={}, expiresInMinutes={}", currentUser.getId(), STATE_TTL_MINUTES);
+        log.info("Created Webex OAuth state. userId={}, expiresInMinutes={}, returnTo={}",
+                currentUser.getId(), STATE_TTL_MINUTES, safeReturnTo);
 
         String authorizeUrl = UriComponentsBuilder
                 .fromUriString("https://webexapis.com/v1/authorize")
@@ -114,8 +118,7 @@ public class UserWebexConnectionServiceImpl implements UserWebexConnectionServic
                 oauthState.getId(), oauthState.getUser().getId());
 
         return UriComponentsBuilder
-                .fromUriString(mailProps.getFrontendUrl())
-                .path("/integration-settings")
+                .fromUriString(frontendUrl(safeLocalReturnTo(oauthState.getReturnTo())))
                 .queryParam("webex", "success")
                 .toUriString();
     }
@@ -256,5 +259,20 @@ public class UserWebexConnectionServiceImpl implements UserWebexConnectionServic
         byte[] bytes = new byte[32];
         new SecureRandom().nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private String safeLocalReturnTo(String returnTo) {
+        if (!StringUtils.hasText(returnTo)
+                || !returnTo.startsWith("/")
+                || returnTo.startsWith("//")
+                || returnTo.contains("://")) {
+            return DEFAULT_WEBEX_RETURN_TO;
+        }
+
+        return returnTo;
+    }
+
+    private String frontendUrl(String path) {
+        return mailProps.getFrontendUrl().replaceAll("/+$", "") + path;
     }
 }

@@ -34,4 +34,7 @@ public class WebexOAuthState extends BaseEntity {
 
     @Column(name = "used_at")
     private LocalDateTime usedAt;
+
+    @Column(name = "return_to", length = 512)
+    private String returnTo;
 }

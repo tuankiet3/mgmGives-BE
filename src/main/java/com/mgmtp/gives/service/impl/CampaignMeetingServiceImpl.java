@@ -10,17 +10,14 @@ import com.mgmtp.gives.dto.campaign_meeting.MeetingNotesResponse;
 import com.mgmtp.gives.dto.campaign_meeting.UpdateCampaignMeetingRequest;
 import com.mgmtp.gives.dto.campaign_meeting.UpdateMeetingNotesRequest;
 import com.mgmtp.gives.dto.webex.WebexCreateMeetingCommand;
+import com.mgmtp.gives.dto.webex.WebexMeetingResponse;
 import com.mgmtp.gives.dto.webex.WebexMeetingResult;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.CampaignMeeting;
 import com.mgmtp.gives.entity.CampaignMedia;
 import com.mgmtp.gives.entity.CampaignMember;
 import com.mgmtp.gives.entity.User;
-import com.mgmtp.gives.enums.CampaignMeetingStatus;
-import com.mgmtp.gives.enums.CampaignMemberRole;
-import com.mgmtp.gives.enums.CampaignStatus;
-import com.mgmtp.gives.enums.UserRole;
-import com.mgmtp.gives.enums.UserStatus;
+import com.mgmtp.gives.enums.*;
 import com.mgmtp.gives.event.campaign_meeting.CampaignMeetingWebexCancellationEvent;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
@@ -28,6 +25,7 @@ import com.mgmtp.gives.repository.CampaignMeetingRepository;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
+import com.mgmtp.gives.service.CampaignMeetingClock;
 import com.mgmtp.gives.service.CampaignMeetingInvitationService;
 import com.mgmtp.gives.service.CampaignMeetingService;
 import com.mgmtp.gives.service.MediaService;
@@ -42,13 +40,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -64,6 +56,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
     private final MediaService mediaService;
     private final UserWebexConnectionService userWebexConnectionService;
     private final ApplicationEventPublisher eventPublisher;
+    private final CampaignMeetingClock campaignMeetingClock;
 
     @Override
     @Transactional
@@ -95,11 +88,11 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
                 .notifyAll(notifyAll)
                 .invitedUserIds(serializeUserIds(recipients))
                 .invitedCount(recipients.size())
-                .invitationsSentAt(LocalDateTime.now())
+                .invitationsSentAt(campaignMeetingClock.now())
                 .startTime(request.startTime())
                 .endTime(request.endTime())
-                .status(CampaignMeetingStatus.SCHEDULED)
-                .updatedAt(LocalDateTime.now())
+                .status(CampaignMeetingStatus.UPCOMING)
+                .updatedAt(campaignMeetingClock.now())
                 .build();
 
         CampaignMeeting saved = campaignMeetingRepository.save(meeting);
@@ -116,7 +109,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         Campaign campaign = getCampaign(campaignId);
         requireMeetingViewer(campaign, currentUser);
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = campaignMeetingClock.now();
         return campaignMeetingRepository.findByCampaignIdOrderByStartTimeAsc(campaignId)
                 .stream()
                 .filter(meeting -> matchesView(meeting, view, now))
@@ -172,7 +165,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         meeting.setStartTime(startTime);
         meeting.setEndTime(endTime);
         meeting.setMeetingUrl(webexMeeting.webLink());
-        meeting.setUpdatedAt(LocalDateTime.now());
+        meeting.setUpdatedAt(campaignMeetingClock.now());
         meeting.setUpdatedBy(currentUser);
 
         CampaignMeeting saved = campaignMeetingRepository.save(meeting);
@@ -182,6 +175,41 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
     }
 
     @Override
+    @Transactional
+    public CampaignMeetingResponse updateMeetingStatus(Long campaignId, Long meetingId, User currentUser) {
+        Campaign campaign = getCampaign(campaignId);
+        requireCampaignAdmin(campaign, currentUser);
+
+        CampaignMeeting campaignMeeting = getMeetingInCampaign(campaignId, meetingId);
+        User hostUser = campaignMeeting.getCreatedBy();
+
+        String accessToken = userWebexConnectionService.getValidAccessToken(hostUser);
+
+        WebexMeetingResult response = webexMeetingClient.getMeeting(campaignMeeting.getWebexMeetingId(), accessToken);
+
+        CampaignMeetingStatus currentStatus = campaignMeeting.getStatus();
+        CampaignMeetingStatus newStatus = mapStatus(response.state(), currentStatus);
+
+        if (isEndedLiveSession(response.state(), currentStatus, newStatus)) {
+            webexMeetingClient.cancelMeeting(campaignMeeting.getWebexMeetingId(), accessToken);
+            log.info(
+                    "Cancelled Webex meeting after host ended live session. meetingId={}, campaignId={}, webexMeetingId={}",
+                    meetingId, campaignId, campaignMeeting.getWebexMeetingId()
+            );
+        }
+
+        if (currentStatus != newStatus) {
+            campaignMeeting.setStatus(newStatus);
+            campaignMeeting.setUpdatedAt(campaignMeetingClock.now());
+            campaignMeeting.setUpdatedBy(currentUser);
+        }
+
+        return toResponse(campaignMeeting, currentUser);
+    }
+
+
+
+    @Override
     @Transactional(readOnly = true)
     public List<CampaignMeetingRecipientResponse> getMeetingRecipients(Long campaignId, User currentUser) {
         Campaign campaign = getCampaign(campaignId);
@@ -189,6 +217,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
 
         return resolveAllRecipients(campaignId)
                 .stream()
+                .filter(member -> !member.getRoleInCampaign().equals(CampaignMemberRole.CAMPAIGN_ADMIN))
                 .map(member -> new CampaignMeetingRecipientResponse(
                         member.getUser().getId(),
                         member.getUser().getFullName(),
@@ -237,7 +266,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         requireCampaignAdmin(campaign, currentUser);
         CampaignMeeting meeting = getMeetingInCampaign(campaignId, meetingId);
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = campaignMeetingClock.now();
         meeting.setNotes(request.content());
         meeting.setNotesUpdatedAt(now);
         meeting.setNotesUpdatedBy(currentUser);
@@ -363,9 +392,9 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         User hostUser = meeting.getCreatedBy();
 
         meeting.setStatus(CampaignMeetingStatus.CANCELLED);
-        meeting.setCancelledAt(LocalDateTime.now());
+        meeting.setCancelledAt(campaignMeetingClock.now());
         meeting.setCancelledBy(currentUser);
-        meeting.setUpdatedAt(LocalDateTime.now());
+        meeting.setUpdatedAt(campaignMeetingClock.now());
         meeting.setUpdatedBy(currentUser);
 
         CampaignMeeting saved = campaignMeetingRepository.save(meeting);
@@ -429,12 +458,12 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
             LocalDateTime startTime,
             LocalDateTime endTime
     ) {
-        boolean hasConflict = campaignMeetingRepository.existsOverlappingActiveMeeting(
+        boolean hasConflict = campaignMeetingRepository.existsOverlappingMeeting(
                 campaignId,
                 startTime,
                 endTime,
                 excludedMeetingId,
-                CampaignMeetingStatus.CANCELLED
+                List.of(CampaignMeetingStatus.UPCOMING, CampaignMeetingStatus.IN_PROGRESS)
         );
         if (hasConflict) {
             throw new AppException(
@@ -445,7 +474,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
     }
 
     private void validateMeetingIsUpcomingForUpdate(CampaignMeeting meeting) {
-        if (!isUpcoming(meeting, LocalDateTime.now())) {
+        if (!isUpcoming(meeting, campaignMeetingClock.now())) {
             throw new AppException(
                     ErrorCode.VALIDATION_ERROR,
                     "Only upcoming scheduled meetings can be updated"
@@ -454,7 +483,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
     }
 
     private void validateMeetingIsUpcomingForCancel(CampaignMeeting meeting) {
-        if (!isUpcoming(meeting, LocalDateTime.now())) {
+        if (!isUpcoming(meeting, campaignMeetingClock.now())) {
             throw new AppException(
                     ErrorCode.VALIDATION_ERROR,
                     "Only upcoming scheduled meetings can be cancelled"
@@ -525,6 +554,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         Set<String> seenEmails = new LinkedHashSet<>();
         return campaignMemberRepository.findByCampaignId(campaignId)
                 .stream()
+                .filter(member -> !member.getRoleInCampaign().equals(CampaignMemberRole.CAMPAIGN_ADMIN))
                 .filter(member -> member.getUser() != null)
                 .filter(member -> isReceivableRecipient(member.getUser()))
                 .filter(member -> seenEmails.add(member.getUser().getEmail().toLowerCase()))
@@ -592,9 +622,10 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
     private boolean matchesView(CampaignMeeting meeting, String view, LocalDateTime now) {
         String normalizedView = view == null || view.isBlank() ? "default" : view.trim().toLowerCase();
         return switch (normalizedView) {
-            case "upcoming", "default" -> meeting.getStatus() == CampaignMeetingStatus.SCHEDULED
+            case "upcoming", "default" -> meeting.getStatus() == CampaignMeetingStatus.UPCOMING
                     && meeting.getEndTime() != null
                     && meeting.getEndTime().isAfter(now);
+            case "in-progress" -> meeting.getStatus() == CampaignMeetingStatus.IN_PROGRESS;
             case "past" -> isPast(meeting, now);
             case "all" -> true;
             default -> throw new AppException(
@@ -605,22 +636,17 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
     }
 
     private Comparator<CampaignMeeting> meetingComparator(String view) {
-        String normalizedView = view == null || view.isBlank() ? "default" : view.trim().toLowerCase();
-        Comparator<CampaignMeeting> ascending = Comparator.comparing(CampaignMeeting::getStartTime);
-        if ("past".equals(normalizedView)) {
-            return ascending.reversed();
-        }
-        return ascending;
+        return Comparator.comparing(CampaignMeeting::getStartTime).reversed();
     }
 
     private boolean isUpcoming(CampaignMeeting meeting, LocalDateTime now) {
-        return meeting.getStatus() == CampaignMeetingStatus.SCHEDULED
+        return meeting.getStatus() == CampaignMeetingStatus.UPCOMING
                 && meeting.getStartTime() != null
                 && meeting.getStartTime().isAfter(now);
     }
 
     private boolean isLive(CampaignMeeting meeting, LocalDateTime now) {
-        return meeting.getStatus() == CampaignMeetingStatus.SCHEDULED
+        return meeting.getStatus() == CampaignMeetingStatus.UPCOMING
                 && meeting.getStartTime() != null
                 && meeting.getEndTime() != null
                 && !meeting.getStartTime().isAfter(now)
@@ -633,18 +659,25 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
                 || (meeting.getEndTime() != null && !meeting.getEndTime().isAfter(now));
     }
 
-    private String effectiveStatus(CampaignMeeting meeting) {
-        LocalDateTime now = LocalDateTime.now();
-        if (meeting.getStatus() == CampaignMeetingStatus.CANCELLED) {
-            return "CANCELLED";
-        }
-        if (isLive(meeting, now)) {
-            return "LIVE";
-        }
-        if (isPast(meeting, now)) {
-            return "ENDED";
-        }
-        return "UPCOMING";
+    private CampaignMeetingStatus mapStatus(String webexState, CampaignMeetingStatus currentStatus) {
+        log.info("Mapping status for webex state: {}, currentStatus={}", webexState, currentStatus);
+        if ("inProgress".equals(webexState)) return CampaignMeetingStatus.IN_PROGRESS;
+        if ("ended".equals(webexState) || "expired".equals(webexState)) return CampaignMeetingStatus.ENDED;
+        if ("cancelled".equals(webexState)) return CampaignMeetingStatus.CANCELLED;
+        if ("active".equals(webexState) && currentStatus == CampaignMeetingStatus.IN_PROGRESS)
+            return CampaignMeetingStatus.ENDED;
+
+        return CampaignMeetingStatus.UPCOMING;
+    }
+
+    private boolean isEndedLiveSession(
+            String webexState,
+            CampaignMeetingStatus currentStatus,
+            CampaignMeetingStatus newStatus
+    ) {
+        return "active".equals(webexState)
+                && currentStatus == CampaignMeetingStatus.IN_PROGRESS
+                && newStatus == CampaignMeetingStatus.ENDED;
     }
 
     private void requireCampaignAdmin(Campaign campaign, User currentUser) {
@@ -698,8 +731,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
 
     private CampaignMeetingResponse toResponse(CampaignMeeting meeting, User currentUser) {
         boolean canManage = canManageMeeting(meeting.getCampaign(), currentUser);
-        boolean upcoming = isUpcoming(meeting, LocalDateTime.now());
-        String displayStatus = effectiveStatus(meeting);
+        boolean upcoming = isUpcoming(meeting, campaignMeetingClock.now());
         return CampaignMeetingResponse.builder()
                 .id(meeting.getId())
                 .campaignId(meeting.getCampaign() != null ? meeting.getCampaign().getId() : null)
@@ -715,8 +747,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
                 .notifyAllMembers(meeting.isNotifyAll())
                 .invitedCount(invitedCount(meeting))
                 .invitedUserIds(canManage ? invitedUserIdsForResponse(meeting) : null)
-                .displayStatus(displayStatus)
-                .effectiveStatus(displayStatus)
+                .displayStatus(meeting.getStatus().name())
                 .canManage(canManage)
                 .canUpdate(canManage && upcoming)
                 .canCancel(canManage && upcoming)

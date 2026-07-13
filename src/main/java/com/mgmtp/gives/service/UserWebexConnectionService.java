@@ -5,7 +5,7 @@ import com.mgmtp.gives.dto.webex.WebexConnectionStatusResponse;
 import com.mgmtp.gives.entity.User;
 
 public interface UserWebexConnectionService {
-    WebexAuthorizeUrlResponse createAuthorizeUrl(User currentUser);
+    WebexAuthorizeUrlResponse createAuthorizeUrl(User currentUser, String returnTo);
 
     String handleCallback(String code, String state);
 

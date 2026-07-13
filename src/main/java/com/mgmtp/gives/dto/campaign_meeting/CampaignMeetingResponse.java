@@ -25,7 +25,6 @@ public record CampaignMeetingResponse(
         Integer invitedCount,
         List<Long> invitedUserIds,
         String displayStatus,
-        String effectiveStatus,
         Boolean canManage,
         Boolean canUpdate,
         Boolean canCancel,

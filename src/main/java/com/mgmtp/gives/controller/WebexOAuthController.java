@@ -29,10 +29,11 @@ public class WebexOAuthController {
 
     @GetMapping("/oauth/authorize")
     public ApiResponse<WebexAuthorizeUrlResponse> authorize(
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(required = false) String returnTo
     ) {
         log.info("Webex OAuth authorize requested. userId={}", userDetails.getUser().getId());
-        return ApiResponse.success(userWebexConnectionService.createAuthorizeUrl(userDetails.getUser()));
+        return ApiResponse.success(userWebexConnectionService.createAuthorizeUrl(userDetails.getUser(), returnTo));
     }
 
     @GetMapping("/oauth/callback")

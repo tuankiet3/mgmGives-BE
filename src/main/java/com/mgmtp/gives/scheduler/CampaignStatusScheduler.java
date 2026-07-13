@@ -21,7 +21,7 @@ public class CampaignStatusScheduler {
     private final CampaignRepository campaignRepository;
     private final CampaignNotificationPublisher publisher;
 
-    @Scheduled(cron = "0 * * * * *")
+    @Scheduled(cron = "0 */10 * * * *")
     @Transactional
     public void updateCampaignStatuses() {
         LocalDateTime now = LocalDateTime.now();
