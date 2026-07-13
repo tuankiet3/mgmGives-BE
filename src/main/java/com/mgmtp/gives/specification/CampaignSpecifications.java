@@ -57,6 +57,17 @@ public final class CampaignSpecifications {
         };
     }
 
+    public static Specification<Campaign> matchesTitleOrOrganizerKeyword(String keyword) {
+        return (root, query, cb) -> {
+            if (keyword == null || keyword.trim().isEmpty())
+                return null;
+            String pattern = "%" + keyword.trim().toLowerCase() + "%";
+            return cb.or(
+                    cb.like(cb.lower(root.get("title")), pattern),
+                    cb.like(cb.lower(root.get("user").get("fullName")), pattern));
+        };
+    }
+
     public static Specification<Campaign> isVisibleTo(User currentUser) {
         return (root, query, cb) -> {
             if (currentUser == null) {

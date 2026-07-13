@@ -31,6 +31,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -110,6 +111,20 @@ class AdminCampaignControllerTest {
                 .andExpect(status().isOk());
 
         assertCapturedCategoryIds(List.of(1L, 2L));
+    }
+
+    @Test
+    void getCampaigns_BindsKeywordForTitleOrOrganizerSearch() throws Exception {
+        mockMvc.perform(get("/api/admin/campaigns")
+                        .with(user(adminUserDetails))
+                        .param("keyword", "Thanh"))
+                .andExpect(status().isOk());
+
+        verify(adminCampaignService).getCampaigns(
+                isNull(),
+                any(),
+                eq("Thanh"),
+                any(Pageable.class));
     }
 
     @SuppressWarnings("unchecked")
