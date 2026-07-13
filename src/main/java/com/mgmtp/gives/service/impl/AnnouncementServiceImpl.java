@@ -13,6 +13,7 @@ import com.mgmtp.gives.entity.Announcement;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.CampaignMedia;
 import com.mgmtp.gives.entity.User;
+import com.mgmtp.gives.enums.MediaContext;
 import com.mgmtp.gives.enums.NotificationType;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
@@ -23,6 +24,7 @@ import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.DonationRepository;
 import com.mgmtp.gives.service.AnnouncementService;
+import com.mgmtp.gives.service.MediaService;
 import com.mgmtp.gives.service.NotificationService;
 import com.mgmtp.gives.util.HtmlSanitizerUtil;
 import org.jsoup.Jsoup;
@@ -56,6 +58,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     private final DonationRepository donationRepository;
     private final CampaignMediaRepository campaignMediaRepository;
     private final CampaignMediaMapper campaignMediaMapper;
+    private final MediaService mediaService;
     private final NotificationService notificationService;
     private final Executor notificationExecutor;
 
@@ -67,6 +70,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
             DonationRepository donationRepository,
             CampaignMediaRepository campaignMediaRepository,
             CampaignMediaMapper campaignMediaMapper,
+            MediaService mediaService,
             NotificationService notificationService,
             @Qualifier("notificationExecutor") Executor notificationExecutor) {
         this.announcementRepository = announcementRepository;
@@ -76,6 +80,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
         this.donationRepository = donationRepository;
         this.campaignMediaRepository = campaignMediaRepository;
         this.campaignMediaMapper = campaignMediaMapper;
+        this.mediaService = mediaService;
         this.notificationService = notificationService;
         this.notificationExecutor = notificationExecutor;
     }
@@ -131,7 +136,6 @@ public class AnnouncementServiceImpl implements AnnouncementService {
         List<CampaignMedia> associatedMedia = campaignMediaRepository.findByAnnouncementIdAndDeletedAtIsNullOrderByDisplayOrderAscIdAsc(announcementId);
         for (CampaignMedia media : associatedMedia) {
             media.setAnnouncement(null);
-            media.setContext("CAMPAIGN");
             media.setDisplayOrder(null);
         }
         campaignMediaRepository.saveAll(associatedMedia);
@@ -142,59 +146,22 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     }
 
     private void saveAnnouncementMedia(Announcement announcement, List<Long> mediaIds, Long campaignId) {
-        if (mediaIds == null) {
-            return;
-        }
+        List<CampaignMedia> currentMedia = campaignMediaRepository
+                .findByAnnouncementIdAndDeletedAtIsNullOrderByDisplayOrderAscIdAsc(announcement.getId());
 
-        List<Long> uniqueMediaIds = mediaIds.stream().distinct().toList();
-        List<CampaignMedia> currentMedia = campaignMediaRepository.findByAnnouncementIdAndDeletedAtIsNullOrderByDisplayOrderAscIdAsc(announcement.getId());
-        List<CampaignMedia> toSave = new java.util.ArrayList<>();
-
-        for (CampaignMedia media : currentMedia) {
-            if (!uniqueMediaIds.contains(media.getId())) {
-                media.setAnnouncement(null);
-                media.setContext("CAMPAIGN");
-                media.setDisplayOrder(null);
-                toSave.add(media);
-            }
-        }
-
-        if (!uniqueMediaIds.isEmpty()) {
-            List<CampaignMedia> newMediaEntities = campaignMediaRepository.findAllById(uniqueMediaIds);
-
-            for (Long id : uniqueMediaIds) {
-                CampaignMedia media = newMediaEntities.stream()
-                        .filter(m -> Objects.equals(m.getId(), id))
-                        .findFirst()
-                        .orElseThrow(() -> new AppException(ErrorCode.VALIDATION_ERROR, "Media with ID " + id + " does not exist"));
-
-                if (media.getDeletedAt() != null) {
-                    throw new AppException(ErrorCode.VALIDATION_ERROR, "Media with ID " + id + " has been deleted");
-                }
-                if (media.getCampaign() == null || !Objects.equals(media.getCampaign().getId(), campaignId)) {
-                    throw new AppException(ErrorCode.VALIDATION_ERROR, "Media with ID " + id + " does not belong to campaign " + campaignId);
-                }
-            }
-
-            for (int i = 0; i < uniqueMediaIds.size(); i++) {
-                Long id = uniqueMediaIds.get(i);
-                CampaignMedia media = newMediaEntities.stream()
-                        .filter(m -> Objects.equals(m.getId(), id))
-                        .findFirst()
-                        .get();
-
-                media.setAnnouncement(announcement);
-                media.setContext("ANNOUNCEMENT");
-                media.setDisplayOrder(i);
-                if (!toSave.contains(media)) {
-                    toSave.add(media);
-                }
-            }
-        }
-
-        if (!toSave.isEmpty()) {
-            campaignMediaRepository.saveAll(toSave);
-        }
+        mediaService.reconcileMediaTags(campaignId, currentMedia, mediaIds,
+                media -> {
+                    media.setAnnouncement(null);
+                    media.setDisplayOrder(null);
+                },
+                (media, index) -> {
+                    if (media.getContext() == MediaContext.FINAL_REPORT || media.getMeeting() != null) {
+                        throw new AppException(ErrorCode.VALIDATION_ERROR,
+                                "Media with ID " + media.getId() + " is already attached to another feature");
+                    }
+                    media.setAnnouncement(announcement);
+                    media.setDisplayOrder(index);
+                });
     }
 
     @Override

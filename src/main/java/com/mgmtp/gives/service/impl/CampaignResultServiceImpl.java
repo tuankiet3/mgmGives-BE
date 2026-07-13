@@ -7,21 +7,26 @@ import com.mgmtp.gives.dto.campaign.CampaignResultRequest;
 import com.mgmtp.gives.dto.campaign.CampaignResultResponse;
 import com.mgmtp.gives.dto.campaign.DonorNotificationInfo;
 import com.mgmtp.gives.dto.campaign.DonorThankYouContext;
+import com.mgmtp.gives.dto.campaign.CampaignMediaResponse;
 import com.mgmtp.gives.dto.notification.CreateNotificationCommand;
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.Announcement;
 import com.mgmtp.gives.entity.Campaign;
+import com.mgmtp.gives.entity.CampaignMedia;
 import com.mgmtp.gives.entity.Category;
 import com.mgmtp.gives.entity.Donation;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.DonationType;
+import com.mgmtp.gives.enums.MediaContext;
 import com.mgmtp.gives.enums.NotificationType;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
+import com.mgmtp.gives.mapper.CampaignMediaMapper;
 import com.mgmtp.gives.repository.AnnouncementRepository;
 import com.mgmtp.gives.repository.CampaignFollowerRepository;
+import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.DonationRepository;
@@ -29,6 +34,7 @@ import com.mgmtp.gives.service.CampaignMemberService;
 import com.mgmtp.gives.service.CampaignResultService;
 import com.mgmtp.gives.service.EmailService;
 import com.mgmtp.gives.service.GeminiService;
+import com.mgmtp.gives.service.MediaService;
 import com.mgmtp.gives.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,6 +79,9 @@ public class CampaignResultServiceImpl implements CampaignResultService {
     private final EmailService emailService;
     private final CampaignFollowerRepository campaignFollowerRepository;
     private final TemplateEngine templateEngine;
+    private final CampaignMediaRepository campaignMediaRepository;
+    private final CampaignMediaMapper campaignMediaMapper;
+    private final MediaService mediaService;
 
     @Override
     @Transactional
@@ -102,6 +111,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
         campaign.setFinalDonorCount(donorCount);
         campaign.setFinalVolunteerCount(volunteerCount);
         campaignRepository.save(campaign);
+        List<CampaignMedia> resultMedia = saveResultMedia(campaign, request.mediaIds());
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
@@ -114,7 +124,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
         });
 
         log.info("Campaign result posted: campaignId={}, userId={}", campaignId, currentUser.getId());
-        return buildResponse(campaign, confirmedTotal);
+        return buildResponse(campaign, confirmedTotal, resultMedia);
     }
 
     @Override
@@ -137,9 +147,10 @@ public class CampaignResultServiceImpl implements CampaignResultService {
         campaign.setResultPublishedBy(currentUser);
         campaign.setResultPublishedAt(LocalDateTime.now());
         campaignRepository.save(campaign);
+        List<CampaignMedia> resultMedia = saveResultMedia(campaign, request.mediaIds());
 
         log.info("Campaign result updated: campaignId={}, userId={}", campaignId, currentUser.getId());
-        return buildResponse(campaign, confirmedTotal);
+        return buildResponse(campaign, confirmedTotal, resultMedia);
     }
 
     @Override
@@ -203,6 +214,32 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                 confirmedTotal, donorCount, volunteerCount, goalPercent,
                 categories, durationDays, moneyDonationCount, goodsDonationCount,
                 announcements, goodsDescriptions, buildBiggestDonorDescription(donations)));
+    }
+
+    /**
+     * Re-tags campaign media as belonging to the final report (context=FINAL_REPORT) so it's
+     * excluded from the general campaign gallery. Media dropped from the report reverts to
+     * context=CAMPAIGN. Media already attached to an announcement or meeting (via FK) is
+     * rejected rather than silently stolen. Returns the final FINAL_REPORT-tagged media in the
+     * order the caller requested, so buildResponse can reuse it without re-querying.
+     */
+    private List<CampaignMedia> saveResultMedia(Campaign campaign, List<Long> mediaIds) {
+        List<CampaignMedia> currentMedia = campaignMediaRepository
+                .findByCampaignIdAndContextAndDeletedAtIsNull(campaign.getId(), MediaContext.FINAL_REPORT);
+
+        return mediaService.reconcileMediaTags(campaign.getId(), currentMedia, mediaIds,
+                media -> media.setContext(MediaContext.CAMPAIGN),
+                (media, index) -> {
+                    if (media.getAnnouncement() != null || media.getMeeting() != null) {
+                        throw new AppException(ErrorCode.VALIDATION_ERROR,
+                                "Media with ID " + media.getId() + " is already attached to another feature");
+                    }
+                    if (media.isCover()) {
+                        throw new AppException(ErrorCode.VALIDATION_ERROR,
+                                "Campaign cover photo cannot be attached to the final report");
+                    }
+                    media.setContext(MediaContext.FINAL_REPORT);
+                });
     }
 
     private static String describeAnnouncement(Announcement announcement) {
@@ -425,6 +462,12 @@ public class CampaignResultServiceImpl implements CampaignResultService {
     }
 
     private CampaignResultResponse buildResponse(Campaign campaign, long confirmedTotal) {
+        List<CampaignMedia> resultMedia = campaignMediaRepository
+                .findByCampaignIdAndContextAndDeletedAtIsNull(campaign.getId(), MediaContext.FINAL_REPORT);
+        return buildResponse(campaign, confirmedTotal, resultMedia);
+    }
+
+    private CampaignResultResponse buildResponse(Campaign campaign, long confirmedTotal, List<CampaignMedia> resultMedia) {
         long donorCount = campaign.getFinalDonorCount() != null
                 ? campaign.getFinalDonorCount()
                 : donationRepository.countDistinctDonorsByCampaignId(campaign.getId());
@@ -437,6 +480,8 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                 ? Math.min(100.0, (amountForGoal * 100.0) / campaign.getTarget())
                 : 0.0;
 
+        List<CampaignMediaResponse> mediaResponses = campaignMediaMapper.toResponseList(resultMedia);
+
         return CampaignResultResponse.builder()
                 .campaignId(campaign.getId())
                 .resultSummary(campaign.getResultSummary())
@@ -446,6 +491,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                 .publishedByName(campaign.getResultPublishedBy() != null
                         ? campaign.getResultPublishedBy().getFullName() : null)
                 .publishedAt(campaign.getResultPublishedAt())
+                .media(mediaResponses)
                 .totalRaised(confirmedTotal)
                 .donorCount(donorCount)
                 .volunteerCount(volunteerCount)

@@ -27,13 +27,14 @@ public class MediaController {
 
     @PostMapping(value = "/upload/campaign", consumes = MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Upload campaign media", description = "Uploads an image or video file for a campaign. Accepts image/jpeg, image/png, image/webp (max 5MB) and video/mp4, video/quicktime, video/x-msvideo, video/webm (max 50MB).")
+    @Operation(summary = "Upload campaign media", description = "Uploads an image, video, or PDF document for a campaign. Accepts image/jpeg, image/png, image/webp, image/gif (max 5MB); video/mp4, video/quicktime, video/x-msvideo, video/webm (max 50MB); application/pdf (max 10MB). Only image files can be set as cover. Optional `context` (CAMPAIGN or FINAL_REPORT, defaults to CAMPAIGN) excludes the media from the general campaign gallery when set to FINAL_REPORT.")
     public ApiResponse<CampaignMediaResponse> uploadCampaignMedia(
             @RequestParam("file") MultipartFile file,
             @RequestParam("campaignId") Long campaignId,
             @RequestParam(value = "isCover", required = false, defaultValue = "false") boolean isCover,
+            @RequestParam(value = "context", required = false) String context,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
-        CampaignMediaResponse media = mediaService.uploadCampaignMedia(file, campaignId, isCover, userDetails.getUser());
+        CampaignMediaResponse media = mediaService.uploadCampaignMedia(file, campaignId, isCover, context, userDetails.getUser());
         return ApiResponse.success(media, "Campaign media uploaded successfully");
     }
 
@@ -88,7 +89,7 @@ public class MediaController {
         CampaignMedia media = mediaService.restoreCampaignMedia(id);
         CampaignMediaResponse response = CampaignMediaResponse.builder()
                 .id(media.getId()).url(media.getUrl()).mediaType(media.getMediaType()).isCover(media.isCover())
-                .caption(media.getCaption()).displayOrder(media.getDisplayOrder()).context(media.getContext())
+                .caption(media.getCaption()).displayOrder(media.getDisplayOrder()).context(media.getContext().name())
                 .build();
         return ApiResponse.success(response, "Campaign media restored successfully");
     }

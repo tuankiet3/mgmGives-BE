@@ -10,6 +10,7 @@ import com.mgmtp.gives.entity.Category;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.MediaContext;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
@@ -469,7 +470,7 @@ public class CampaignServiceImpl implements CampaignService {
     @Override
     @Transactional(readOnly = true)
     public List<CampaignMedia> getActiveMediasByCampaignId(Long campaignId) {
-        return campaignMediaRepository.findByCampaignIdAndDeletedAtIsNull(campaignId);
+        return campaignMediaRepository.findByCampaignIdAndContextNotAndDeletedAtIsNull(campaignId, MediaContext.FINAL_REPORT);
     }
 
     @Override
@@ -487,8 +488,11 @@ public class CampaignServiceImpl implements CampaignService {
         boolean isEditable = isCreator && campaign.getStatus().isEditable();
         response.setIsEditable(isEditable);
 
-        // 2. Fetch active media
-        List<CampaignMedia> activeMedia = campaignMediaRepository.findByCampaignIdAndDeletedAtIsNull(campaign.getId());
+        // 2. Fetch active media, excluding FINAL_REPORT context - the final report has its own
+        // curated media list (see CampaignResultServiceImpl) and isn't meant to echo the general
+        // gallery. Announcement/meeting media stays visible here.
+        List<CampaignMedia> activeMedia = campaignMediaRepository
+                .findByCampaignIdAndContextNotAndDeletedAtIsNull(campaign.getId(), MediaContext.FINAL_REPORT);
         List<CampaignMediaResponse> mediaResponses = activeMedia.stream()
                 .map(m -> CampaignMediaResponse.builder()
                         .id(m.getId())
@@ -497,7 +501,7 @@ public class CampaignServiceImpl implements CampaignService {
                         .isCover(m.isCover())
                         .caption(m.getCaption())
                         .displayOrder(m.getDisplayOrder())
-                        .context(m.getContext())
+                        .context(m.getContext().name())
                         .build())
                 .toList();
         response.setMedia(mediaResponses);

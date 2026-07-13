@@ -1,6 +1,7 @@
 package com.mgmtp.gives.repository;
 
 import com.mgmtp.gives.entity.CampaignMedia;
+import com.mgmtp.gives.enums.MediaContext;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -17,7 +18,9 @@ public interface CampaignMediaRepository extends JpaRepository<CampaignMedia, Lo
 
     List<CampaignMedia> findByCampaignIdAndDeletedAtIsNull(Long campaignId);
 
-    List<CampaignMedia> findByCampaignIdAndContextAndDeletedAtIsNull(Long campaignId, String context);
+    List<CampaignMedia> findByCampaignIdAndContextAndDeletedAtIsNull(Long campaignId, MediaContext context);
+
+    List<CampaignMedia> findByCampaignIdAndContextNotAndDeletedAtIsNull(Long campaignId, MediaContext context);
 
     List<CampaignMedia> findByCampaignIdAndMeetingIdAndDeletedAtIsNull(Long campaignId, Long meetingId);
 

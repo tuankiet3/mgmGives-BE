@@ -1,5 +1,6 @@
 package com.mgmtp.gives.entity;
 
+import com.mgmtp.gives.enums.MediaContext;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -45,6 +46,7 @@ public class CampaignMedia extends BaseEntity {
     private Integer displayOrder;
 
     @Builder.Default
+    @Enumerated(EnumType.STRING)
     @Column(name = "context")
-    private String context = "CAMPAIGN";
+    private MediaContext context = MediaContext.CAMPAIGN;
 }

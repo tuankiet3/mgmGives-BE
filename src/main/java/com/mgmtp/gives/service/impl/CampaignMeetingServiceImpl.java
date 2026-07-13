@@ -787,7 +787,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
 
     private CampaignMediaResponse toMediaResponse(CampaignMedia media) {
         return new CampaignMediaResponse(media.getId(), media.getUrl(), media.getMediaType(), media.isCover(),
-                    media.getCaption(), media.getDisplayOrder(), media.getContext());
+                    media.getCaption(), media.getDisplayOrder(), media.getContext().name());
     }
 
     private String actorName(User user, String fallback) {

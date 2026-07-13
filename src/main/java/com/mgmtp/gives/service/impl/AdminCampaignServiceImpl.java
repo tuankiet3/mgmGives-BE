@@ -6,6 +6,7 @@ import com.mgmtp.gives.entity.CampaignMember;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.MediaContext;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
 import com.mgmtp.gives.notification.publisher.CampaignNotificationPublisher;
@@ -144,7 +145,7 @@ public class AdminCampaignServiceImpl implements AdminCampaignService {
     @Override
     @Transactional(readOnly = true)
     public List<CampaignMedia> getActiveMediasByCampaignId(Long campaignId) {
-        return campaignMediaRepository.findByCampaignIdAndDeletedAtIsNull(campaignId);
+        return campaignMediaRepository.findByCampaignIdAndContextNotAndDeletedAtIsNull(campaignId, MediaContext.FINAL_REPORT);
     }
 
     private boolean shouldStartImmediately(Campaign campaign) {

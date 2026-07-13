@@ -8,6 +8,7 @@ import com.mgmtp.gives.entity.CampaignMedia;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.MediaContext;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
@@ -30,7 +31,15 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -45,9 +54,18 @@ public class MediaServiceImpl implements MediaService {
     @Value("${app.media.upload-dir}")
     private String uploadDir;
 
+    // Contexts a caller may self-assign at upload time. Announcement/meeting media doesn't need
+    // its own context - it's scoped by FK (announcement_id / meeting_id) and stays visible in
+    // the general gallery like any other campaign media, so it's uploaded as the default
+    // CAMPAIGN context.
+    private static final Set<MediaContext> SELF_ASSIGNABLE_CONTEXTS =
+            Set.of(MediaContext.CAMPAIGN, MediaContext.FINAL_REPORT);
+
     @Override
     @Transactional
-    public CampaignMediaResponse uploadCampaignMedia(MultipartFile file, Long campaignId, boolean isCover, User currentUser) {
+    public CampaignMediaResponse uploadCampaignMedia(
+            MultipartFile file, Long campaignId, boolean isCover, String context, User currentUser
+    ) {
         MediaValidationUtil.validateFile(file, false);
 
         Campaign campaign = campaignRepository.findById(campaignId)
@@ -63,6 +81,11 @@ public class MediaServiceImpl implements MediaService {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Only image files can be set as cover image");
         }
 
+        MediaContext resolvedContext = resolveSelfAssignedContext(context);
+        if (isCover && resolvedContext == MediaContext.FINAL_REPORT) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Final report media cannot be set as a cover image");
+        }
+
         String filename = storeFile(file, "campaign media");
 
         CampaignMedia media = CampaignMedia.builder()
@@ -70,25 +93,101 @@ public class MediaServiceImpl implements MediaService {
                 .mediaType(detectedType)
                 .isCover(isCover)
                 .campaign(campaign)
+                .context(resolvedContext)
                 .build();
 
         CampaignMedia saved = campaignMediaRepository.save(media);
 
-        // If isCover is true, soft-delete any existing cover images of the campaign
+        // If isCover is true, soft-delete any existing cover image within the SAME context -
+        // a cover image only makes sense as "the" cover for the gallery it belongs to, so this
+        // must not reach into (or clear) another feature's media.
         if (isCover) {
-            campaignMediaRepository.findByCampaignIdAndDeletedAtIsNull(campaignId)
+            campaignMediaRepository.findByCampaignIdAndContextAndDeletedAtIsNull(campaignId, resolvedContext)
                     .stream()
                     .filter(CampaignMedia::isCover)
                     .filter(m -> !m.getId().equals(saved.getId()))
                     .forEach(this::softDeleteMedia);
         }
 
-        log.info("Campaign media uploaded: id={}, file={}, type={}, isCover={}, campaignId={}", 
+        log.info("Campaign media uploaded: id={}, file={}, type={}, isCover={}, campaignId={}",
                 saved.getId(), filename, saved.getMediaType(), saved.isCover(), campaignId);
         return CampaignMediaResponse.builder()
                 .id(saved.getId()).url(saved.getUrl()).mediaType(saved.getMediaType()).isCover(saved.isCover())
-                .caption(saved.getCaption()).displayOrder(saved.getDisplayOrder()).context(saved.getContext())
+                .caption(saved.getCaption()).displayOrder(saved.getDisplayOrder()).context(saved.getContext().name())
                 .build();
+    }
+
+    private static MediaContext resolveSelfAssignedContext(String context) {
+        if (context == null || context.isBlank()) {
+            return MediaContext.CAMPAIGN;
+        }
+        MediaContext parsed;
+        try {
+            parsed = MediaContext.valueOf(context);
+        } catch (IllegalArgumentException e) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Invalid media context: " + context);
+        }
+        if (!SELF_ASSIGNABLE_CONTEXTS.contains(parsed)) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Invalid media context: " + context);
+        }
+        return parsed;
+    }
+
+    @Override
+    @Transactional
+    public List<CampaignMedia> reconcileMediaTags(
+            Long campaignId,
+            List<CampaignMedia> currentlyTagged,
+            List<Long> requestedMediaIds,
+            Consumer<CampaignMedia> onRevert,
+            BiConsumer<CampaignMedia, Integer> onClaim
+    ) {
+        if (requestedMediaIds == null) {
+            return currentlyTagged;
+        }
+
+        List<Long> uniqueIds = requestedMediaIds.stream().distinct().toList();
+        Map<Long, CampaignMedia> currentlyTaggedById = currentlyTagged.stream()
+                .collect(Collectors.toMap(CampaignMedia::getId, m -> m));
+
+        List<CampaignMedia> toSave = new ArrayList<>();
+        for (CampaignMedia media : currentlyTagged) {
+            if (!uniqueIds.contains(media.getId())) {
+                onRevert.accept(media);
+                toSave.add(media);
+            }
+        }
+
+        List<Long> idsNeedingFetch = uniqueIds.stream()
+                .filter(id -> !currentlyTaggedById.containsKey(id))
+                .toList();
+        Map<Long, CampaignMedia> fetchedById = idsNeedingFetch.isEmpty()
+                ? Map.of()
+                : campaignMediaRepository.findAllById(idsNeedingFetch).stream()
+                        .collect(Collectors.toMap(CampaignMedia::getId, m -> m));
+
+        List<CampaignMedia> claimed = new ArrayList<>();
+        for (int i = 0; i < uniqueIds.size(); i++) {
+            Long id = uniqueIds.get(i);
+            CampaignMedia media = currentlyTaggedById.containsKey(id) ? currentlyTaggedById.get(id) : fetchedById.get(id);
+            if (media == null) {
+                throw new AppException(ErrorCode.VALIDATION_ERROR, "Media with ID " + id + " does not exist");
+            }
+            if (media.getDeletedAt() != null) {
+                throw new AppException(ErrorCode.VALIDATION_ERROR, "Media with ID " + id + " has been deleted");
+            }
+            if (media.getCampaign() == null || !Objects.equals(media.getCampaign().getId(), campaignId)) {
+                throw new AppException(ErrorCode.VALIDATION_ERROR, "Media with ID " + id + " does not belong to campaign " + campaignId);
+            }
+            onClaim.accept(media, i);
+            toSave.add(media);
+            claimed.add(media);
+        }
+
+        if (!toSave.isEmpty()) {
+            campaignMediaRepository.saveAll(toSave);
+        }
+        return claimed;
     }
 
     @Override
@@ -115,7 +214,7 @@ public class MediaServiceImpl implements MediaService {
         log.info("Campaign meeting attachment uploaded: id={}, file={}, type={}, campaignId={}, meetingId={}",
                 saved.getId(), filename, saved.getMediaType(), campaign.getId(), meeting.getId());
         return new CampaignMediaResponse(saved.getId(), saved.getUrl(), saved.getMediaType(), saved.isCover(),
-                saved.getCaption(), saved.getDisplayOrder(), saved.getContext());
+                saved.getCaption(), saved.getDisplayOrder(), saved.getContext().name());
     }
 
     @Override
@@ -145,7 +244,7 @@ public class MediaServiceImpl implements MediaService {
         softDeleteMedia(media);
         return CampaignMediaResponse.builder()
                 .id(media.getId()).url(media.getUrl()).mediaType(media.getMediaType()).isCover(media.isCover())
-                .caption(media.getCaption()).displayOrder(media.getDisplayOrder()).context(media.getContext())
+                .caption(media.getCaption()).displayOrder(media.getDisplayOrder()).context(media.getContext().name())
                 .build();
     }
 
@@ -157,7 +256,7 @@ public class MediaServiceImpl implements MediaService {
         }
         softDeleteMedia(media);
         return new CampaignMediaResponse(media.getId(), media.getUrl(), media.getMediaType(), media.isCover(),
-                media.getCaption(), media.getDisplayOrder(), media.getContext());
+                media.getCaption(), media.getDisplayOrder(), media.getContext().name());
     }
 
     private boolean canManageCampaignMedia(Campaign campaign, User user) {
@@ -204,9 +303,9 @@ public class MediaServiceImpl implements MediaService {
         String filename = UUID.randomUUID() + (extension.isEmpty() ? "" : "." + extension);
 
         Path targetPath = Paths.get(uploadDir).resolve(filename);
-        try {
+        try (var is = file.getInputStream()) {
             Files.createDirectories(targetPath.getParent());
-            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(is, targetPath, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             log.error("Failed to store {} file: path={}", context, targetPath, e);
             throw new AppException(ErrorCode.UNCATEGORIZED_ERROR, "Failed to store file");
@@ -274,9 +373,9 @@ public class MediaServiceImpl implements MediaService {
         String filename = UUID.randomUUID() + (extension.isEmpty() ? "" : "." + extension);
 
         Path targetPath = Paths.get(uploadDir).resolve(filename);
-        try {
+        try (var is = file.getInputStream()) {
             Files.createDirectories(targetPath.getParent());
-            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(is, targetPath, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             log.error("Failed to store avatar file: path={}", targetPath, e);
             throw new AppException(ErrorCode.UNCATEGORIZED_ERROR, "Failed to store file");

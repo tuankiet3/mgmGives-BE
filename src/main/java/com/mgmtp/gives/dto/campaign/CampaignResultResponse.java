@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -15,6 +16,7 @@ public class CampaignResultResponse {
     private String acknowledgements;
     private String publishedByName;
     private LocalDateTime publishedAt;
+    private List<CampaignMediaResponse> media;
 
     // Auto-computed stats
     private Long totalRaised;

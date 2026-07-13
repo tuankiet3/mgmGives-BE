@@ -10,7 +10,7 @@ import java.util.Set;
 public final class MediaValidationUtil {
 
     private static final Set<String> IMAGE_TYPES = Set.of(
-            "image/jpeg", "image/png", "image/webp"
+            "image/jpeg", "image/png", "image/webp", "image/gif"
     );
 
     private static final Set<String> VIDEO_TYPES = Set.of(
@@ -26,6 +26,9 @@ public final class MediaValidationUtil {
             "text/plain"
     );
 
+    /** Document types accepted for general campaign media (a stricter subset of DOCUMENT_TYPES, task attachments allow more). */
+    private static final Set<String> CAMPAIGN_DOCUMENT_TYPES = Set.of("application/pdf");
+
     private static final long MAX_IMAGE_SIZE = 5L * 1024 * 1024;
     private static final long MAX_VIDEO_SIZE = 50L * 1024 * 1024;
     private static final long MAX_DOCUMENT_SIZE = 10L * 1024 * 1024;
@@ -35,6 +38,7 @@ public final class MediaValidationUtil {
     public static String detectCategory(String contentType) {
         if (IMAGE_TYPES.contains(contentType)) return "IMAGE";
         if (VIDEO_TYPES.contains(contentType)) return "VIDEO";
+        if (CAMPAIGN_DOCUMENT_TYPES.contains(contentType)) return "DOCUMENT";
         throw new AppException(ErrorCode.UNSUPPORTED_FILE_TYPE);
     }
 
@@ -49,17 +53,42 @@ public final class MediaValidationUtil {
         String contentType = file.getContentType();
         String category = detectCategory(contentType);
 
-        if (imageOnly && "VIDEO".equals(category)) {
+        if (imageOnly && !"IMAGE".equals(category)) {
             throw new AppException(ErrorCode.IMAGE_ONLY);
         }
 
-        long maxSize = "IMAGE".equals(category) ? MAX_IMAGE_SIZE : MAX_VIDEO_SIZE;
+        validateCampaignFileExtension(file.getOriginalFilename(), category);
+
+        long maxSize = switch (category) {
+            case "IMAGE" -> MAX_IMAGE_SIZE;
+            case "DOCUMENT" -> MAX_DOCUMENT_SIZE;
+            default -> MAX_VIDEO_SIZE;
+        };
         if (file.getSize() > maxSize) {
             throw new AppException(ErrorCode.FILE_SIZE_EXCEEDED);
         }
 
         if ("IMAGE".equals(category)) {
             validateImageMagicBytes(file, contentType);
+        } else if ("DOCUMENT".equals(category)) {
+            validatePdfMagicBytes(file);
+        }
+    }
+
+    private static void validateCampaignFileExtension(String originalFilename, String category) {
+        int lastDot = originalFilename == null ? -1 : originalFilename.lastIndexOf('.');
+        if (lastDot == -1) {
+            throw new AppException(ErrorCode.UNSUPPORTED_FILE_TYPE);
+        }
+        String ext = originalFilename.substring(lastDot + 1).toLowerCase();
+        boolean validExt = switch (category) {
+            case "IMAGE" -> Set.of("jpg", "jpeg", "png", "webp", "gif").contains(ext);
+            case "VIDEO" -> Set.of("mp4", "mov", "avi", "webm").contains(ext);
+            case "DOCUMENT" -> Set.of("pdf").contains(ext);
+            default -> false;
+        };
+        if (!validExt) {
+            throw new AppException(ErrorCode.UNSUPPORTED_FILE_TYPE);
         }
     }
 
@@ -109,8 +138,8 @@ public final class MediaValidationUtil {
     }
 
     private static void validateImageMagicBytes(MultipartFile file, String contentType) {
-        try {
-            byte[] header = file.getInputStream().readNBytes(12);
+        try (var is = file.getInputStream()) {
+            byte[] header = is.readNBytes(12);
             boolean valid = switch (contentType) {
                 case "image/jpeg" -> header.length >= 3
                         && header[0] == (byte) 0xFF
@@ -124,8 +153,25 @@ public final class MediaValidationUtil {
                 case "image/webp" -> header.length >= 12
                         && header[0] == 0x52 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x46
                         && header[8] == 0x57 && header[9] == 0x45 && header[10] == 0x42 && header[11] == 0x50;
+                case "image/gif" -> header.length >= 6
+                        && header[0] == 0x47 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x38
+                        && (header[4] == 0x37 || header[4] == 0x39) && header[5] == 0x61;
                 default -> false;
             };
+            if (!valid) {
+                throw new AppException(ErrorCode.UNSUPPORTED_FILE_TYPE);
+            }
+        } catch (IOException e) {
+            throw new AppException(ErrorCode.UNCATEGORIZED_ERROR, "Failed to read file content");
+        }
+    }
+
+    private static void validatePdfMagicBytes(MultipartFile file) {
+        try (var is = file.getInputStream()) {
+            byte[] header = is.readNBytes(5);
+            boolean valid = header.length >= 5
+                    && header[0] == 0x25 && header[1] == 0x50 && header[2] == 0x44
+                    && header[3] == 0x46 && header[4] == 0x2D;
             if (!valid) {
                 throw new AppException(ErrorCode.UNSUPPORTED_FILE_TYPE);
             }
