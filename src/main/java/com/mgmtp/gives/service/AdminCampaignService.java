@@ -22,5 +22,4 @@ public interface AdminCampaignService {
 
     List<CampaignMedia> getActiveMediasByCampaignId(Long campaignId);
 
-    void deleteCampaign(Long id, User adminUser);
 }

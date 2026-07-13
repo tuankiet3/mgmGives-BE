@@ -108,14 +108,4 @@ public class AdminCampaignController {
                                 "Campaign rejected successfully");
         }
 
-        @DeleteMapping("/{id}")
-        @Operation(summary = "Delete a campaign", description = "Allows admin to delete a campaign regardless of ownership. Only PENDING, REJECTED, or DRAFT campaigns can be deleted.")
-        public ApiResponse<Void> deleteCampaign(
-                        @Parameter(description = "The ID of the campaign to delete", required = true) @PathVariable Long id,
-                        @AuthenticationPrincipal CustomUserDetails userDetails) {
-                log.info("REST admin request to delete campaign: id={}, adminId={}", id,
-                                userDetails.getUser().getId());
-                adminCampaignService.deleteCampaign(id, userDetails.getUser());
-                return ApiResponse.success(null, "Campaign deleted successfully");
-        }
 }

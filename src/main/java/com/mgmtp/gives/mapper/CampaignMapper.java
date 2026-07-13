@@ -49,8 +49,6 @@ public abstract class CampaignMapper {
     }
 
     protected boolean resolveIsCampaignAdmin(Campaign campaign, Long currentUserId, boolean isSystemAdmin) {
-        if (isSystemAdmin)
-            return true;
         if (currentUserId == null || campaign == null || campaign.getId() == null)
             return false;
         return campaignMemberRepository.existsByCampaignIdAndUserIdAndRoleInCampaign(

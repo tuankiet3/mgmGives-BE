@@ -204,7 +204,8 @@ public class CampaignServiceImpl implements CampaignService {
         boolean isCampaignAdmin = campaignMemberService.canManageCampaign(id, currentUser);
 
         if (!isCreator && !isCampaignAdmin) {
-            log.warn("Update campaign denied: not creator/campaign_admin. campaignId={}, userId={}", id, currentUser.getId());
+            log.warn("Update campaign denied: not creator/campaign_admin. campaignId={}, userId={}", id,
+                    currentUser.getId());
             throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE);
         }
 
@@ -255,7 +256,8 @@ public class CampaignServiceImpl implements CampaignService {
         campaign.setAcceptsGoods(request.acceptsGoods() != null ? request.acceptsGoods() : campaign.isAcceptsGoods());
         campaign.setCategories(categories);
         campaign.setStatus(newStatus);
-        campaign.setDonationMethod(request.donationMethod() != null ? request.donationMethod() : campaign.getDonationMethod());
+        campaign.setDonationMethod(
+                request.donationMethod() != null ? request.donationMethod() : campaign.getDonationMethod());
         campaign.setQrBankInfo(request.qrBankInfo());
         campaign.setBankName(request.bankName());
         campaign.setBankAccountNumber(request.bankAccountNumber());
@@ -416,13 +418,16 @@ public class CampaignServiceImpl implements CampaignService {
             DonationMethod method = request.donationMethod() != null ? request.donationMethod() : DonationMethod.PAYOS;
             if (method == DonationMethod.MANUAL_QR || method == DonationMethod.HYBRID) {
                 if (request.bankName() == null || request.bankName().isBlank()) {
-                    throw new AppException(ErrorCode.VALIDATION_ERROR, "Bank name is required for Manual QR or Hybrid donation methods.");
+                    throw new AppException(ErrorCode.VALIDATION_ERROR,
+                            "Bank name is required for Manual QR or Hybrid donation methods.");
                 }
                 if (request.bankAccountNumber() == null || request.bankAccountNumber().isBlank()) {
-                    throw new AppException(ErrorCode.VALIDATION_ERROR, "Bank account number is required for Manual QR or Hybrid donation methods.");
+                    throw new AppException(ErrorCode.VALIDATION_ERROR,
+                            "Bank account number is required for Manual QR or Hybrid donation methods.");
                 }
                 if (request.bankAccountHolderName() == null || request.bankAccountHolderName().isBlank()) {
-                    throw new AppException(ErrorCode.VALIDATION_ERROR, "Bank account holder name is required for Manual QR or Hybrid donation methods.");
+                    throw new AppException(ErrorCode.VALIDATION_ERROR,
+                            "Bank account holder name is required for Manual QR or Hybrid donation methods.");
                 }
             }
         }
@@ -491,7 +496,7 @@ public class CampaignServiceImpl implements CampaignService {
 
         boolean isCreator = campaign.getUser() != null && currentUser != null
                 && campaign.getUser().getId().equals(currentUser.getId());
-        boolean isEditable = isAdmin || (isCreator && campaign.getStatus().isEditable());
+        boolean isEditable = isCreator && campaign.getStatus().isEditable();
         response.setIsEditable(isEditable);
 
         // 2. Fetch active media
@@ -592,7 +597,7 @@ public class CampaignServiceImpl implements CampaignService {
 
             boolean isCreator = campaign.getUser() != null && currentUser != null
                     && campaign.getUser().getId().equals(currentUser.getId());
-            boolean isEditable = isAdmin || (isCreator && campaign.getStatus().isEditable());
+            boolean isEditable = isCreator && campaign.getStatus().isEditable();
             response.setIsEditable(isEditable);
 
             response.setCoverImageUrl(coverImageMap.get(campaign.getId()));
@@ -616,6 +621,7 @@ public class CampaignServiceImpl implements CampaignService {
             return response;
         }).toList();
     }
+
     @Transactional(readOnly = true)
     public boolean isFollowed(Long campaignId, Long userId) {
         return campaignFollowerRepository.existsByCampaignIdAndUserId(campaignId, userId);
