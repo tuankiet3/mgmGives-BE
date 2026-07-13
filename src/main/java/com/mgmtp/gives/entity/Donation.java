@@ -51,6 +51,12 @@ public class Donation extends BaseEntity {
     @Column(name = "transaction_id")
     private String transactionId;
 
+    @Column(name = "transaction_description")
+    private String transactionDescription;
+
+    @Column(name = "transaction_proof_url")
+    private String transactionProofUrl;
+
     @Column(name = "order_code")
     private Long orderCode;
 

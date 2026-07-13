@@ -36,7 +36,6 @@ public abstract class CampaignMapper {
     @Mapping(target = "resultPosted", source = "resultPosted")
     @Mapping(target = "resultPublishedAt", source = "resultPublishedAt")
     @Mapping(target = "resultPublishedByName", expression = "java(campaign.getResultPublishedBy() != null ? campaign.getResultPublishedBy().getFullName() : null)")
-    @Mapping(target = "qrImageUrl", ignore = true)
     @Mapping(target = "creatorHasPayOS", ignore = true)
     public abstract CampaignResponse toResponse(Campaign campaign, @Context Long currentUserId,
             @Context boolean isSystemAdmin);

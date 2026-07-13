@@ -31,5 +31,7 @@ public interface MediaService {
 
     String uploadTaskFile(MultipartFile file);
 
+    String uploadTransactionProof(MultipartFile file);
+
     void softDeleteTaskFile(String storedFilename);
 }

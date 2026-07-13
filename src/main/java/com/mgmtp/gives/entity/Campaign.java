@@ -44,20 +44,20 @@ public class Campaign extends BaseEntity {
     @Builder.Default
     private DonationMethod donationMethod = DonationMethod.PAYOS;
 
-    @Column(name = "qr_bank_info", columnDefinition = "TEXT")
-    private String qrBankInfo;
-
     @Column(name = "bank_name")
     private String bankName;
+
+    @Column(name = "bank_code")
+    private String bankCode;
+
+    @Column(name = "bank_bin")
+    private String bankBin;
 
     @Column(name = "bank_account_number")
     private String bankAccountNumber;
 
     @Column(name = "bank_account_holder_name")
     private String bankAccountHolderName;
-
-    @OneToOne(mappedBy = "campaign", cascade = CascadeType.ALL, orphanRemoval = true)
-    private CampaignQrMedia qrMedia;
 
     @ManyToOne
     @JoinColumn(name = "user_id")

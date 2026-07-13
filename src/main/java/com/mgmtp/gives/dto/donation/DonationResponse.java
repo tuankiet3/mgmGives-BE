@@ -23,6 +23,9 @@ public class DonationResponse {
     
     private DonationStatus status;
     private String transactionId;
+    private String transactionDescription;
+    private String transactionProofUrl;
+    private String donorEmail;
     private String rejectReason;
     
     private String message;

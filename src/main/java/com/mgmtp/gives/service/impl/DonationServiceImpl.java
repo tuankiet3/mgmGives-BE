@@ -92,51 +92,8 @@ public class DonationServiceImpl implements DonationService {
             throw new AppException(ErrorCode.VALIDATION_ERROR,
                     "This campaign only accepts PayOS online payments, not manual QR bank transfers.");
         }
-        if (isManualMoney && !org.springframework.util.StringUtils.hasText(request.transactionId())) {
-            throw new AppException(ErrorCode.VALIDATION_ERROR, "Transaction ID / Reference Code is required for manual QR bank transfers.");
-        }
         DonationStatus status = isManualMoney ? DonationStatus.PENDING : DonationStatus.SUCCESSFUL;
         LocalDateTime confirmedAt = isManualMoney ? null : LocalDateTime.now();
-
-        // --- PayOS Transaction Verification for Manual QR Submissions ---
-        if (isManualMoney) {
-            try {
-                PayOS activePayOS = payOSClientProvider.getClientForCampaign(campaign);
-                String txId = request.transactionId().trim();
-                vn.payos.model.v2.paymentRequests.PaymentLink paymentLink = activePayOS.paymentRequests().get(txId);
-                if (paymentLink != null) {
-                    vn.payos.model.v2.paymentRequests.PaymentLinkStatus paymentStatus = paymentLink.getStatus();
-                    if (vn.payos.model.v2.paymentRequests.PaymentLinkStatus.PAID.equals(paymentStatus)) {
-                        // Transaction is genuinely paid on PayOS — auto-confirm immediately
-                        log.info("Manual QR transactionId={} verified as PAID on PayOS. Auto-confirming.", txId);
-                        status = DonationStatus.SUCCESSFUL;
-                        confirmedAt = LocalDateTime.now();
-                    } else if (vn.payos.model.v2.paymentRequests.PaymentLinkStatus.CANCELLED.equals(paymentStatus)
-                            || vn.payos.model.v2.paymentRequests.PaymentLinkStatus.EXPIRED.equals(paymentStatus)
-                            || vn.payos.model.v2.paymentRequests.PaymentLinkStatus.FAILED.equals(paymentStatus)) {
-                        // Transaction link is in a terminal failure state — reject immediately
-                        log.warn("Manual QR transactionId={} is in a non-payable state on PayOS: {}", txId, paymentStatus);
-                        throw new AppException(ErrorCode.VALIDATION_ERROR,
-                                "The transaction ID you provided (" + txId + ") has already been cancelled, expired, or failed on PayOS. Please check and try again.");
-                    } else {
-                        // Transaction exists but not yet PAID (still PENDING on PayOS side)
-                        log.info("Manual QR transactionId={} exists on PayOS but is not PAID yet (status={}). Saving as PENDING for admin review.", txId, paymentStatus);
-                        // status remains PENDING
-                    }
-                } else {
-                    // No matching PayOS payment link found for this transactionId —
-                    log.info("Manual QR transactionId={} not found on PayOS. Saving as PENDING for manual admin review.", txId);
-                }
-            } catch (AppException e) {
-                throw e;
-            } catch (Exception e) {
-                // PayOS is unavailable or the campaign has no PayOS connection —
-                // fall through gracefully: save as PENDING for manual admin review
-                log.warn("PayOS check skipped for manual QR transactionId={}: {} — saving as PENDING for admin review.",
-                        request.transactionId(), e.getMessage());
-            }
-        }
-        // --- End PayOS Verification ---
 
         Donation donation = Donation.builder()
                 .user(user)
@@ -148,6 +105,8 @@ public class DonationServiceImpl implements DonationService {
                 .status(status)
                 .confirmedAt(confirmedAt)
                 .transactionId(request.transactionId())
+                .transactionDescription(null)
+                .transactionProofUrl(request.transactionProofUrl())
                 .message(messageText)
                 .isMessageHidden(false)
                 .goodsCondition(request.donationType() == DonationType.GOODS ? request.goodsCondition() : null)
@@ -156,6 +115,10 @@ public class DonationServiceImpl implements DonationService {
                 .build();
 
         Donation savedDonation = donationRepository.save(donation);
+        if (isManualMoney) {
+            savedDonation.setTransactionDescription("mgmGives " + savedDonation.getId());
+            savedDonation = donationRepository.save(savedDonation);
+        }
         campaignFollowerService.autoFollow(user.getId(), campaign.getId());
 
         if (status == DonationStatus.SUCCESSFUL) {
@@ -268,7 +231,7 @@ public class DonationServiceImpl implements DonationService {
         donation = donationRepository.save(donation);
 
         try {
-            String description = "mgm Gives " + donation.getId();
+            String description = "mgmGives " + donation.getId();
             String cancelUrl = payOSCancelUrl + "/campaigns/" + campaign.getId()
                     + "/donate?paymentStatus=cancel&donationId=" + donation.getId();
             String returnUrl = payOSReturnUrl + "/campaigns/" + campaign.getId() + "?payment=success&donationId="
@@ -288,6 +251,7 @@ public class DonationServiceImpl implements DonationService {
 
             donation.setTransactionId(checkoutResponse.getPaymentLinkId());
             donation.setOrderCode(orderCode);
+            donation.setTransactionDescription(description);
             donationRepository.save(donation);
 
             log.info("PayOS payment link created for donation ID: {}", donation.getId());
@@ -498,6 +462,8 @@ public class DonationServiceImpl implements DonationService {
                 .isAnonymous(donation.isAnonymous())
                 .status(donation.getStatus())
                 .transactionId(donation.getTransactionId())
+                .transactionDescription(donation.getTransactionDescription())
+                .transactionProofUrl(donation.getTransactionProofUrl())
                 .confirmedById(donation.getConfirmedBy() != null ? donation.getConfirmedBy().getId() : null)
                 .confirmedByName(donation.getConfirmedBy() != null ? donation.getConfirmedBy().getFullName() : null)
                 .confirmedAt(donation.getConfirmedAt())
@@ -524,7 +490,8 @@ public class DonationServiceImpl implements DonationService {
             boolean isCreator = donation.getCampaign().getUser() != null &&
                     donation.getCampaign().getUser().getId().equals(currentUser.getId());
             boolean isDonor = donation.getUser() != null && donation.getUser().getId().equals(currentUser.getId());
-            if (isAdmin || isCreator || isDonor) {
+            boolean isCampaignManager = campaignMemberService.canManageCampaign(donation.getCampaign().getId(), currentUser);
+            if (isAdmin || isCreator || isDonor || isCampaignManager) {
                 canSeeHidden = true;
             }
         }
@@ -535,18 +502,22 @@ public class DonationServiceImpl implements DonationService {
         }
 
         Long amountVal = canSeeHidden ? donation.getAmount() : null;
+        String donorEmail = donation.isAnonymous() && !canSeeHidden ? null : (donation.getUser() != null ? donation.getUser().getEmail() : null);
 
         return DonationResponse.builder()
                 .id(donation.getId())
                 .campaignId(donation.getCampaign().getId())
                 .campaignName(donation.getCampaign().getTitle())
                 .donorName(donorName)
+                .donorEmail(donorEmail)
                 .type(donation.getType())
                 .amount(amountVal)
                 .detail(donation.getDetail())
                 .isAnonymous(donation.isAnonymous())
                 .status(donation.getStatus())
                 .transactionId(donation.getTransactionId())
+                .transactionDescription(donation.getTransactionDescription())
+                .transactionProofUrl(donation.getTransactionProofUrl())
                 .rejectReason(donation.getRejectReason())
                 .message(displayedMessage)
                 .isMessageHidden(donation.isMessageHidden())
@@ -696,6 +667,43 @@ public class DonationServiceImpl implements DonationService {
                     ErrorCode.VALIDATION_ERROR,
                     "Amount must not exceed " + MAX_DONATION_AMOUNT);
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DonationResponse> getCampaignDonationsForAdmin(Long campaignId, User currentUser) {
+        if (!campaignMemberService.canManageCampaign(campaignId, currentUser)) {
+            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE,
+                    "Only Campaign Managers or global ADMIN can view all donations.");
+        }
+        List<Donation> donations = donationRepository.findByCampaignIdOrderByCreatedAtDesc(campaignId);
+        return donations.stream()
+                .filter(d -> d.getType() == DonationType.MONEY && d.getOrderCode() == null)
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public DonationResponse submitManualProof(Long donationId, String proofUrl, User user) {
+        Donation donation = donationRepository.findById(donationId)
+                .orElseThrow(() -> new AppException(ErrorCode.DONATE_NOT_FOUND, "Donation not found."));
+
+        if (!donation.getUser().getId().equals(user.getId())) {
+            throw new AppException(ErrorCode.UNAUTHORIZED, "You do not own this donation record.");
+        }
+
+        if (donation.getType() != DonationType.MONEY || donation.getOrderCode() != null) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "This donation is not a manual QR bank transfer.");
+        }
+
+        if (donation.getStatus() != DonationStatus.PENDING) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Only pending donations can have proof submitted.");
+        }
+
+        donation.setTransactionProofUrl(proofUrl);
+        Donation saved = donationRepository.save(donation);
+        return toResponse(saved);
     }
 
 }

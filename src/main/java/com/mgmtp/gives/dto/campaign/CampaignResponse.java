@@ -44,9 +44,9 @@ public class CampaignResponse {
     private String resultPublishedByName;
 
     private DonationMethod donationMethod;
-    private String qrImageUrl;
-    private String qrBankInfo;
     private String bankName;
+    private String bankCode;
+    private String bankBin;
     private String bankAccountNumber;
     private String bankAccountHolderName;
     private Boolean creatorHasPayOS;

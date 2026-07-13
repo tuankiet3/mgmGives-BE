@@ -36,4 +36,8 @@ public interface DonationService {
     DonationResponse confirmCampaignDonation(Long donationId, User currentUser);
 
     DonationResponse rejectCampaignDonation(Long donationId, String reason, User currentUser);
+
+    List<DonationResponse> getCampaignDonationsForAdmin(Long campaignId, User currentUser);
+
+    DonationResponse submitManualProof(Long donationId, String proofUrl, User user);
 }

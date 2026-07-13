@@ -25,6 +25,10 @@ public record DonationRequest(
 
         String transactionId,
 
+        String transactionDescription,
+
+        String transactionProofUrl,
+
         @Size(max = 280, message = "Message must not exceed 280 characters")
         String message,
 

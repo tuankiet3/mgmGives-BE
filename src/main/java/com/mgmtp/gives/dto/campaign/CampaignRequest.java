@@ -11,7 +11,6 @@ public record CampaignRequest(
         @NotBlank(message = "Title is required")
         @Size(max = 255, message = "Title must not exceed 255 characters")
         String title,
-
         String description,
         Set<Long> categories,
         Boolean acceptsMoney,
@@ -22,9 +21,9 @@ public record CampaignRequest(
         CampaignPriority priority,
         CampaignStatus status,
         DonationMethod donationMethod,
-        String qrImageUrl,
-        String qrBankInfo,
         String bankName,
+        String bankCode,
+        String bankBin,
         String bankAccountNumber,
         String bankAccountHolderName
 ) {

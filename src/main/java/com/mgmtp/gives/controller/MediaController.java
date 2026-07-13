@@ -73,6 +73,15 @@ public class MediaController {
         return ApiResponse.success(filename, "Campaign QR uploaded successfully");
     }
 
+    @PostMapping(value = "/upload/transaction-proof", consumes = MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Upload transaction proof image", description = "Uploads an image file for transaction verification and returns the stored filename.")
+    public ApiResponse<String> uploadTransactionProof(
+            @RequestParam("file") MultipartFile file) {
+        String filename = mediaService.uploadTransactionProof(file);
+        return ApiResponse.success(filename, "Transaction proof uploaded successfully");
+    }
+
     @PatchMapping("/{id}/campaign/restore")
     @Operation(summary = "Restore campaign media", description = "Restores a soft-deleted campaign media record. Must be within 14 days of deletion.")
     public ApiResponse<CampaignMediaResponse> restoreCampaignMedia(@PathVariable Long id) {

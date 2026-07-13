@@ -25,6 +25,8 @@ public class DonationAdminResponse {
     
     private DonationStatus status;
     private String transactionId;
+    private String transactionDescription;
+    private String transactionProofUrl;
     private Long confirmedById;
     private String confirmedByName;
     private LocalDateTime confirmedAt;

@@ -340,6 +340,15 @@ public class MediaServiceImpl implements MediaService {
     }
 
     @Override
+    @Transactional
+    public String uploadTransactionProof(MultipartFile file) {
+        MediaValidationUtil.validateFile(file, true);
+        String filename = storeFile(file, "transaction proof");
+        log.info("Transaction proof uploaded: file={}", filename);
+        return filename;
+    }
+
+    @Override
     public void softDeleteTaskFile(String storedFilename) {
         if (storedFilename == null || storedFilename.isBlank()) {
             return;

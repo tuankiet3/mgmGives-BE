@@ -51,6 +51,14 @@ public class DonationController {
         return ApiResponse.success(responseList);
     }
 
+    @GetMapping("/campaign/{campaignId}")
+    @Operation(summary = "Get all donations for a campaign (for campaign admin)", description = "Retrieve a list of all donations for a specific campaign, including failed ones. Restricted to campaign creator/admin.")
+    public ApiResponse<List<DonationResponse>> getCampaignDonationsForAdmin(@PathVariable Long campaignId,
+                                                                            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        List<DonationResponse> responseList = donationService.getCampaignDonationsForAdmin(campaignId, userDetails.getUser());
+        return ApiResponse.success(responseList);
+    }
+
     @PostMapping("/payos/create")
     @Operation(summary = "Create a PayOS payment link", description = "Generates a real PayOS VietQR checkout link for a money donation and creates a PENDING donation record.")
     public ApiResponse<PayOSResponse> createPayOSDonation(@Valid @RequestBody PayOSRequest request,
@@ -97,5 +105,14 @@ public class DonationController {
                                                         @AuthenticationPrincipal CustomUserDetails userDetails) {
         DonationResponse donation = donationService.rejectCampaignDonation(id, request.reason(), userDetails.getUser());
         return ApiResponse.success(donation, "Donation rejected successfully");
+    }
+
+    @PatchMapping("/{id}/proof")
+    @Operation(summary = "Submit transaction proof for a manual donation", description = "Submit/attach the receipt proof image URL for a manual QR transfer donation.")
+    public ApiResponse<DonationResponse> submitProof(@PathVariable Long id,
+                                                     @RequestParam(required = false) String proofUrl,
+                                                     @AuthenticationPrincipal CustomUserDetails userDetails) {
+        DonationResponse donation = donationService.submitManualProof(id, proofUrl, userDetails.getUser());
+        return ApiResponse.success(donation, "Transaction proof receipt submitted successfully");
     }
 }

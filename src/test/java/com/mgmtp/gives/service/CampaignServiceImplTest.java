@@ -20,7 +20,6 @@ import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.DonationRepository;
 import com.mgmtp.gives.service.impl.CampaignServiceImpl;
 import com.mgmtp.gives.service.NotificationService;
-import com.mgmtp.gives.repository.CampaignQrMediaRepository;
 import com.mgmtp.gives.repository.UserPayOSConnectionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,9 +70,6 @@ class CampaignServiceImplTest {
     @Mock
     private DonationRepository donationRepository;
  
-    @Mock
-    private CampaignQrMediaRepository campaignQrMediaRepository;
-
     @Mock
     private UserPayOSConnectionRepository userPayOSConnectionRepository;
 
@@ -730,9 +726,9 @@ class CampaignServiceImplTest {
                 CampaignPriority.HIGH,
                 CampaignStatus.PENDING,
                 com.mgmtp.gives.enums.DonationMethod.MANUAL_QR,
-                null,
-                "Bank Info",
                 null, // missing bankName
+                null, // bankCode
+                null, // bankBin
                 "123456789",
                 "NGUYEN VAN A"
         );
@@ -754,9 +750,9 @@ class CampaignServiceImplTest {
                 CampaignPriority.HIGH,
                 CampaignStatus.PENDING,
                 com.mgmtp.gives.enums.DonationMethod.MANUAL_QR,
-                "http://example.com/qr.png",
-                "Bank Info",
                 "MBBank",
+                "MB",
+                "970422",
                 "123456789",
                 "NGUYEN VAN A"
         );
@@ -772,10 +768,9 @@ class CampaignServiceImplTest {
 
         assertNotNull(result);
         assertEquals(com.mgmtp.gives.enums.DonationMethod.MANUAL_QR, result.getDonationMethod());
-        assertEquals("Bank Info", result.getQrBankInfo());
-        assertEquals("MBBank", result.getBankName());
+        assertEquals("MB", result.getBankCode());
+        assertEquals("970422", result.getBankBin());
         assertEquals("123456789", result.getBankAccountNumber());
         assertEquals("NGUYEN VAN A", result.getBankAccountHolderName());
-        verify(campaignQrMediaRepository, times(1)).save(any(com.mgmtp.gives.entity.CampaignQrMedia.class));
     }
 }
