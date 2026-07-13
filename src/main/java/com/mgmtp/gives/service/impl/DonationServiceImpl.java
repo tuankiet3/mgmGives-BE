@@ -193,11 +193,12 @@ public class DonationServiceImpl implements DonationService {
     @Override
     @Transactional(readOnly = true)
     public Page<DonationAdminResponse> getAllDonations(DonationStatus status, DonationType type, Long campaignId,
-            Pageable pageable) {
+            String search, Pageable pageable) {
         Specification<Donation> spec = Specification.allOf(
                 hasStatus(status),
                 hasType(type),
-                hasCampaignId(campaignId));
+                hasCampaignId(campaignId),
+                matchesSearch(search));
         return donationRepository.findAll(spec, pageable).map(this::toAdminResponse);
     }
 

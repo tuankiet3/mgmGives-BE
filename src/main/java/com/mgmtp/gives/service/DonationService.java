@@ -17,7 +17,7 @@ public interface DonationService {
     List<DonationResponse> getPublicDonationsByCampaignId(Long campaignId);
 
     Page<DonationAdminResponse> getAllDonations(DonationStatus status, DonationType type, Long campaignId,
-            Pageable pageable);
+            String search, Pageable pageable);
 
     DonationAdminResponse confirmDonation(Long donationId, User admin);
 
