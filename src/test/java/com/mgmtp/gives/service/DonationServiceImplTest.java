@@ -333,7 +333,7 @@ class DonationServiceImplTest {
         DonationResponse response = donationService.rejectCampaignDonation(10L, "Invalid signature", testUser);
 
         assertNotNull(response);
-        assertEquals(DonationStatus.FAILED, testDonation.getStatus());
+        assertEquals(DonationStatus.REJECTED, testDonation.getStatus());
         assertEquals("Invalid signature", testDonation.getRejectReason());
         verify(notificationService).broadcastDashboardUpdate();
     }

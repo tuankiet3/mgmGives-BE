@@ -123,10 +123,11 @@ public class DonationServiceImpl implements DonationService {
 
         if (status == DonationStatus.SUCCESSFUL) {
             publisher.publishDonationConfirmedEvents(savedDonation);
+            notificationService.broadcastDashboardUpdate();
         } else {
             sendPendingApprovalNotification(savedDonation);
+            notificationService.broadcastDashboardUpdate();
         }
-        notificationService.broadcastDashboardUpdate();
 
         log.info(
                 "Donation created: donationId={}, campaignId={}, status={}",
@@ -147,8 +148,8 @@ public class DonationServiceImpl implements DonationService {
     @Override
     @Transactional(readOnly = true)
     public List<DonationResponse> getPublicDonationsByCampaignId(Long campaignId) {
-        List<Donation> donations = donationRepository.findByCampaignIdAndStatusNotOrderByCreatedAtDesc(
-                campaignId, DonationStatus.FAILED);
+        List<Donation> donations = donationRepository.findByCampaignIdAndStatusNotInOrderByCreatedAtDesc(
+                campaignId, List.of(DonationStatus.FAILED, DonationStatus.REJECTED));
 
         return donations.stream().map(this::toResponse).toList();
     }
@@ -573,13 +574,13 @@ public class DonationServiceImpl implements DonationService {
                     "Only Campaign Managers or global ADMIN can reject manual QR donations.");
         }
 
-        if (donation.getStatus() == DonationStatus.FAILED) {
+        if (donation.getStatus() == DonationStatus.REJECTED) {
             return toResponse(donation);
         }
 
         String finalReason = (reason != null && !reason.trim().isEmpty()) ? reason.trim() : "Invalid transaction details";
 
-        donation.setStatus(DonationStatus.FAILED);
+        donation.setStatus(DonationStatus.REJECTED);
         donation.setRejectReason(finalReason);
         donation.setConfirmedAt(LocalDateTime.now());
         donation.setUpdatedAt(LocalDateTime.now());
@@ -706,6 +707,10 @@ public class DonationServiceImpl implements DonationService {
 
         donation.setTransactionProofUrl(proofUrl);
         Donation saved = donationRepository.save(donation);
+        
+        // Refresh dashboard to display the newly uploaded receipt proof image in real time
+        notificationService.broadcastDashboardUpdate();
+        
         return toResponse(saved);
     }
 

@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 import com.mgmtp.gives.enums.DonationStatus;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import com.mgmtp.gives.enums.DonationType;
@@ -32,7 +33,11 @@ public interface DonationRepository extends JpaRepository<Donation, Long>, JpaSp
     @Query("SELECT COALESCE(SUM(d.amount), 0) FROM Donation d WHERE d.campaign.id = :campaignId AND d.status <> :failedStatus")
     Long sumAmountByCampaignIdAndStatusNotFailed(@Param("campaignId") Long campaignId, @Param("failedStatus") DonationStatus failedStatus);
 
-    List<Donation> findByCampaignIdAndStatusNotOrderByCreatedAtDesc(Long campaignId, DonationStatus status);
+    @Query("SELECT d FROM Donation d WHERE d.campaign.id = :campaignId AND d.status NOT IN :statuses ORDER BY d.createdAt DESC")
+    List<Donation> findByCampaignIdAndStatusNotInOrderByCreatedAtDesc(
+            @Param("campaignId") Long campaignId,
+            @Param("statuses") Collection<DonationStatus> statuses
+    );
 
     @Query("SELECT COUNT(DISTINCT d.user.id) FROM Donation d WHERE d.campaign.id = :campaignId AND d.status = 'SUCCESSFUL'")
     long countDistinctDonorsByCampaignIdAndStatusSuccessful(@Param("campaignId") Long campaignId);
