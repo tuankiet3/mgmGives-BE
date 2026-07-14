@@ -36,4 +36,17 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(ErrorCode.VALIDATION_ERROR.getStatus()).body(response);
     }
+
+    @ExceptionHandler(jakarta.validation.ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<?>> handleConstraintViolation(jakarta.validation.ConstraintViolationException ex, HttpServletRequest request) {
+        Map<String, String> errors = new HashMap<>();
+        ex.getConstraintViolations().forEach(violation -> {
+            String path = violation.getPropertyPath().toString();
+            String field = path.contains(".") ? path.substring(path.lastIndexOf(".") + 1) : path;
+            errors.put(field, violation.getMessage());
+        });
+        ApiResponse<?> response = ApiResponse.fail(errors, ErrorCode.VALIDATION_ERROR, request.getRequestURI());
+
+        return ResponseEntity.status(ErrorCode.VALIDATION_ERROR.getStatus()).body(response);
+    }
 }

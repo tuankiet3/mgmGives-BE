@@ -17,12 +17,17 @@ import com.mgmtp.gives.enums.MediaContext;
 import com.mgmtp.gives.enums.NotificationType;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
+import com.mgmtp.gives.repository.AnnouncementLikeRepository;
+import com.mgmtp.gives.entity.AnnouncementLikeId;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.Authentication;
 import com.mgmtp.gives.repository.AnnouncementRepository;
 import com.mgmtp.gives.repository.CampaignFollowerRepository;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.DonationRepository;
+import com.mgmtp.gives.security.CustomUserDetails;
 import com.mgmtp.gives.service.AnnouncementService;
 import com.mgmtp.gives.service.MediaService;
 import com.mgmtp.gives.service.NotificationService;
@@ -38,6 +43,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -61,6 +67,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     private final MediaService mediaService;
     private final NotificationService notificationService;
     private final Executor notificationExecutor;
+    private final AnnouncementLikeRepository announcementLikeRepository;
 
     public AnnouncementServiceImpl(
             AnnouncementRepository announcementRepository,
@@ -72,7 +79,8 @@ public class AnnouncementServiceImpl implements AnnouncementService {
             CampaignMediaMapper campaignMediaMapper,
             MediaService mediaService,
             NotificationService notificationService,
-            @Qualifier("notificationExecutor") Executor notificationExecutor) {
+            @Qualifier("notificationExecutor") Executor notificationExecutor,
+            AnnouncementLikeRepository announcementLikeRepository) {
         this.announcementRepository = announcementRepository;
         this.campaignRepository = campaignRepository;
         this.campaignMemberRepository = campaignMemberRepository;
@@ -83,6 +91,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
         this.mediaService = mediaService;
         this.notificationService = notificationService;
         this.notificationExecutor = notificationExecutor;
+        this.announcementLikeRepository = announcementLikeRepository;
     }
 
     @Override
@@ -183,9 +192,20 @@ public class AnnouncementServiceImpl implements AnnouncementService {
             mediaMap = Map.of();
         }
 
+        // Bulk-checks liked announcement IDs for the current user in a single database call, preventing N+1 SELECT loops
+        Set<Long> likedAnnouncementIds = Collections.emptySet();
+        User currentUser = getCurrentUser();
+        if (currentUser != null && !announcementIds.isEmpty()) {
+            likedAnnouncementIds = announcementLikeRepository.findLikedAnnouncementIdsByAnnouncementIdInAndUserId(
+                    announcementIds, currentUser.getId()
+            );
+        }
+
+        final Set<Long> finalLikedIds = likedAnnouncementIds;
         return announcementPage.map(announcement -> {
             List<CampaignMedia> mediaList = mediaMap.getOrDefault(announcement.getId(), List.of());
-            return toResponse(announcement, mediaList);
+            boolean isLiked = finalLikedIds.contains(announcement.getId());
+            return toResponse(announcement, mediaList, isLiked);
         });
     }
 
@@ -296,12 +316,33 @@ public class AnnouncementServiceImpl implements AnnouncementService {
                 .build());
     }
 
-    private AnnouncementResponse toResponse(Announcement announcement) {
-        List<CampaignMedia> mediaList = campaignMediaRepository.findByAnnouncementIdAndDeletedAtIsNullOrderByDisplayOrderAscIdAsc(announcement.getId());
-        return toResponse(announcement, mediaList);
+    private User getCurrentUser() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.getPrincipal() instanceof CustomUserDetails userDetails) {
+                return userDetails.getUser();
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to get current user from SecurityContextHolder: {}", ex.getMessage());
+        }
+        return null;
     }
 
-    private AnnouncementResponse toResponse(Announcement announcement, List<CampaignMedia> mediaList) {
+    private AnnouncementResponse toResponse(Announcement announcement) {
+        List<CampaignMedia> mediaList = campaignMediaRepository.findByAnnouncementIdAndDeletedAtIsNullOrderByDisplayOrderAscIdAsc(announcement.getId());
+        
+        // Single entity fetch checks liked status individually using existsById
+        boolean isLiked = false;
+        User currentUser = getCurrentUser();
+        if (currentUser != null) {
+            isLiked = announcementLikeRepository.existsById(
+                    new AnnouncementLikeId(announcement.getId(), currentUser.getId())
+            );
+        }
+        return toResponse(announcement, mediaList, isLiked);
+    }
+
+    private AnnouncementResponse toResponse(Announcement announcement, List<CampaignMedia> mediaList, boolean isLiked) {
         User createdBy = announcement.getCreatedBy();
 
         List<CampaignMediaResponse> mediaResponses = campaignMediaMapper.toResponseList(mediaList);
@@ -317,7 +358,10 @@ public class AnnouncementServiceImpl implements AnnouncementService {
                         createdBy.getEmail()),
                 announcement.getCreatedAt(),
                 announcement.getUpdatedAt(),
-                mediaResponses
+                mediaResponses,
+                announcement.getLikesCount(),
+                announcement.getRepliesCount(),
+                isLiked
         );
     }
 }

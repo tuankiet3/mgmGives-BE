@@ -49,6 +49,8 @@ public enum ErrorCode {
     UNAUTHORIZED_ANNOUNCEMENT_ACCESS(2016, "You do not have permission to manage announcements for this campaign", HttpStatus.FORBIDDEN),
     CAMPAIGN_ADMIN_CANNOT_LEAVE(2018, "Campaign admins cannot leave the campaign", HttpStatus.FORBIDDEN),
     ANNOUNCEMENT_NOT_FOUND(2017, "Announcement not found", HttpStatus.NOT_FOUND),
+    REPLY_NOT_FOUND(2019, "Reply not found", HttpStatus.NOT_FOUND),
+    UNAUTHORIZED_REPLY_ACTION(2020, "You do not have permission to perform this action on this reply", HttpStatus.FORBIDDEN),
 
     CAMPAIGN_MEDIA_NOT_FOUND(3001, "Campaign media not found", HttpStatus.NOT_FOUND),
     MEDIA_NOT_FOUND(3002, "Media file not found", HttpStatus.NOT_FOUND),

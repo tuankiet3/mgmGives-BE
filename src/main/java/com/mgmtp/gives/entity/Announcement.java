@@ -33,6 +33,14 @@ public class Announcement extends BaseEntity {
     @Column(name = "published_at")
     private LocalDateTime publishedAt;
 
+    @Column(name = "likes_count", nullable = false)
+    @Builder.Default
+    private int likesCount = 0;
+
+    @Column(name = "replies_count", nullable = false)
+    @Builder.Default
+    private int repliesCount = 0;
+
     @LastModifiedDate
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;

@@ -12,7 +12,10 @@ public record AnnouncementResponse(
         UserSummary createdBy,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
-        List<CampaignMediaResponse> media
+        List<CampaignMediaResponse> media,
+        int likesCount,
+        int repliesCount,
+        boolean isLiked
 ) {
     public record UserSummary(
             Long id,
