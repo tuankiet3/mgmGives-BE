@@ -1,6 +1,7 @@
 package com.mgmtp.gives.service.impl;
 
 import com.mgmtp.gives.common.ErrorCode;
+import com.mgmtp.gives.common.MailProps;
 import com.mgmtp.gives.dto.campaign.CampaignResultDraftContext;
 import com.mgmtp.gives.dto.campaign.CampaignResultGenerateResponse;
 import com.mgmtp.gives.dto.campaign.CampaignResultRequest;
@@ -38,20 +39,34 @@ import com.mgmtp.gives.service.MediaService;
 import com.mgmtp.gives.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.util.UriComponentsBuilder;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import com.mgmtp.gives.enums.DonationStatus;
+import com.openhtmltopdf.outputdevice.helper.BaseRendererBuilder;
+import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.Image;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Paths;
 import java.text.NumberFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -60,6 +75,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
 
 @Slf4j
 @Service
@@ -68,6 +88,9 @@ public class CampaignResultServiceImpl implements CampaignResultService {
 
     private static final String RESULT_EMAIL_SUBJECT_PREFIX = "Campaign Results: ";
     private static final DateTimeFormatter ANNOUNCEMENT_DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy");
+    private static final String PDF_FONT_FAMILY = "Noto Sans";
+    private static final int PDF_IMAGE_MAX_DIMENSION = 640;
+    private static final float PDF_IMAGE_JPEG_QUALITY = 0.7f;
 
     private final CampaignRepository campaignRepository;
     private final CampaignMemberRepository campaignMemberRepository;
@@ -82,6 +105,10 @@ public class CampaignResultServiceImpl implements CampaignResultService {
     private final CampaignMediaRepository campaignMediaRepository;
     private final CampaignMediaMapper campaignMediaMapper;
     private final MediaService mediaService;
+    private final MailProps mailProps;
+
+    @Value("${app.media.upload-dir}")
+    private String uploadDir;
 
     @Override
     @Transactional
@@ -287,6 +314,9 @@ public class CampaignResultServiceImpl implements CampaignResultService {
     private void sendResultNotifications(Campaign campaign) {
         String campaignName = campaign.getTitle() != null ? campaign.getTitle() : "this campaign";
         String linkUrl = "/campaigns/" + campaign.getId() + "/result";
+        String reportLink = buildReportLink(campaign.getId());
+        byte[] reportPdf = tryRenderResultPdf(campaign);
+        String reportPdfFilename = "final-report-" + campaign.getId() + ".pdf";
 
         // --- Followers (single query) ---
         List<User> followerUsers = campaignFollowerRepository.findFollowerUsersByCampaignId(campaign.getId());
@@ -326,10 +356,14 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                     .linkUrl(linkUrl)
                     .build());
             for (User user : volunteerUsers) {
-                emailService.sendHtmlEmail(
-                        user.getEmail(),
-                        RESULT_EMAIL_SUBJECT_PREFIX + campaignName,
-                        buildVolunteerEmailBody(user.getFullName(), campaignName));
+                String subject = RESULT_EMAIL_SUBJECT_PREFIX + campaignName;
+                String body = buildVolunteerEmailBody(user.getFullName(), campaignName, reportLink);
+                if (reportPdf != null) {
+                    emailService.sendHtmlEmailWithAttachment(
+                            user.getEmail(), subject, body, reportPdf, reportPdfFilename, "application/pdf");
+                } else {
+                    emailService.sendHtmlEmail(user.getEmail(), subject, body);
+                }
             }
         }
 
@@ -353,11 +387,15 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                     .linkUrl(linkUrl)
                     .build());
 
-            emailService.sendHtmlEmail(
-                    donor.email(),
-                    RESULT_EMAIL_SUBJECT_PREFIX + campaignName,
-                    buildDonorEmailBody(donor.fullName(), campaignName, formattedAmount,
-                            aiThankYouMessages.get(donor.userId())));
+            String subject = RESULT_EMAIL_SUBJECT_PREFIX + campaignName;
+            String body = buildDonorEmailBody(donor.fullName(), campaignName, formattedAmount,
+                    aiThankYouMessages.get(donor.userId()), reportLink);
+            if (reportPdf != null) {
+                emailService.sendHtmlEmailWithAttachment(
+                        donor.email(), subject, body, reportPdf, reportPdfFilename, "application/pdf");
+            } else {
+                emailService.sendHtmlEmail(donor.email(), subject, body);
+            }
         }
     }
 
@@ -424,20 +462,23 @@ public class CampaignResultServiceImpl implements CampaignResultService {
         return templateEngine.process("follower-result-notification", context);
     }
 
-    private String buildVolunteerEmailBody(String fullName, String campaignName) {
+    private String buildVolunteerEmailBody(String fullName, String campaignName, String reportLink) {
         Context context = new Context();
         context.setVariable("fullName", fullName);
         context.setVariable("campaignName", campaignName);
+        context.setVariable("reportLink", reportLink);
         return templateEngine.process("volunteer-result-notification", context);
     }
 
-    private String buildDonorEmailBody(String fullName, String campaignName, String formattedAmount, String aiMessage) {
+    private String buildDonorEmailBody(String fullName, String campaignName, String formattedAmount, String aiMessage,
+            String reportLink) {
         Context context = new Context();
 
         context.setVariable("fullName", fullName);
         context.setVariable("campaignName", campaignName);
         context.setVariable("formattedAmount", formattedAmount);
         context.setVariable("aiMessage", aiMessage);
+        context.setVariable("reportLink", reportLink);
 
         return templateEngine.process(
                 "donor-result-notification",
@@ -460,6 +501,168 @@ public class CampaignResultServiceImpl implements CampaignResultService {
             throw new AppException(ErrorCode.UNAUTHORIZED_RESULT_ACCESS);
         }
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] generateResultPdf(Long campaignId) {
+        Campaign campaign = campaignRepository.findById(campaignId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CAMPAIGN_NOT_FOUND));
+        if (!campaign.isResultPosted()) {
+            throw new AppException(ErrorCode.CAMPAIGN_RESULT_NOT_FOUND);
+        }
+        return renderResultPdf(campaign);
+    }
+
+    /**
+     * Same as {@link #renderResultPdf} but swallows rendering failures, returning null instead
+     * of throwing - used when sending result notification emails so a PDF rendering bug never
+     * blocks the emails themselves from going out.
+     */
+    private byte[] tryRenderResultPdf(Campaign campaign) {
+        try {
+            return renderResultPdf(campaign);
+        } catch (Exception e) {
+            log.error("Failed to render final report PDF for notification email: campaignId={}", campaign.getId(), e);
+            return null;
+        }
+    }
+
+    private byte[] renderResultPdf(Campaign campaign) {
+        long totalRaised = campaign.getFinalAmountRaised() != null ? campaign.getFinalAmountRaised() : 0L;
+        double goalPercent = campaign.getTarget() != null && campaign.getTarget() > 0
+                ? Math.min(100.0, (totalRaised * 100.0) / campaign.getTarget())
+                : 0.0;
+
+        Context context = new Context();
+        context.setVariable("campaignName", campaign.getTitle());
+        context.setVariable("resultSummary", campaign.getResultSummary());
+        context.setVariable("itemsSummary", campaign.getItemsSummary());
+        context.setVariable("acknowledgements", campaign.getAcknowledgements());
+        context.setVariable("publishedByName", campaign.getResultPublishedBy() != null
+                ? campaign.getResultPublishedBy().getFullName() : null);
+        context.setVariable("publishedAt", campaign.getResultPublishedAt() != null
+                ? campaign.getResultPublishedAt().format(ANNOUNCEMENT_DATE_FORMAT) : null);
+        context.setVariable("totalRaised", NumberFormat.getNumberInstance(Locale.US).format(totalRaised));
+        context.setVariable("donorCount", campaign.getFinalDonorCount() != null ? campaign.getFinalDonorCount() : 0L);
+        context.setVariable("volunteerCount",
+                campaign.getFinalVolunteerCount() != null ? campaign.getFinalVolunteerCount() : 0L);
+        context.setVariable("goalPercent", String.format(Locale.US, "%.0f", goalPercent));
+        context.setVariable("reportLink", buildReportLink(campaign.getId()));
+        context.setVariable("galleryMedia", buildGalleryMedia(campaign));
+
+        String html = templateEngine.process("final-report-pdf", context);
+
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            PdfRendererBuilder builder = new PdfRendererBuilder();
+            builder.useFastMode();
+            // The base PDF fonts have no Vietnamese glyph coverage, so campaign/report text
+            // with diacritics would render as tofu boxes without an embedded Unicode font.
+            builder.useFont(() -> getClass().getResourceAsStream("/fonts/NotoSans-Regular.ttf"),
+                    PDF_FONT_FAMILY, 400, BaseRendererBuilder.FontStyle.NORMAL, true);
+            builder.useFont(() -> getClass().getResourceAsStream("/fonts/NotoSans-Bold.ttf"),
+                    PDF_FONT_FAMILY, 700, BaseRendererBuilder.FontStyle.NORMAL, true);
+            builder.withHtmlContent(html, null);
+            builder.toStream(outputStream);
+            builder.run();
+            return outputStream.toByteArray();
+        } catch (IOException e) {
+            log.error("Failed to render final report PDF: campaignId={}", campaign.getId(), e);
+            throw new AppException(ErrorCode.UNCATEGORIZED_ERROR, "Failed to generate final report PDF");
+        }
+    }
+
+    private String buildReportLink(Long campaignId) {
+        return UriComponentsBuilder
+                .fromUriString(mailProps.getFrontendUrl())
+                .pathSegment("campaigns", campaignId.toString(), "result")
+                .toUriString();
+    }
+
+    /**
+     * Same non-cover media the public final report page shows (campaign.medias, minus the
+     * cover image). Images are embedded as downscaled JPEG data URIs rather than the original
+     * files - embedding full-resolution originals ballooned the PDF to several MB, which in
+     * turn made the emailed copy large enough that Gmail clips the message body. Videos can't
+     * play in a PDF, so they render as a placeholder card instead.
+     */
+    private List<PdfMediaItem> buildGalleryMedia(Campaign campaign) {
+        return campaignMediaRepository.findByCampaignIdAndDeletedAtIsNull(campaign.getId()).stream()
+                .filter(m -> !m.isCover())
+                .map(m -> new PdfMediaItem(
+                        "VIDEO".equalsIgnoreCase(m.getMediaType()) ? null : buildImageDataUri(m.getUrl()),
+                        "VIDEO".equalsIgnoreCase(m.getMediaType())))
+                .filter(item -> item.isVideo() || item.url() != null)
+                .toList();
+    }
+
+    private String buildImageDataUri(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return null;
+        }
+        File file = Paths.get(uploadDir).resolve(filename).toFile();
+        if (!file.exists()) {
+            return null;
+        }
+        try {
+            BufferedImage original = ImageIO.read(file);
+            if (original == null) {
+                return null;
+            }
+            BufferedImage resized = resizeToMaxDimension(original, PDF_IMAGE_MAX_DIMENSION);
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            writeJpeg(resized, buffer, PDF_IMAGE_JPEG_QUALITY);
+            return "data:image/jpeg;base64," + Base64.getEncoder().encodeToString(buffer.toByteArray());
+        } catch (IOException e) {
+            log.warn("Failed to load gallery image for final report PDF: file={}", filename, e);
+            return null;
+        }
+    }
+
+    private static BufferedImage resizeToMaxDimension(BufferedImage original, int maxDimension) {
+        int width = original.getWidth();
+        int height = original.getHeight();
+        if (Math.max(width, height) <= maxDimension) {
+            return toOpaqueRgb(original);
+        }
+        double scale = (double) maxDimension / Math.max(width, height);
+        int newWidth = Math.max(1, (int) Math.round(width * scale));
+        int newHeight = Math.max(1, (int) Math.round(height * scale));
+        Image scaledImage = original.getScaledInstance(newWidth, newHeight, Image.SCALE_SMOOTH);
+        BufferedImage resized = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = resized.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.drawImage(scaledImage, 0, 0, Color.WHITE, null);
+        g.dispose();
+        return resized;
+    }
+
+    // JPEG has no alpha channel - flatten onto a white background so transparent PNGs don't
+    // come out with garbled colors.
+    private static BufferedImage toOpaqueRgb(BufferedImage original) {
+        if (original.getType() == BufferedImage.TYPE_INT_RGB) {
+            return original;
+        }
+        BufferedImage rgb = new BufferedImage(original.getWidth(), original.getHeight(), BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = rgb.createGraphics();
+        g.drawImage(original, 0, 0, Color.WHITE, null);
+        g.dispose();
+        return rgb;
+    }
+
+    private static void writeJpeg(BufferedImage image, ByteArrayOutputStream output, float quality) throws IOException {
+        ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
+        ImageWriteParam param = writer.getDefaultWriteParam();
+        param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+        param.setCompressionQuality(quality);
+        try (ImageOutputStream ios = ImageIO.createImageOutputStream(output)) {
+            writer.setOutput(ios);
+            writer.write(null, new IIOImage(image, null, null), param);
+        } finally {
+            writer.dispose();
+        }
+    }
+
+    private record PdfMediaItem(String url, boolean isVideo) {}
 
     private CampaignResultResponse buildResponse(Campaign campaign, long confirmedTotal) {
         List<CampaignMedia> resultMedia = campaignMediaRepository

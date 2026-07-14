@@ -11,7 +11,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -54,6 +58,18 @@ public class CampaignResultController {
     public ApiResponse<CampaignResultResponse> getResult(@PathVariable Long id) {
         log.info("REST request to get campaign result: campaignId={}", id);
         return ApiResponse.success(campaignResultService.getResult(id));
+    }
+
+    @GetMapping("/{id}/result/pdf")
+    @Operation(summary = "View final result as PDF", description = "Renders the posted final result as a PDF, opened inline (e.g. in a new browser tab) rather than force-downloaded. Visible to all authenticated users.")
+    public ResponseEntity<byte[]> exportResultPdf(@PathVariable Long id) {
+        log.info("REST request to export campaign result PDF: campaignId={}", id);
+        byte[] pdf = campaignResultService.generateResultPdf(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.inline().filename("final-report-" + id + ".pdf").build().toString())
+                .body(pdf);
     }
 
     @PostMapping("/{id}/result/generate")

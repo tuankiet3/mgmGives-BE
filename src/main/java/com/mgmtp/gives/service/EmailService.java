@@ -34,4 +34,13 @@ public interface EmailService {
     void executeSend(String toEmail, String content, TokenType type);
 
     void sendHtmlEmail(String toEmail, String subject, String htmlContent);
+
+    void sendHtmlEmailWithAttachment(
+            String toEmail,
+            String subject,
+            String htmlContent,
+            byte[] attachmentBytes,
+            String attachmentFilename,
+            String attachmentContentType
+    );
 }

@@ -10,6 +10,7 @@ import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
@@ -108,6 +109,33 @@ public class EmailServiceImpl implements EmailService {
             log.info("HTML email sent: subject={}, to={}", subject, toEmail);
         } catch (MessagingException e) {
             log.error("Failed to send HTML email: subject={}, to={}", subject, toEmail, e);
+            throw new AppException(ErrorCode.EMAIL_SENT_FAILURE, e.getMessage());
+        }
+    }
+
+    @Async
+    @Override
+    public void sendHtmlEmailWithAttachment(
+            String toEmail,
+            String subject,
+            String htmlContent,
+            byte[] attachmentBytes,
+            String attachmentFilename,
+            String attachmentContentType
+    ) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name());
+            helper.setFrom(mailProps.getFromMail());
+            helper.setTo(toEmail);
+            helper.setSubject(subject);
+            helper.setText(htmlContent, true);
+            helper.addAttachment(attachmentFilename, new ByteArrayResource(attachmentBytes), attachmentContentType);
+            mailSender.send(message);
+            log.info("HTML email with attachment sent: subject={}, to={}, attachment={}",
+                    subject, toEmail, attachmentFilename);
+        } catch (MessagingException e) {
+            log.error("Failed to send HTML email with attachment: subject={}, to={}", subject, toEmail, e);
             throw new AppException(ErrorCode.EMAIL_SENT_FAILURE, e.getMessage());
         }
     }

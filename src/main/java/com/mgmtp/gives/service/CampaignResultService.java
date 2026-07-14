@@ -10,4 +10,5 @@ public interface CampaignResultService {
     CampaignResultResponse updateResult(Long campaignId, CampaignResultRequest request, User currentUser);
     CampaignResultResponse getResult(Long campaignId);
     CampaignResultGenerateResponse generateResultDraft(Long campaignId, User currentUser);
+    byte[] generateResultPdf(Long campaignId);
 }

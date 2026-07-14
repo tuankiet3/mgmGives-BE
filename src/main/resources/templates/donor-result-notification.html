@@ -36,6 +36,13 @@
         Together, we made it happen!
     </p>
 
+    <p th:if="${reportLink != null}">
+        The full final report (including a downloadable PDF) is attached to this email and also available online:
+    </p>
+    <p th:if="${reportLink != null}" style="text-align:center;margin:20px 0;">
+        <a th:href="${reportLink}" style="display:inline-block;background-color:#2658e9;color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">View Final Report</a>
+    </p>
+
 </div>
 
 </body>
