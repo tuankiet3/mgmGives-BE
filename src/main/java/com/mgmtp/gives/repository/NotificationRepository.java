@@ -17,4 +17,10 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     List<Notification> findByUserIdAndIsReadFalse(Long userId);
 
     long countByUserIdAndIsReadFalse(Long userId);
+
+    List<Notification> findByUserIdAndTypeOrderByCreatedAtDesc(
+            Long userId,
+            com.mgmtp.gives.enums.NotificationType type,
+            Pageable pageable
+    );
 }

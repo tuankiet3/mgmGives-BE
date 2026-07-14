@@ -22,6 +22,10 @@ import com.mgmtp.gives.enums.DonationStatus;
 import com.mgmtp.gives.enums.NotificationType;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.NotificationRepository;
+import com.mgmtp.gives.repository.CampaignMemberRepository;
+import com.mgmtp.gives.repository.UserRepository;
+import com.mgmtp.gives.enums.CampaignPriority;
+import com.mgmtp.gives.dto.dashboard.AdminDashboardOverviewResponse;
 import com.mgmtp.gives.service.DashboardService;
 import lombok.RequiredArgsConstructor;
 import java.util.stream.Collectors;
@@ -37,6 +41,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import org.jsoup.Jsoup;
 
 @Service
 @RequiredArgsConstructor
@@ -50,31 +55,31 @@ public class DashboardServiceImpl implements DashboardService {
     private final CampaignFollowerRepository campaignFollowerRepository;
     private final CampaignMapper campaignMapper;
     private final CampaignMediaRepository campaignMediaRepository;
+    private final CampaignMemberRepository campaignMemberRepository;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional(readOnly = true)
     public DashboardOverviewResponse getDashboardOverview(User currentUser) {
         log.info("Generating dashboard overview for user: {}", currentUser.getEmail());
 
-        // 1. Total donated amount of current user (MONEY type, successful status)
-        List<Donation> userDonations = donationRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getId());
-        long totalDonatedAmount = userDonations.stream()
-                .filter(d -> d.getType() == DonationType.MONEY && d.getStatus() == DonationStatus.SUCCESSFUL)
-                .mapToLong(d -> d.getAmount() != null ? d.getAmount() : 0L)
-                .sum();
-
-        // 2. Count Active Campaigns (APPROVED or IN_PROGRESS)
-        long activeCampaignsCount = campaignRepository.countByStatusIn(
-                List.of(CampaignStatus.APPROVED, CampaignStatus.IN_PROGRESS)
+        // 1. Total donated amount of current user (MONEY type, successful status) - Database aggregated to avoid unbounded fetch
+        long totalDonatedAmount = donationRepository.sumAmountByUserIdAndStatusAndType(
+                currentUser.getId(),
+                DonationStatus.SUCCESSFUL,
+                DonationType.MONEY
         );
 
-        // 3. Count Completed Campaigns (COMPLETED)
-        long completedCampaignsCount = campaignRepository.countByStatus(CampaignStatus.COMPLETED);
+        // 2. Count Completed Campaigns (COMPLETED) that current user joined
+        long completedCampaignsCount = campaignMemberRepository.countByUserIdAndCampaignStatus(
+                currentUser.getId(),
+                CampaignStatus.COMPLETED
+        );
 
-        // 3.5. Count Followed Campaigns for the current user
+        // 3. Count Followed Campaigns for the current user
         long followedCampaignsCount = campaignFollowerRepository.countByUserId(currentUser.getId());
 
-        // 4. Get Recommended Campaigns (Top 3 active campaigns: priority DESC, endDate ASC)
+        // 4. Get Recommended Campaigns (Top 3 active campaigns: closest endDate first, then highest priority)
         Specification<Campaign> activeCampaignSpec = (root, query, cb) -> cb.and(
                 cb.or(
                         cb.equal(root.get("status"), CampaignStatus.APPROVED),
@@ -82,12 +87,14 @@ public class DashboardServiceImpl implements DashboardService {
                 ),
                 cb.greaterThan(root.get("endDate"), LocalDateTime.now())
         );
-        Pageable recommendedPageable = PageRequest.of(0, 3, Sort.by(
-                Sort.Order.asc("endDate")
-        ));
         boolean isAdmin = currentUser.getRole() == UserRole.ADMIN;
-        
+
+        Pageable recommendedPageable = PageRequest.of(0, 3, Sort.by(
+                Sort.Order.asc("endDate"),
+                Sort.Order.desc("priority")
+        ));
         List<Campaign> campaigns = campaignRepository.findAll(activeCampaignSpec, recommendedPageable).getContent();
+                
         List<Long> campaignIds = campaigns.stream().map(Campaign::getId).toList();
         List<CampaignMedia> coverImages = campaignIds.isEmpty()
                 ? List.of()
@@ -106,9 +113,9 @@ public class DashboardServiceImpl implements DashboardService {
                 })
                 .toList();
 
-        // 5. Get Recent Donations (Top 5)
-        List<DonationResponse> recentDonations = userDonations.stream()
-                .limit(5)
+        // 5. Get Recent Donations (Top 10) - Limited fetch from database
+        List<Donation> recentUserDonations = donationRepository.findTop10ByUserIdOrderByCreatedAtDesc(currentUser.getId());
+        List<DonationResponse> recentDonations = recentUserDonations.stream()
                 .map(d -> mapToDonationResponse(d, currentUser))
                 .toList();
 
@@ -117,7 +124,6 @@ public class DashboardServiceImpl implements DashboardService {
 
         return DashboardOverviewResponse.builder()
                 .totalDonatedAmount(totalDonatedAmount)
-                .activeCampaignsCount(activeCampaignsCount)
                 .followedCampaignsCount(followedCampaignsCount)
                 .completedCampaignsCount(completedCampaignsCount)
                 .recommendedCampaigns(recommendedCampaigns)
@@ -129,20 +135,12 @@ public class DashboardServiceImpl implements DashboardService {
     private List<ActivityDTO> getCombinedActivities(User currentUser) {
         List<ActivityDTO> activities = new ArrayList<>();
 
-        // Fetch user notifications
+        // 1. Fetch user notifications (synchronous with header, filtering/mapping announcements properly)
         List<Notification> notifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getId(), PageRequest.of(0, 10)).getContent();
         for (Notification n : notifications) {
-            String type = "NOTIFICATION";
-            if (n.getType() == NotificationType.DONATION ||
-                n.getType() == NotificationType.DONATION_CONFIRMED ||
-                n.getType() == NotificationType.CAMPAIGN_DONATION_CONFIRMED ||
-                (n.getTitle() != null && n.getTitle().toLowerCase().contains("donation")) ||
-                (n.getMessage() != null && n.getMessage().toLowerCase().contains("donation"))) {
-                type = "DONATION";
-            }
             activities.add(ActivityDTO.builder()
                     .id("NOTI-" + n.getId())
-                    .type(type)
+                    .type(n.getType() == NotificationType.CAMPAIGN_ANNOUNCEMENT ? "ANNOUNCEMENT" : "NOTIFICATION")
                     .title(n.getTitle())
                     .message(n.getMessage())
                     .linkUrl(n.getLinkUrl())
@@ -150,17 +148,70 @@ public class DashboardServiceImpl implements DashboardService {
                     .build());
         }
 
-        // Fetch published announcements
-        List<Announcement> announcements = announcementRepository.findByOrderByPublishedAtDesc(PageRequest.of(0, 10)).getContent();
-        for (Announcement a : announcements) {
+        // 2. Fetch announcements created by this user (so creator can also see them)
+        List<Announcement> myAnnouncements = announcementRepository.findByCreatedByIdOrderByPublishedAtDesc(currentUser.getId(), PageRequest.of(0, 10));
+        for (Announcement a : myAnnouncements) {
+            String snippet = getPlainTextSnippet(a.getContent());
+            String message = a.getTitle();
+            if (!snippet.isEmpty()) {
+                message = a.getTitle() + " - " + snippet;
+            }
             activities.add(ActivityDTO.builder()
                     .id("ANN-" + a.getId())
                     .type("ANNOUNCEMENT")
-                    .title(a.getTitle())
-                    .message(a.getContent())
-                    .linkUrl(a.getCampaign() != null ? "/campaigns/" + a.getCampaign().getId() : null)
+                    .title("New announcement in \"" + a.getCampaign().getTitle() + "\"")
+                    .message(message)
+                    .linkUrl(a.getCampaign() != null ? "/campaigns/" + a.getCampaign().getId() + "/announcements/" + a.getId() : null)
                     .createdAt(a.getPublishedAt() != null ? a.getPublishedAt() : 
                                (a.getCreatedAt() != null ? a.getCreatedAt() : LocalDateTime.now()))
+                    .build());
+        }
+
+        // 3. Fetch donations of campaigns followed or joined by this user
+        List<Donation> donations = donationRepository.findDonationsForFollowedAndJoinedCampaigns(currentUser.getId(), PageRequest.of(0, 10));
+        boolean isSystemAdmin = currentUser.getRole() == com.mgmtp.gives.enums.UserRole.ADMIN;
+
+        // Batch fetch campaign admin permissions to avoid querying inside a loop (N+1 query problem)
+        List<Long> campaignIds = donations.stream()
+                .map(d -> d.getCampaign().getId())
+                .distinct()
+                .toList();
+        List<Long> adminCampaignIds = campaignIds.isEmpty() ? List.of() :
+                campaignMemberRepository.findCampaignIdsByUserIdAndRoleAndCampaignIdsIn(
+                        currentUser.getId(),
+                        com.mgmtp.gives.enums.CampaignMemberRole.CAMPAIGN_ADMIN,
+                        campaignIds
+                );
+
+        for (Donation d : donations) {
+            String donorName = "Anonymous";
+            if (!d.isAnonymous() && d.getUser() != null) {
+                donorName = d.getUser().getFullName();
+            }
+
+            // Check if user has permission to see the amount (is self, global admin, creator, or campaign admin)
+            boolean isSelf = d.getUser() != null && d.getUser().getId().equals(currentUser.getId());
+            boolean isCreator = d.getCampaign().getUser() != null && d.getCampaign().getUser().getId().equals(currentUser.getId());
+            boolean isCampaignAdmin = adminCampaignIds.contains(d.getCampaign().getId());
+            boolean canSeeAmount = isSelf || isSystemAdmin || isCreator || isCampaignAdmin;
+
+            String message = "";
+            if (d.getType() == com.mgmtp.gives.enums.DonationType.MONEY) {
+                String amountStr = canSeeAmount 
+                        ? (d.getAmount() != null ? String.format("%,d", d.getAmount().longValue()) : "0") 
+                        : "****";
+                message = donorName + " donated " + amountStr + " VND";
+            } else if (d.getType() == com.mgmtp.gives.enums.DonationType.GOODS) {
+                message = donorName + " donated goods: " + (d.getGoodsCategory() != null ? d.getGoodsCategory() : "");
+            }
+
+            activities.add(ActivityDTO.builder()
+                    .id("DON-" + d.getId())
+                    .type("DONATION")
+                    .title(d.getCampaign().getTitle())
+                    .message(message)
+                    .linkUrl("/campaigns/" + d.getCampaign().getId())
+                    .createdAt(d.getCreatedAt() != null ? d.getCreatedAt() : LocalDateTime.now())
                     .build());
         }
 
@@ -204,5 +255,49 @@ public class DashboardServiceImpl implements DashboardService {
                 .deliveryMethod(donation.getDeliveryMethod())
                 .createdAt(donation.getCreatedAt())
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AdminDashboardOverviewResponse getAdminDashboardOverview() {
+        log.info("Generating admin dashboard overview statistics");
+
+        long totalEmployees = userRepository.count();
+        long campaignAdmins = userRepository.countByRole(com.mgmtp.gives.enums.UserRole.ADMIN);
+        long totalCampaigns = campaignRepository.countByStatusNot(CampaignStatus.DRAFT);
+        long pendingCampaigns = campaignRepository.countByStatus(CampaignStatus.PENDING);
+        long activeCampaigns = campaignRepository.countByStatusIn(
+                List.of(CampaignStatus.APPROVED, CampaignStatus.IN_PROGRESS)
+        );
+
+        int currentYear = java.time.LocalDate.now().getYear();
+        LocalDateTime startOfYear = LocalDateTime.of(currentYear, 1, 1, 0, 0, 0);
+        LocalDateTime endOfYear = LocalDateTime.of(currentYear, 12, 31, 23, 59, 59);
+        long totalDonation = donationRepository.sumConfirmedDonationsByYear(
+                DonationStatus.SUCCESSFUL,
+                DonationType.MONEY,
+                startOfYear,
+                endOfYear
+        );
+
+        return AdminDashboardOverviewResponse.builder()
+                .totalEmployees(totalEmployees)
+                .campaignAdmins(campaignAdmins)
+                .totalCampaigns(totalCampaigns)
+                .pendingCampaigns(pendingCampaigns)
+                .activeCampaigns(activeCampaigns)
+                .totalDonation(totalDonation)
+                .build();
+    }
+
+    private String getPlainTextSnippet(String html) {
+        if (html == null) {
+            return "";
+        }
+        String text = Jsoup.parse(html).text();
+        if (text.length() > 120) {
+            return text.substring(0, 117) + "...";
+        }
+        return text;
     }
 }

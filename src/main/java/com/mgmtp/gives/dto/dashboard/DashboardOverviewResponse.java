@@ -10,7 +10,6 @@ import java.util.List;
 @Builder
 public class DashboardOverviewResponse {
     private Long totalDonatedAmount;
-    private Long activeCampaignsCount;
     private Long followedCampaignsCount;
     private Long completedCampaignsCount;
     private List<CampaignResponse> recommendedCampaigns;

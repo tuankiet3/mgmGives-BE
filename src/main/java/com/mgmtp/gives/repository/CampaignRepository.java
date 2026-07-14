@@ -54,6 +54,7 @@ public interface CampaignRepository extends JpaRepository<Campaign, Long>, JpaSp
 
     long countByStatus(CampaignStatus status);
     long countByStatusIn(Collection<CampaignStatus> statuses);
+    long countByStatusNot(CampaignStatus status);
 
     boolean existsByUserIdAndStatusInAndDonationMethodIn(
             Long userId,

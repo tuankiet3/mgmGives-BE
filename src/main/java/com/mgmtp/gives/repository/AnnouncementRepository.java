@@ -17,4 +17,9 @@ public interface AnnouncementRepository extends JpaRepository<Announcement, Long
     Page<Announcement> findByCampaignId(Long campaignId, Pageable pageable);
 
     List<Announcement> findByCampaignIdOrderByPublishedAtAsc(Long campaignId);
+
+    List<Announcement> findByCreatedByIdOrderByPublishedAtDesc(
+            Long createdById, 
+            Pageable pageable
+    );
 }

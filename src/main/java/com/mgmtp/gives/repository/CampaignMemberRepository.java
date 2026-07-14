@@ -15,8 +15,12 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 
+import com.mgmtp.gives.enums.CampaignStatus;
+
 public interface CampaignMemberRepository extends JpaRepository<CampaignMember, Long> {
         List<CampaignMember> findByCampaignId(Long campaignId);
+        
+        long countByUserIdAndCampaignStatus(Long userId, CampaignStatus status);
 
         @Query("""
                         SELECT DISTINCT new com.mgmtp.gives.dto.notification.NotificationRecipient(
@@ -35,6 +39,13 @@ public interface CampaignMemberRepository extends JpaRepository<CampaignMember, 
         boolean existsByCampaignIdAndUserId(Long campaignId, Long userId);
 
         boolean existsByCampaignIdAndUserIdAndRoleInCampaign(Long campaignId, Long userId, CampaignMemberRole role);
+
+        @Query("SELECT cm.campaign.id FROM CampaignMember cm WHERE cm.user.id = :userId AND cm.roleInCampaign = :role AND cm.campaign.id IN :campaignIds")
+        List<Long> findCampaignIdsByUserIdAndRoleAndCampaignIdsIn(
+                @Param("userId") Long userId,
+                @Param("role") CampaignMemberRole role,
+                @Param("campaignIds") List<Long> campaignIds
+        );
 
         long countByCampaignIdAndRoleInCampaign(Long campaignId, CampaignMemberRole role);
 

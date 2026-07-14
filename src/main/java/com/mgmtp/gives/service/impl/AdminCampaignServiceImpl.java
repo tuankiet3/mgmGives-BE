@@ -14,6 +14,7 @@ import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.service.AdminCampaignService;
+import com.mgmtp.gives.service.NotificationService;
 import com.mgmtp.gives.entity.CampaignMedia;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,7 @@ public class AdminCampaignServiceImpl implements AdminCampaignService {
     private final CampaignMemberRepository campaignMemberRepository;
     private final CampaignMediaRepository campaignMediaRepository;
     private final CampaignNotificationPublisher publisher;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional(readOnly = true)
@@ -108,6 +110,7 @@ public class AdminCampaignServiceImpl implements AdminCampaignService {
         }
 
         publisher.publishCampaignStatusChanged(saved, oldStatus, saved.getStatus());
+        notificationService.broadcastDashboardUpdate();
         log.info("Campaign approved successfully: id={}, adminId={}", id, adminUser.getId());
 
         return saved;
@@ -137,6 +140,7 @@ public class AdminCampaignServiceImpl implements AdminCampaignService {
                 saved,
                 oldStatus,
                 saved.getStatus());
+        notificationService.broadcastDashboardUpdate();
 
         log.info("Campaign rejected successfully: id={}, adminId={}, reason='{}'", id, adminUser.getId(), reason);
         return saved;
@@ -147,7 +151,6 @@ public class AdminCampaignServiceImpl implements AdminCampaignService {
     public List<CampaignMedia> getActiveMediasByCampaignId(Long campaignId) {
         return campaignMediaRepository.findByCampaignIdAndContextNotAndDeletedAtIsNull(campaignId, MediaContext.FINAL_REPORT);
     }
-
     private boolean shouldStartImmediately(Campaign campaign) {
         return campaign.getStartDate() != null
                 && !campaign.getStartDate().isAfter(LocalDateTime.now());

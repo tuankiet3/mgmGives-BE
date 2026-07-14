@@ -12,9 +12,13 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
+import com.mgmtp.gives.enums.UserRole;
+
 @Repository
 public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
     Optional<User> findByEmail(String email);
+
+    long countByRole(UserRole role);
 
     boolean existsByEmail(String email);
 

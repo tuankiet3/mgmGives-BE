@@ -12,12 +12,22 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
+import com.mgmtp.gives.enums.DonationType;
 
 @Repository
 public interface DonationRepository extends JpaRepository<Donation, Long>, JpaSpecificationExecutor<Donation> {
     List<Donation> findByUserIdOrderByCreatedAtDesc(Long userId);
 
     List<Donation> findByCampaignIdOrderByCreatedAtDesc(Long campaignId);
+
+    List<Donation> findTop10ByUserIdOrderByCreatedAtDesc(Long userId);
+
+    @Query("SELECT COALESCE(SUM(d.amount), 0) FROM Donation d WHERE d.user.id = :userId AND d.status = :status AND d.type = :type")
+    long sumAmountByUserIdAndStatusAndType(
+            @Param("userId") Long userId,
+            @Param("status") DonationStatus status,
+            @Param("type") DonationType type
+    );
 
     @Query("SELECT COALESCE(SUM(d.amount), 0) FROM Donation d WHERE d.campaign.id = :campaignId AND d.status <> :failedStatus")
     Long sumAmountByCampaignIdAndStatusNotFailed(@Param("campaignId") Long campaignId, @Param("failedStatus") DonationStatus failedStatus);
@@ -80,5 +90,35 @@ public interface DonationRepository extends JpaRepository<Donation, Long>, JpaSp
             com.mgmtp.gives.enums.DonationStatus status,
             com.mgmtp.gives.enums.DonationType type,
             java.time.LocalDateTime limit
+    );
+
+    @Query("""
+        SELECT COALESCE(SUM(d.amount), 0)
+        FROM Donation d
+        WHERE d.status = :status
+          AND d.type = :type
+          AND d.createdAt >= :startOfYear
+          AND d.createdAt <= :endOfYear
+        """)
+    long sumConfirmedDonationsByYear(
+            @Param("status") com.mgmtp.gives.enums.DonationStatus status,
+            @Param("type") com.mgmtp.gives.enums.DonationType type,
+            @Param("startOfYear") java.time.LocalDateTime startOfYear,
+            @Param("endOfYear") java.time.LocalDateTime endOfYear
+    );
+
+    @Query("""
+        SELECT d
+        FROM Donation d
+        WHERE d.campaign.id IN (
+            SELECT cf.campaign.id FROM CampaignFollower cf WHERE cf.user.id = :userId
+        ) OR d.campaign.id IN (
+            SELECT cm.campaign.id FROM CampaignMember cm WHERE cm.user.id = :userId
+        ) OR d.user.id = :userId
+        ORDER BY d.createdAt DESC
+        """)
+    List<Donation> findDonationsForFollowedAndJoinedCampaigns(
+            @Param("userId") Long userId, 
+            org.springframework.data.domain.Pageable pageable
     );
 }
