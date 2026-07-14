@@ -43,6 +43,7 @@ public interface CampaignMemberRepository extends JpaRepository<CampaignMember, 
                         FROM CampaignMember cm
                         JOIN FETCH cm.campaign c
                         WHERE cm.user.id = :userId
+                          AND cm.roleInCampaign = :role
                           AND (:keyword = '' OR LOWER(c.title) LIKE CONCAT('%', LOWER(:keyword), '%'))
                           AND (CAST(:status AS string) IS NULL OR c.status = :status)
                           AND (CAST(:priority AS string) IS NULL OR c.priority = :priority)
@@ -52,6 +53,7 @@ public interface CampaignMemberRepository extends JpaRepository<CampaignMember, 
                         FROM CampaignMember cm
                         JOIN cm.campaign c
                         WHERE cm.user.id = :userId
+                          AND cm.roleInCampaign = :role
                           AND (:keyword = '' OR LOWER(c.title) LIKE CONCAT('%', LOWER(:keyword), '%'))
                           AND (CAST(:status AS string) IS NULL OR c.status = :status)
                           AND (CAST(:priority AS string) IS NULL OR c.priority = :priority)
@@ -59,6 +61,7 @@ public interface CampaignMemberRepository extends JpaRepository<CampaignMember, 
                         """)
         Page<CampaignMember> findAllByUserIdWithFilters(
                         @Param("userId") Long userId,
+                        @Param("role") CampaignMemberRole role,
                         @Param("keyword") String keyword,
                         @Param("status") CampaignStatus status,
                         @Param("priority") CampaignPriority priority,

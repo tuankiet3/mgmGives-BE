@@ -111,7 +111,8 @@ public class CampaignMemberServiceImpl implements CampaignMemberService {
         long categoryCount = hasCategories ? categoryIds.size() : 0L;
 
         Page<CampaignMember> page = campaignMemberRepo.findAllByUserIdWithFilters(
-                userId, normalizedKeyword, status, priority, hasCategories, sanitizedCategoryIds, categoryCount, pageable);
+                userId, CampaignMemberRole.VOLUNTEER, normalizedKeyword, status, priority, hasCategories,
+                sanitizedCategoryIds, categoryCount, pageable);
 
         java.util.List<Long> campaignIds = page.getContent().stream()
                 .map(cm -> cm.getCampaign().getId())
