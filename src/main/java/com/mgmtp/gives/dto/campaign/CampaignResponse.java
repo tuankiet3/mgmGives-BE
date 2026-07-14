@@ -26,6 +26,7 @@ public class CampaignResponse {
     private String rejectionReason;
     private Long creatorId;
     private String creatorName;
+    private String creatorAvatarUrl;
     private List<CategoryResponse> categories;
     private List<CampaignMediaResponse> medias;
     private List<CampaignMediaResponse> media;

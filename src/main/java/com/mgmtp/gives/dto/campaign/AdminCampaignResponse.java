@@ -25,6 +25,7 @@ public class AdminCampaignResponse {
     // Submitter info
     private Long creatorId;
     private String creatorName;
+    private String creatorAvatarUrl;
     private String creatorEmail;
 
     // Review metadata

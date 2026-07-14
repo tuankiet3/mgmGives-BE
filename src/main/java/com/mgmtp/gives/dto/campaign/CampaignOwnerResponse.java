@@ -22,6 +22,7 @@ public class CampaignOwnerResponse {
     private CampaignPriority priority;
     private Long creatorId;
     private String creatorName;
+    private String creatorAvatarUrl;
 
     // Review outcome visible to the owner
     private String rejectionReason;

@@ -22,6 +22,7 @@ public abstract class CampaignMapper {
 
     @Mapping(target = "creatorId", source = "user.id")
     @Mapping(target = "creatorName", source = "user.fullName")
+    @Mapping(target = "creatorAvatarUrl", source = "user.avatarUrl")
     @Mapping(target = "categories", source = "categories")
     @Mapping(target = "currentRaised", expression = "java(calculateCurrentRaised(campaign))")
     @Mapping(target = "medias", ignore = true)

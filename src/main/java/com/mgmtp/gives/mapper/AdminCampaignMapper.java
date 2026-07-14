@@ -18,6 +18,7 @@ public abstract class AdminCampaignMapper {
 
     @Mapping(target = "creatorId", source = "user.id")
     @Mapping(target = "creatorName", source = "user.fullName")
+    @Mapping(target = "creatorAvatarUrl", source = "user.avatarUrl")
     @Mapping(target = "creatorEmail", source = "user.email")
     @Mapping(target = "approvedById", source = "approvedBy.id")
     @Mapping(target = "approvedByName", source = "approvedBy.fullName")
@@ -28,6 +29,7 @@ public abstract class AdminCampaignMapper {
 
     @Mapping(target = "creatorId", source = "user.id")
     @Mapping(target = "creatorName", source = "user.fullName")
+    @Mapping(target = "creatorAvatarUrl", source = "user.avatarUrl")
     @Mapping(target = "categories", source = "categories")
     public abstract CampaignOwnerResponse toOwnerResponse(Campaign campaign);
 
