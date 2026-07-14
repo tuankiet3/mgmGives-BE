@@ -37,5 +37,8 @@ public class DonationResponse {
     private String goodsCategory;
     private String deliveryMethod;
     
+    private LocalDateTime confirmedAt;
+    private LocalDateTime updatedAt;
+    
     private LocalDateTime createdAt;
 }

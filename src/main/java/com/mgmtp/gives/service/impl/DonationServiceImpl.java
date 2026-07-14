@@ -524,6 +524,8 @@ public class DonationServiceImpl implements DonationService {
                 .goodsCondition(donation.getGoodsCondition())
                 .goodsCategory(donation.getGoodsCategory())
                 .deliveryMethod(donation.getDeliveryMethod())
+                .confirmedAt(donation.getConfirmedAt())
+                .updatedAt(donation.getUpdatedAt())
                 .createdAt(donation.getCreatedAt())
                 .build();
     }
@@ -579,6 +581,7 @@ public class DonationServiceImpl implements DonationService {
 
         donation.setStatus(DonationStatus.FAILED);
         donation.setRejectReason(finalReason);
+        donation.setConfirmedAt(LocalDateTime.now());
         donation.setUpdatedAt(LocalDateTime.now());
         Donation savedDonation = donationRepository.save(donation);
 
