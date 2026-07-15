@@ -241,7 +241,8 @@ public class CampaignServiceImpl implements CampaignService {
         campaign.setAcceptsGoods(request.acceptsGoods() != null ? request.acceptsGoods() : campaign.isAcceptsGoods());
         campaign.setCategories(categories);
         campaign.setStatus(newStatus);
-        campaign.setDonationMethod(request.donationMethod() != null ? request.donationMethod() : campaign.getDonationMethod());
+        campaign.setDonationMethod(
+                request.donationMethod() != null ? request.donationMethod() : campaign.getDonationMethod());
         campaign.setBankName(request.bankName());
         campaign.setBankCode(request.bankCode());
         campaign.setBankBin(request.bankBin());
@@ -402,13 +403,16 @@ public class CampaignServiceImpl implements CampaignService {
             DonationMethod method = request.donationMethod() != null ? request.donationMethod() : DonationMethod.PAYOS;
             if (method == DonationMethod.MANUAL_QR || method == DonationMethod.HYBRID) {
                 if (request.bankName() == null || request.bankName().isBlank()) {
-                    throw new AppException(ErrorCode.VALIDATION_ERROR, "Bank name is required for Manual QR or Hybrid donation methods.");
+                    throw new AppException(ErrorCode.VALIDATION_ERROR,
+                            "Bank name is required for Manual QR or Hybrid donation methods.");
                 }
                 if (request.bankCode() == null || request.bankCode().isBlank()) {
-                    throw new AppException(ErrorCode.VALIDATION_ERROR, "Bank code is required for Manual QR or Hybrid donation methods.");
+                    throw new AppException(ErrorCode.VALIDATION_ERROR,
+                            "Bank code is required for Manual QR or Hybrid donation methods.");
                 }
                 if (request.bankBin() == null || request.bankBin().isBlank()) {
-                    throw new AppException(ErrorCode.VALIDATION_ERROR, "Bank BIN is required for Manual QR or Hybrid donation methods.");
+                    throw new AppException(ErrorCode.VALIDATION_ERROR,
+                            "Bank BIN is required for Manual QR or Hybrid donation methods.");
                 }
                 if (request.bankAccountNumber() == null || request.bankAccountNumber().isBlank()) {
                     throw new AppException(ErrorCode.VALIDATION_ERROR,
@@ -470,7 +474,8 @@ public class CampaignServiceImpl implements CampaignService {
     @Override
     @Transactional(readOnly = true)
     public List<CampaignMedia> getActiveMediasByCampaignId(Long campaignId) {
-        return campaignMediaRepository.findByCampaignIdAndContextNotAndDeletedAtIsNull(campaignId, MediaContext.FINAL_REPORT);
+        return campaignMediaRepository.findByCampaignIdAndContextNotAndDeletedAtIsNull(campaignId,
+                MediaContext.FINAL_REPORT);
     }
 
     @Override
@@ -488,8 +493,10 @@ public class CampaignServiceImpl implements CampaignService {
         boolean isEditable = isCreator && campaign.getStatus().isEditable();
         response.setIsEditable(isEditable);
 
-        // 2. Fetch active media, excluding FINAL_REPORT context - the final report has its own
-        // curated media list (see CampaignResultServiceImpl) and isn't meant to echo the general
+        // 2. Fetch active media, excluding FINAL_REPORT context - the final report has
+        // its own
+        // curated media list (see CampaignResultServiceImpl) and isn't meant to echo
+        // the general
         // gallery. Announcement/meeting media stays visible here.
         List<CampaignMedia> activeMedia = campaignMediaRepository
                 .findByCampaignIdAndContextNotAndDeletedAtIsNull(campaign.getId(), MediaContext.FINAL_REPORT);

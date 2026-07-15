@@ -48,4 +48,11 @@ public class CampaignAccessHelper {
     public boolean isCampaignMember(Long campaignId, Long userId) {
         return campaignMemberRepository.existsByCampaignIdAndUserId(campaignId, userId);
     }
+
+    public void validateCampaignMemberOrAdmin(Long campaignId, User user, ErrorCode errorCodeToThrow) {
+        if (user == null || (!isCampaignAdmin(campaignId, user)
+                && !isCampaignMember(campaignId, user.getId()))) {
+            throw new AppException(errorCodeToThrow);
+        }
+    }
 }

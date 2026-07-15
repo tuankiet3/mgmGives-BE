@@ -11,6 +11,7 @@ public record CampaignTaskResponse(
         String title,
         String description,
         TaskStatus status,
+        long position,
         LocalDateTime dueDate,
         boolean isArchived,
         UserSummary createdBy,
@@ -18,7 +19,8 @@ public record CampaignTaskResponse(
         List<LabelInfo> labels,
         List<TaskAttachmentResponse> attachments,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        LocalDateTime deletedAt
 ) {
     public record UserSummary(
             Long id,

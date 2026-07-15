@@ -6,8 +6,11 @@ import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.CampaignMedia;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.CampaignMemberRole;
+import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
+import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.UserRepository;
 import com.mgmtp.gives.service.impl.MediaServiceImpl;
@@ -29,6 +32,9 @@ class MediaServiceImplTest {
 
     @Mock
     private CampaignMediaRepository campaignMediaRepository;
+
+    @Mock
+    private CampaignMemberRepository campaignMemberRepository;
 
     @Mock
     private CampaignRepository campaignRepository;
@@ -110,6 +116,25 @@ class MediaServiceImplTest {
 
         assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
         assertEquals("Cannot remove cover photo directly", exception.getMessage());
+        verify(campaignMediaRepository, never()).save(any());
+    }
+
+    @Test
+    void softDeleteCampaignMedia_SystemAdminOfAnotherCampaign_ThrowsAppException() {
+        User systemAdmin = new User();
+        systemAdmin.setId(2L);
+        systemAdmin.setRole(UserRole.ADMIN);
+        campaign.setStatus(CampaignStatus.DRAFT);
+
+        when(campaignMediaRepository.findById(100L)).thenReturn(Optional.of(coverMedia));
+        when(campaignMemberRepository.existsByCampaignIdAndUserIdAndRoleInCampaign(
+                campaign.getId(), systemAdmin.getId(), CampaignMemberRole.CAMPAIGN_ADMIN))
+                .thenReturn(false);
+
+        AppException exception = assertThrows(AppException.class,
+                () -> mediaService.softDeleteCampaignMedia(100L, systemAdmin));
+
+        assertEquals(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE, exception.getErrorCode());
         verify(campaignMediaRepository, never()).save(any());
     }
 }

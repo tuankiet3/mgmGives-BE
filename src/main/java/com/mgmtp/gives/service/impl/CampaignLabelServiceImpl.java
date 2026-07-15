@@ -79,8 +79,10 @@ public class CampaignLabelServiceImpl implements CampaignLabelService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<CampaignLabelResponse> getLabelsByCampaign(Long campaignId) {
+    public List<CampaignLabelResponse> getLabelsByCampaign(Long campaignId, User currentUser) {
         campaignAccessHelper.findCampaignOrThrow(campaignId);
+        campaignAccessHelper.validateCampaignMemberOrAdmin(
+                campaignId, currentUser, ErrorCode.UNAUTHORIZED_LABEL_ACCESS);
         return campaignLabelRepository.findByCampaignId(campaignId).stream()
                 .map(this::toResponse)
                 .toList();

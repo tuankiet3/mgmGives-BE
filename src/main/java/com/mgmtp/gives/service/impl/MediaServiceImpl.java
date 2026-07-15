@@ -54,18 +54,20 @@ public class MediaServiceImpl implements MediaService {
     @Value("${app.media.upload-dir}")
     private String uploadDir;
 
-    // Contexts a caller may self-assign at upload time. Announcement/meeting media doesn't need
-    // its own context - it's scoped by FK (announcement_id / meeting_id) and stays visible in
-    // the general gallery like any other campaign media, so it's uploaded as the default
+    // Contexts a caller may self-assign at upload time. Announcement/meeting media
+    // doesn't need
+    // its own context - it's scoped by FK (announcement_id / meeting_id) and stays
+    // visible in
+    // the general gallery like any other campaign media, so it's uploaded as the
+    // default
     // CAMPAIGN context.
-    private static final Set<MediaContext> SELF_ASSIGNABLE_CONTEXTS =
-            Set.of(MediaContext.CAMPAIGN, MediaContext.FINAL_REPORT);
+    private static final Set<MediaContext> SELF_ASSIGNABLE_CONTEXTS = Set.of(MediaContext.CAMPAIGN,
+            MediaContext.FINAL_REPORT);
 
     @Override
     @Transactional
     public CampaignMediaResponse uploadCampaignMedia(
-            MultipartFile file, Long campaignId, boolean isCover, String context, User currentUser
-    ) {
+            MultipartFile file, Long campaignId, boolean isCover, String context, User currentUser) {
         MediaValidationUtil.validateFile(file, false);
 
         Campaign campaign = campaignRepository.findById(campaignId)
@@ -73,7 +75,8 @@ public class MediaServiceImpl implements MediaService {
                         "Campaign not found with ID: " + campaignId));
 
         if (!canManageCampaignMedia(campaign, currentUser)) {
-            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE, "Only campaign creator or admin can upload media");
+            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE,
+                    "Only the campaign creator or a campaign admin can upload media");
         }
 
         String detectedType = MediaValidationUtil.detectCategory(file.getContentType());
@@ -98,8 +101,10 @@ public class MediaServiceImpl implements MediaService {
 
         CampaignMedia saved = campaignMediaRepository.save(media);
 
-        // If isCover is true, soft-delete any existing cover image within the SAME context -
-        // a cover image only makes sense as "the" cover for the gallery it belongs to, so this
+        // If isCover is true, soft-delete any existing cover image within the SAME
+        // context -
+        // a cover image only makes sense as "the" cover for the gallery it belongs to,
+        // so this
         // must not reach into (or clear) another feature's media.
         if (isCover) {
             campaignMediaRepository.findByCampaignIdAndContextAndDeletedAtIsNull(campaignId, resolvedContext)
@@ -140,8 +145,7 @@ public class MediaServiceImpl implements MediaService {
             List<CampaignMedia> currentlyTagged,
             List<Long> requestedMediaIds,
             Consumer<CampaignMedia> onRevert,
-            BiConsumer<CampaignMedia, Integer> onClaim
-    ) {
+            BiConsumer<CampaignMedia, Integer> onClaim) {
         if (requestedMediaIds == null) {
             return currentlyTagged;
         }
@@ -169,7 +173,8 @@ public class MediaServiceImpl implements MediaService {
         List<CampaignMedia> claimed = new ArrayList<>();
         for (int i = 0; i < uniqueIds.size(); i++) {
             Long id = uniqueIds.get(i);
-            CampaignMedia media = currentlyTaggedById.containsKey(id) ? currentlyTaggedById.get(id) : fetchedById.get(id);
+            CampaignMedia media = currentlyTaggedById.containsKey(id) ? currentlyTaggedById.get(id)
+                    : fetchedById.get(id);
             if (media == null) {
                 throw new AppException(ErrorCode.VALIDATION_ERROR, "Media with ID " + id + " does not exist");
             }
@@ -177,7 +182,8 @@ public class MediaServiceImpl implements MediaService {
                 throw new AppException(ErrorCode.VALIDATION_ERROR, "Media with ID " + id + " has been deleted");
             }
             if (media.getCampaign() == null || !Objects.equals(media.getCampaign().getId(), campaignId)) {
-                throw new AppException(ErrorCode.VALIDATION_ERROR, "Media with ID " + id + " does not belong to campaign " + campaignId);
+                throw new AppException(ErrorCode.VALIDATION_ERROR,
+                        "Media with ID " + id + " does not belong to campaign " + campaignId);
             }
             onClaim.accept(media, i);
             toSave.add(media);
@@ -195,8 +201,7 @@ public class MediaServiceImpl implements MediaService {
     public CampaignMediaResponse uploadCampaignMeetingAttachment(
             MultipartFile file,
             Campaign campaign,
-            CampaignMeeting meeting
-    ) {
+            CampaignMeeting meeting) {
         MediaValidationUtil.validateFile(file, false);
 
         String detectedType = MediaValidationUtil.detectCategory(file.getContentType());
@@ -225,7 +230,8 @@ public class MediaServiceImpl implements MediaService {
                         "Campaign media not found with ID: " + id));
 
         if (!canManageCampaignMedia(media.getCampaign(), currentUser)) {
-            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE, "Only campaign creator or admin can delete media");
+            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE,
+                    "Only the campaign creator or a campaign admin can delete media");
         }
 
         if (media.isCover()) {
@@ -260,8 +266,8 @@ public class MediaServiceImpl implements MediaService {
     }
 
     private boolean canManageCampaignMedia(Campaign campaign, User user) {
-        if (user.getRole() == UserRole.ADMIN) return true;
-        if (campaign.getUser() != null && campaign.getUser().getId().equals(user.getId())) return true;
+        if (campaign.getUser() != null && campaign.getUser().getId().equals(user.getId()))
+            return true;
         return campaignMemberRepository.existsByCampaignIdAndUserIdAndRoleInCampaign(
                 campaign.getId(), user.getId(), CampaignMemberRole.CAMPAIGN_ADMIN);
     }
@@ -282,7 +288,8 @@ public class MediaServiceImpl implements MediaService {
                     Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
                     log.info("Moved campaign media to trash: id={}, file={}", media.getId(), media.getUrl());
                 } else {
-                    log.warn("Campaign media file not found on disk during soft delete: id={}, file={}", media.getId(), media.getUrl());
+                    log.warn("Campaign media file not found on disk during soft delete: id={}, file={}", media.getId(),
+                            media.getUrl());
                 }
             } catch (IOException e) {
                 log.error("Failed to move campaign media to trash: id={}, file={}", media.getId(), media.getUrl(), e);
@@ -339,12 +346,14 @@ public class MediaServiceImpl implements MediaService {
                     Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
                     log.info("Restored campaign media from trash: id={}, file={}", media.getId(), media.getUrl());
                 } else {
-                    log.warn("Campaign media file not found in trash during restore: id={}, file={}", media.getId(), media.getUrl());
+                    log.warn("Campaign media file not found in trash during restore: id={}, file={}", media.getId(),
+                            media.getUrl());
                     throw new ResourceNotFoundException(ErrorCode.MEDIA_NOT_FOUND,
                             "Campaign media file not found in trash during restore: " + media.getUrl());
                 }
             } catch (IOException e) {
-                log.error("Failed to restore campaign media from trash: id={}, file={}", media.getId(), media.getUrl(), e);
+                log.error("Failed to restore campaign media from trash: id={}, file={}", media.getId(), media.getUrl(),
+                        e);
                 throw new AppException(ErrorCode.UNCATEGORIZED_ERROR, "Failed to restore file from trash");
             }
         }

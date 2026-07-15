@@ -60,7 +60,8 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
 
     @Override
     @Transactional
-    public CampaignMeetingResponse createMeeting(Long campaignId, CreateCampaignMeetingRequest request, User currentUser) {
+    public CampaignMeetingResponse createMeeting(Long campaignId, CreateCampaignMeetingRequest request,
+            User currentUser) {
         Campaign campaign = getCampaign(campaignId);
 
         validateMeetingTime(request.startTime(), request.endTime());
@@ -75,8 +76,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
                 request.title(),
                 request.description(),
                 request.startTime(),
-                request.endTime()
-        ), accessToken);
+                request.endTime()), accessToken);
 
         CampaignMeeting meeting = CampaignMeeting.builder()
                 .campaign(campaign)
@@ -132,8 +132,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
             Long campaignId,
             Long meetingId,
             UpdateCampaignMeetingRequest request,
-            User currentUser
-    ) {
+            User currentUser) {
         Campaign campaign = getCampaign(campaignId);
         requireCampaignAdmin(campaign, currentUser);
 
@@ -157,8 +156,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         WebexMeetingResult webexMeeting = webexMeetingClient.updateMeeting(
                 meeting.getWebexMeetingId(),
                 new WebexCreateMeetingCommand(title, description, startTime, endTime),
-                accessToken
-        );
+                accessToken);
 
         meeting.setTitle(title);
         meeting.setDescription(description);
@@ -194,8 +192,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
             webexMeetingClient.cancelMeeting(campaignMeeting.getWebexMeetingId(), accessToken);
             log.info(
                     "Cancelled Webex meeting after host ended live session. meetingId={}, campaignId={}, webexMeetingId={}",
-                    meetingId, campaignId, campaignMeeting.getWebexMeetingId()
-            );
+                    meetingId, campaignId, campaignMeeting.getWebexMeetingId());
         }
 
         if (currentStatus != newStatus) {
@@ -206,8 +203,6 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
 
         return toResponse(campaignMeeting, currentUser);
     }
-
-
 
     @Override
     @Transactional(readOnly = true)
@@ -222,8 +217,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
                         member.getUser().getId(),
                         member.getUser().getFullName(),
                         member.getUser().getEmail(),
-                        member.getRoleInCampaign()
-                ))
+                        member.getRoleInCampaign()))
                 .toList();
     }
 
@@ -241,8 +235,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
                         member.getUser().getId(),
                         member.getUser().getFullName(),
                         member.getUser().getEmail(),
-                        member.getRoleInCampaign()
-                ))
+                        member.getRoleInCampaign()))
                 .toList();
     }
 
@@ -260,8 +253,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
             Long campaignId,
             Long meetingId,
             UpdateMeetingNotesRequest request,
-            User currentUser
-    ) {
+            User currentUser) {
         Campaign campaign = getCampaign(campaignId);
         requireCampaignAdmin(campaign, currentUser);
         CampaignMeeting meeting = getMeetingInCampaign(campaignId, meetingId);
@@ -289,16 +281,14 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
                 "Meeting was created",
                 meeting.getCreatedBy() != null ? meeting.getCreatedBy().getId() : null,
                 actorName(meeting.getCreatedBy(), "System"),
-                meeting.getCreatedAt()
-        ));
+                meeting.getCreatedAt()));
         if (meeting.getInvitationsSentAt() != null) {
             activities.add(new MeetingActivityResponse(
                     "INVITATIONS_SENT",
                     "Invitations were sent to " + invitedCount(meeting) + " members",
                     null,
                     "System",
-                    meeting.getInvitationsSentAt()
-            ));
+                    meeting.getInvitationsSentAt()));
         }
         if (meeting.getUpdatedBy() != null && meeting.getUpdatedAt() != null) {
             activities.add(new MeetingActivityResponse(
@@ -306,8 +296,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
                     "Meeting was updated",
                     meeting.getUpdatedBy().getId(),
                     actorName(meeting.getUpdatedBy(), "Unknown"),
-                    meeting.getUpdatedAt()
-            ));
+                    meeting.getUpdatedAt()));
         }
         if (meeting.getCancelledAt() != null) {
             activities.add(new MeetingActivityResponse(
@@ -315,8 +304,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
                     "Meeting was cancelled",
                     meeting.getCancelledBy() != null ? meeting.getCancelledBy().getId() : null,
                     actorName(meeting.getCancelledBy(), "Unknown"),
-                    meeting.getCancelledAt()
-            ));
+                    meeting.getCancelledAt()));
         }
         if (meeting.getNotesUpdatedAt() != null) {
             activities.add(new MeetingActivityResponse(
@@ -324,8 +312,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
                     "Meeting notes were updated",
                     meeting.getNotesUpdatedBy() != null ? meeting.getNotesUpdatedBy().getId() : null,
                     actorName(meeting.getNotesUpdatedBy(), "Unknown"),
-                    meeting.getNotesUpdatedAt()
-            ));
+                    meeting.getNotesUpdatedAt()));
         }
         return activities.stream()
                 .filter(activity -> activity.timestamp() != null)
@@ -352,8 +339,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
             Long campaignId,
             Long meetingId,
             MultipartFile file,
-            User currentUser
-    ) {
+            User currentUser) {
         Campaign campaign = getCampaign(campaignId);
         requireCampaignAdmin(campaign, currentUser);
         CampaignMeeting meeting = getMeetingInCampaign(campaignId, meetingId);
@@ -366,8 +352,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
             Long campaignId,
             Long meetingId,
             Long attachmentId,
-            User currentUser
-    ) {
+            User currentUser) {
         Campaign campaign = getCampaign(campaignId);
         requireCampaignAdmin(campaign, currentUser);
         getMeetingInCampaign(campaignId, meetingId);
@@ -376,8 +361,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
                 .findByIdAndCampaignIdAndMeetingIdAndDeletedAtIsNull(attachmentId, campaignId, meetingId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.CAMPAIGN_MEDIA_NOT_FOUND,
-                        "Campaign meeting attachment not found with ID: " + attachmentId
-                ));
+                        "Campaign meeting attachment not found with ID: " + attachmentId));
         return mediaService.softDeleteCampaignMeetingAttachment(media);
     }
 
@@ -403,8 +387,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         eventPublisher.publishEvent(new CampaignMeetingWebexCancellationEvent(
                 saved.getId(),
                 saved.getWebexMeetingId(),
-                hostUser != null ? hostUser.getId() : null
-        ));
+                hostUser != null ? hostUser.getId() : null));
         campaignMeetingInvitationService.sendCancellationNotice(saved);
 
         return toResponse(saved, currentUser);
@@ -414,22 +397,19 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         return campaignRepository.findById(campaignId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.CAMPAIGN_NOT_FOUND,
-                        "Campaign not found with ID: " + campaignId
-                ));
+                        "Campaign not found with ID: " + campaignId));
     }
 
     private CampaignMeeting getMeetingInCampaign(Long campaignId, Long meetingId) {
         CampaignMeeting meeting = campaignMeetingRepository.findById(meetingId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.VALIDATION_ERROR,
-                        "Campaign meeting not found with ID: " + meetingId
-                ));
+                        "Campaign meeting not found with ID: " + meetingId));
 
         if (meeting.getCampaign() == null || !campaignId.equals(meeting.getCampaign().getId())) {
             throw new ResourceNotFoundException(
                     ErrorCode.VALIDATION_ERROR,
-                    "Campaign meeting not found with ID: " + meetingId
-            );
+                    "Campaign meeting not found with ID: " + meetingId);
         }
         return meeting;
     }
@@ -438,8 +418,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         if (campaign.getStatus() != CampaignStatus.APPROVED && campaign.getStatus() != CampaignStatus.IN_PROGRESS) {
             throw new AppException(
                     ErrorCode.INVALID_CAMPAIGN_STATUS_FOR_UPDATE,
-                    "Meetings can only be created for APPROVED or IN_PROGRESS campaigns"
-            );
+                    "Meetings can only be created for APPROVED or IN_PROGRESS campaigns");
         }
     }
 
@@ -456,20 +435,17 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
             Long campaignId,
             Long excludedMeetingId,
             LocalDateTime startTime,
-            LocalDateTime endTime
-    ) {
+            LocalDateTime endTime) {
         boolean hasConflict = campaignMeetingRepository.existsOverlappingMeeting(
                 campaignId,
                 startTime,
                 endTime,
                 excludedMeetingId,
-                List.of(CampaignMeetingStatus.UPCOMING, CampaignMeetingStatus.IN_PROGRESS)
-        );
+                List.of(CampaignMeetingStatus.UPCOMING, CampaignMeetingStatus.IN_PROGRESS));
         if (hasConflict) {
             throw new AppException(
                     ErrorCode.MEETING_TIME_CONFLICT,
-                    "This campaign already has a meeting scheduled during this time."
-            );
+                    "This campaign already has a meeting scheduled during this time.");
         }
     }
 
@@ -477,8 +453,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         if (!isUpcoming(meeting, campaignMeetingClock.now())) {
             throw new AppException(
                     ErrorCode.VALIDATION_ERROR,
-                    "Only upcoming scheduled meetings can be updated"
-            );
+                    "Only upcoming scheduled meetings can be updated");
         }
     }
 
@@ -486,8 +461,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         if (!isUpcoming(meeting, campaignMeetingClock.now())) {
             throw new AppException(
                     ErrorCode.VALIDATION_ERROR,
-                    "Only upcoming scheduled meetings can be cancelled"
-            );
+                    "Only upcoming scheduled meetings can be cancelled");
         }
     }
 
@@ -495,8 +469,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         if (request.notifyAllMembers() != null || request.recipientUserIds() != null) {
             throw new AppException(
                     ErrorCode.VALIDATION_ERROR,
-                    "Meeting recipients can only be selected when creating a meeting"
-            );
+                    "Meeting recipients can only be selected when creating a meeting");
         }
     }
 
@@ -511,8 +484,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         if (recipientUserIds == null || recipientUserIds.isEmpty()) {
             throw new AppException(
                     ErrorCode.VALIDATION_ERROR,
-                    "recipientUserIds is required when notifyAll is false"
-            );
+                    "recipientUserIds is required when notifyAll is false");
         }
 
         Set<Long> selectedIds = new LinkedHashSet<>(recipientUserIds);
@@ -529,8 +501,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         if (!invalidIds.isEmpty()) {
             throw new AppException(
                     ErrorCode.VALIDATION_ERROR,
-                    "Selected recipients must be campaign members: " + invalidIds
-            );
+                    "Selected recipients must be campaign members: " + invalidIds);
         }
 
         List<User> recipients = new ArrayList<>();
@@ -544,8 +515,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         if (recipients.size() != selectedIds.size()) {
             throw new AppException(
                     ErrorCode.VALIDATION_ERROR,
-                    "Selected recipients must be active campaign members with email addresses"
-            );
+                    "Selected recipients must be active campaign members with email addresses");
         }
         return recipients;
     }
@@ -630,8 +600,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
             case "all" -> true;
             default -> throw new AppException(
                     ErrorCode.VALIDATION_ERROR,
-                    "Unsupported meeting view: " + view
-            );
+                    "Unsupported meeting view: " + view);
         };
     }
 
@@ -661,9 +630,12 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
 
     private CampaignMeetingStatus mapStatus(String webexState, CampaignMeetingStatus currentStatus) {
         log.info("Mapping status for webex state: {}, currentStatus={}", webexState, currentStatus);
-        if ("inProgress".equals(webexState)) return CampaignMeetingStatus.IN_PROGRESS;
-        if ("ended".equals(webexState) || "expired".equals(webexState)) return CampaignMeetingStatus.ENDED;
-        if ("cancelled".equals(webexState)) return CampaignMeetingStatus.CANCELLED;
+        if ("inProgress".equals(webexState))
+            return CampaignMeetingStatus.IN_PROGRESS;
+        if ("ended".equals(webexState) || "expired".equals(webexState))
+            return CampaignMeetingStatus.ENDED;
+        if ("cancelled".equals(webexState))
+            return CampaignMeetingStatus.CANCELLED;
         if ("active".equals(webexState) && currentStatus == CampaignMeetingStatus.IN_PROGRESS)
             return CampaignMeetingStatus.ENDED;
 
@@ -673,8 +645,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
     private boolean isEndedLiveSession(
             String webexState,
             CampaignMeetingStatus currentStatus,
-            CampaignMeetingStatus newStatus
-    ) {
+            CampaignMeetingStatus newStatus) {
         return "active".equals(webexState)
                 && currentStatus == CampaignMeetingStatus.IN_PROGRESS
                 && newStatus == CampaignMeetingStatus.ENDED;
@@ -691,22 +662,19 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
 
         throw new AppException(
                 ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE,
-                "Only Campaign Admin or global ADMIN can manage campaign meetings"
-        );
+                "Only the campaign creator or a campaign admin can manage campaign meetings");
     }
 
     private boolean canManageMeeting(Campaign campaign, User currentUser) {
         if (campaign == null || currentUser == null || currentUser.getId() == null) {
             return false;
         }
-        boolean isGlobalAdmin = currentUser.getRole() == UserRole.ADMIN;
         boolean isCreator = campaign.getUser() != null && campaign.getUser().getId().equals(currentUser.getId());
         boolean isCampaignAdmin = campaignMemberRepository.existsByCampaignIdAndUserIdAndRoleInCampaign(
                 campaign.getId(),
                 currentUser.getId(),
-                CampaignMemberRole.CAMPAIGN_ADMIN
-        );
-        return isGlobalAdmin || isCreator || isCampaignAdmin;
+                CampaignMemberRole.CAMPAIGN_ADMIN);
+        return isCreator || isCampaignAdmin;
     }
 
     private void requireMeetingViewer(Campaign campaign, User currentUser) {
@@ -714,18 +682,15 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
             throw new AppException(ErrorCode.UNAUTHORIZED, "User must be authenticated");
         }
 
-        boolean isGlobalAdmin = currentUser.getRole() == UserRole.ADMIN;
         boolean isCreator = campaign.getUser() != null && campaign.getUser().getId().equals(currentUser.getId());
         boolean isMember = campaignMemberRepository.existsByCampaignIdAndUserId(
                 campaign.getId(),
-                currentUser.getId()
-        );
+                currentUser.getId());
 
-        if (!isGlobalAdmin && !isCreator && !isMember) {
+        if (!isCreator && !isMember) {
             throw new AppException(
                     ErrorCode.UNAUTHORIZED_CAMPAIGN_ACCESS,
-                    "Only campaign members can view campaign meetings"
-            );
+                    "Only campaign members can view campaign meetings");
         }
     }
 
@@ -781,13 +746,12 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
                 meeting.getNotesUpdatedAt(),
                 updatedBy != null ? updatedBy.getId() : null,
                 actorName(updatedBy, null),
-                canEdit
-        );
+                canEdit);
     }
 
     private CampaignMediaResponse toMediaResponse(CampaignMedia media) {
         return new CampaignMediaResponse(media.getId(), media.getUrl(), media.getMediaType(), media.isCover(),
-                    media.getCaption(), media.getDisplayOrder(), media.getContext().name());
+                media.getCaption(), media.getDisplayOrder(), media.getContext().name());
     }
 
     private String actorName(User user, String fallback) {

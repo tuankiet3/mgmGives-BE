@@ -38,4 +38,8 @@ public final class CampaignTaskSpecifications {
     public static Specification<CampaignTask> isNotDeleted() {
         return (root, query, cb) -> cb.isNull(root.get("deletedAt"));
     }
+
+    public static Specification<CampaignTask> isDeleted() {
+        return (root, query, cb) -> cb.isNotNull(root.get("deletedAt"));
+    }
 }

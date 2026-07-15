@@ -4,6 +4,7 @@ import com.mgmtp.gives.common.ApiResponse;
 import com.mgmtp.gives.dto.campaign_task.CampaignTaskResponse;
 import com.mgmtp.gives.dto.campaign_task.CreateCampaignTaskRequest;
 import com.mgmtp.gives.dto.campaign_task.TaskAttachmentResponse;
+import com.mgmtp.gives.dto.campaign_task.TaskAssignableMemberResponse;
 import com.mgmtp.gives.dto.campaign_task.UpdateCampaignTaskRequest;
 import com.mgmtp.gives.enums.TaskStatus;
 import com.mgmtp.gives.security.CustomUserDetails;
@@ -31,6 +32,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 import static org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE;
 
@@ -64,18 +67,23 @@ public class CampaignTaskController {
             @RequestParam(required = false) TaskStatus status,
             @RequestParam(required = false) Long assigneeId,
             @RequestParam(defaultValue = "false") Boolean isArchived,
-            @ParameterObject @PageableDefault(page = 0, size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+            @RequestParam(defaultValue = "false") Boolean isDeleted,
+            @ParameterObject @PageableDefault(page = 0, size = 10, sort = "position", direction = Sort.Direction.ASC) Pageable pageable,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
         log.info("REST request to get tasks: campaignId={}, status={}, assigneeId={}, isArchived={}",
                 campaignId, status, assigneeId, isArchived);
         return ApiResponse.success(
-                campaignTaskService.getTasksByCampaign(campaignId, status, assigneeId, isArchived, pageable));
+                campaignTaskService.getTasksByCampaign(campaignId, status, assigneeId, isArchived,
+                        isDeleted, pageable, userDetails.getUser()));
     }
 
     @GetMapping("/tasks/{taskId}")
     @Operation(summary = "Get task detail by ID")
-    public ApiResponse<CampaignTaskResponse> getTask(@PathVariable Long taskId) {
+    public ApiResponse<CampaignTaskResponse> getTask(
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
         log.info("REST request to get task: taskId={}", taskId);
-        return ApiResponse.success(campaignTaskService.getTaskById(taskId));
+        return ApiResponse.success(campaignTaskService.getTaskById(taskId, userDetails.getUser()));
     }
 
     @PatchMapping("/tasks/{taskId}")
@@ -102,6 +110,17 @@ public class CampaignTaskController {
         return ApiResponse.success(null, "Task deleted successfully");
     }
 
+    @DeleteMapping("/tasks/{taskId}/permanently")
+    @Operation(summary = "Permanently delete an archived task")
+    public ApiResponse<Void> permanentlyDeleteArchivedTask(
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        log.info("REST request to permanently delete archived task: taskId={}, userId={}",
+                taskId, userDetails.getUser().getId());
+        campaignTaskService.permanentlyDeleteArchivedTask(taskId, userDetails.getUser());
+        return ApiResponse.success(null, "Task permanently deleted successfully");
+    }
+
     @PostMapping("/tasks/{taskId}/archive")
     @Operation(summary = "Archive a task")
     public ApiResponse<CampaignTaskResponse> archiveTask(
@@ -114,16 +133,36 @@ public class CampaignTaskController {
                 "Task archived successfully");
     }
 
-    @PostMapping("/tasks/{taskId}/restore")
-    @Operation(summary = "Restore an archived task")
-    public ApiResponse<CampaignTaskResponse> restoreTask(
+    @PostMapping("/tasks/{taskId}/unarchive")
+    @Operation(summary = "Unarchive a task")
+    public ApiResponse<CampaignTaskResponse> unarchiveTask(
             @PathVariable Long taskId,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
-        log.info("REST request to restore task: taskId={}, userId={}",
+        log.info("REST request to unarchive task: taskId={}, userId={}",
                 taskId, userDetails.getUser().getId());
         return ApiResponse.success(
-                campaignTaskService.restoreTask(taskId, userDetails.getUser()),
+                campaignTaskService.unarchiveTask(taskId, userDetails.getUser()),
+                "Task unarchived successfully");
+    }
+
+    @PostMapping("/tasks/{taskId}/restore")
+    @Operation(summary = "Restore a soft-deleted task")
+    public ApiResponse<CampaignTaskResponse> restoreDeletedTask(
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        log.info("REST request to restore deleted task: taskId={}, userId={}",
+                taskId, userDetails.getUser().getId());
+        return ApiResponse.success(
+                campaignTaskService.restoreDeletedTask(taskId, userDetails.getUser()),
                 "Task restored successfully");
+    }
+
+    @GetMapping("/campaigns/{campaignId}/task-assignees")
+    @Operation(summary = "Get campaign members eligible for task assignment")
+    public ApiResponse<List<TaskAssignableMemberResponse>> getAssignableMembers(
+            @PathVariable Long campaignId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ApiResponse.success(campaignTaskService.getAssignableMembers(campaignId, userDetails.getUser()));
     }
 
     @PostMapping("/tasks/{taskId}/assignees/{userId}")

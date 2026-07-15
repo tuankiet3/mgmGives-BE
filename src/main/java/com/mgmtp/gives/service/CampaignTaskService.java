@@ -3,6 +3,7 @@ package com.mgmtp.gives.service;
 import com.mgmtp.gives.dto.campaign_task.CampaignTaskResponse;
 import com.mgmtp.gives.dto.campaign_task.CreateCampaignTaskRequest;
 import com.mgmtp.gives.dto.campaign_task.TaskAttachmentResponse;
+import com.mgmtp.gives.dto.campaign_task.TaskAssignableMemberResponse;
 import com.mgmtp.gives.dto.campaign_task.UpdateCampaignTaskRequest;
 import com.mgmtp.gives.entity.User;
 import org.springframework.data.domain.Page;
@@ -18,13 +19,20 @@ public interface CampaignTaskService {
 
     void deleteTask(Long taskId, User currentUser);
 
-    CampaignTaskResponse getTaskById(Long taskId);
+    void permanentlyDeleteArchivedTask(Long taskId, User currentUser);
 
-    Page<CampaignTaskResponse> getTasksByCampaign(Long campaignId, TaskStatus status, Long assigneeId, Boolean isArchived, Pageable pageable);
+    CampaignTaskResponse getTaskById(Long taskId, User currentUser);
+
+    Page<CampaignTaskResponse> getTasksByCampaign(Long campaignId, TaskStatus status, Long assigneeId,
+            Boolean isArchived, Boolean isDeleted, Pageable pageable, User currentUser);
 
     CampaignTaskResponse archiveTask(Long taskId, User currentUser);
 
-    CampaignTaskResponse restoreTask(Long taskId, User currentUser);
+    CampaignTaskResponse unarchiveTask(Long taskId, User currentUser);
+
+    CampaignTaskResponse restoreDeletedTask(Long taskId, User currentUser);
+
+    java.util.List<TaskAssignableMemberResponse> getAssignableMembers(Long campaignId, User currentUser);
 
     CampaignTaskResponse addAssignee(Long taskId, Long userId, User currentUser);
 

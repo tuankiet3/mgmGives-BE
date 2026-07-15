@@ -50,9 +50,12 @@ public class CampaignLabelController {
 
         @GetMapping("/campaigns/{campaignId}/labels")
         @Operation(summary = "Get all labels for a campaign")
-        public ApiResponse<List<CampaignLabelResponse>> getLabels(@PathVariable Long campaignId) {
+        public ApiResponse<List<CampaignLabelResponse>> getLabels(
+                        @PathVariable Long campaignId,
+                        @AuthenticationPrincipal CustomUserDetails userDetails) {
                 log.info("REST request to get labels: campaignId={}", campaignId);
-                return ApiResponse.success(campaignLabelService.getLabelsByCampaign(campaignId));
+                return ApiResponse.success(
+                                campaignLabelService.getLabelsByCampaign(campaignId, userDetails.getUser()));
         }
 
         @RequestMapping(value = "/labels/{labelId}", method = { RequestMethod.PUT, RequestMethod.PATCH })

@@ -82,7 +82,7 @@ public class DonationController {
     }
 
     @PatchMapping("/{id}/message/hide")
-    @Operation(summary = "Hide or show a donation message (moderation)", description = "Allows Campaign Admin or global ADMIN to moderate donation messages.")
+    @Operation(summary = "Hide or show a donation message (moderation)", description = "Allows a Campaign Admin to moderate donation messages.")
     public ApiResponse<DonationResponse> hideDonationMessage(@PathVariable Long id,
                                                              @RequestParam boolean hidden,
                                                              @AuthenticationPrincipal CustomUserDetails userDetails) {
@@ -91,7 +91,7 @@ public class DonationController {
     }
 
     @PatchMapping("/{id}/confirm")
-    @Operation(summary = "Confirm a donation", description = "Allows the campaign creator or global admin to confirm a pending manual QR donation.")
+    @Operation(summary = "Confirm a donation", description = "Allows a Campaign Admin to confirm a pending manual QR donation.")
     public ApiResponse<DonationResponse> confirmDonation(@PathVariable Long id,
                                                          @AuthenticationPrincipal CustomUserDetails userDetails) {
         DonationResponse donation = donationService.confirmCampaignDonation(id, userDetails.getUser());
@@ -99,7 +99,7 @@ public class DonationController {
     }
 
     @PatchMapping("/{id}/reject")
-    @Operation(summary = "Reject a donation", description = "Allows the campaign creator or global admin to reject a pending manual QR donation with a reason.")
+    @Operation(summary = "Reject a donation", description = "Allows a Campaign Admin to reject a pending manual QR donation with a reason.")
     public ApiResponse<DonationResponse> rejectDonation(@PathVariable Long id,
                                                         @Valid @RequestBody RejectRequest request,
                                                         @AuthenticationPrincipal CustomUserDetails userDetails) {

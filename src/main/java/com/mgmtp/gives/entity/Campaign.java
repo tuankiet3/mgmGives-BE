@@ -159,4 +159,5 @@ public class Campaign extends BaseEntity {
 
     @Column(name = "final_volunteer_count")
     private Long finalVolunteerCount;
+
 }

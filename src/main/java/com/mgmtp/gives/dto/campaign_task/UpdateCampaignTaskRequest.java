@@ -14,6 +14,8 @@ public record UpdateCampaignTaskRequest(
 
         LocalDateTime dueDate,
 
+        Boolean clearDueDate,
+
         TaskStatus status
 ) {
 }

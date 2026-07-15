@@ -318,7 +318,7 @@ public class DonationServiceImpl implements DonationService {
 
         if (!campaignMemberService.canManageCampaign(donation.getCampaign().getId(), currentUser)) {
             throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE,
-                    "Only Campaign Admin or global ADMIN can moderate donation messages.");
+                    "Only a Campaign Admin can moderate donation messages.");
         }
 
         donation.setMessageHidden(hidden);
@@ -542,7 +542,7 @@ public class DonationServiceImpl implements DonationService {
 
         if (!campaignMemberService.canManageCampaign(donation.getCampaign().getId(), currentUser)) {
             throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE,
-                    "Only Campaign Managers or global ADMIN can confirm manual QR donations.");
+                    "Only a Campaign Admin can confirm manual QR donations.");
         }
 
         if (donation.getStatus() == DonationStatus.SUCCESSFUL) {
@@ -571,7 +571,7 @@ public class DonationServiceImpl implements DonationService {
 
         if (!campaignMemberService.canManageCampaign(donation.getCampaign().getId(), currentUser)) {
             throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE,
-                    "Only Campaign Managers or global ADMIN can reject manual QR donations.");
+                    "Only a Campaign Admin can reject manual QR donations.");
         }
 
         if (donation.getStatus() == DonationStatus.REJECTED) {

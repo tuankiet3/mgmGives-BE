@@ -35,6 +35,9 @@ public class CampaignTask extends BaseEntity {
     @Column(name = "due_date")
     private LocalDateTime dueDate;
 
+    @Column(name = "position")
+    private long position;
+
     @ManyToOne
     @JoinColumn(name = "created_by")
     private User createdBy;

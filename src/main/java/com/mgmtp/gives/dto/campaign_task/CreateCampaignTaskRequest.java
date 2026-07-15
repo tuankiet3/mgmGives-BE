@@ -19,6 +19,8 @@ public record CreateCampaignTaskRequest(
 
         List<Long> assigneeIds,
 
-        List<Long> labelIds
+        List<Long> labelIds,
+
+        TaskStatus status
 ) {
 }

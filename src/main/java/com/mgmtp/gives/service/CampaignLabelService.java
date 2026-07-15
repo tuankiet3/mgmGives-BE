@@ -14,5 +14,5 @@ public interface CampaignLabelService {
 
     void deleteLabel(Long labelId, User currentUser);
 
-    List<CampaignLabelResponse> getLabelsByCampaign(Long campaignId);
+    List<CampaignLabelResponse> getLabelsByCampaign(Long campaignId, User currentUser);
 }
