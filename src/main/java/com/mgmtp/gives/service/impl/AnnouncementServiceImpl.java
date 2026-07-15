@@ -355,7 +355,8 @@ public class AnnouncementServiceImpl implements AnnouncementService {
                 createdBy == null ? null : new AnnouncementResponse.UserSummary(
                         createdBy.getId(),
                         createdBy.getFullName(),
-                        createdBy.getEmail()),
+                        createdBy.getEmail(),
+                        createdBy.getAvatarUrl()),
                 announcement.getCreatedAt(),
                 announcement.getUpdatedAt(),
                 mediaResponses,

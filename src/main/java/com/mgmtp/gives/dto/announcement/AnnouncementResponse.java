@@ -20,7 +20,8 @@ public record AnnouncementResponse(
     public record UserSummary(
             Long id,
             String name,
-            String email
+            String email,
+            String avatarUrl
     ) {
     }
 }
