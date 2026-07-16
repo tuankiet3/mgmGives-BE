@@ -29,8 +29,8 @@ public final class MediaValidationUtil {
     /** Document types accepted for general campaign media (a stricter subset of DOCUMENT_TYPES, task attachments allow more). */
     private static final Set<String> CAMPAIGN_DOCUMENT_TYPES = Set.of("application/pdf");
 
-    private static final long MAX_IMAGE_SIZE = 5L * 1024 * 1024;
-    private static final long MAX_VIDEO_SIZE = 50L * 1024 * 1024;
+    private static final long MAX_IMAGE_SIZE = 15L * 1024 * 1024;
+    private static final long MAX_VIDEO_SIZE = 200L * 1024 * 1024;
     private static final long MAX_DOCUMENT_SIZE = 10L * 1024 * 1024;
 
     private MediaValidationUtil() {}
@@ -65,7 +65,12 @@ public final class MediaValidationUtil {
             default -> MAX_VIDEO_SIZE;
         };
         if (file.getSize() > maxSize) {
-            throw new AppException(ErrorCode.FILE_SIZE_EXCEEDED);
+            String message = switch (category) {
+                case "IMAGE" -> "Image size must be less than 15MB";
+                case "DOCUMENT" -> "Document size must be less than 10MB";
+                default -> "Video size must be less than 200MB";
+            };
+            throw new AppException(ErrorCode.FILE_SIZE_EXCEEDED, message);
         }
 
         if ("IMAGE".equals(category)) {
@@ -129,7 +134,12 @@ public final class MediaValidationUtil {
 
         long maxSize = "DOCUMENT".equals(category) ? MAX_DOCUMENT_SIZE : ("IMAGE".equals(category) ? MAX_IMAGE_SIZE : MAX_VIDEO_SIZE);
         if (file.getSize() > maxSize) {
-            throw new AppException(ErrorCode.FILE_SIZE_EXCEEDED);
+            String message = switch (category) {
+                case "IMAGE" -> "Image size must be less than 15MB";
+                case "DOCUMENT" -> "Document size must be less than 10MB";
+                default -> "Video size must be less than 200MB";
+            };
+            throw new AppException(ErrorCode.FILE_SIZE_EXCEEDED, message);
         }
 
         if ("IMAGE".equals(category)) {

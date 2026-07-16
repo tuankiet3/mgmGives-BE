@@ -49,4 +49,11 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(ErrorCode.VALIDATION_ERROR.getStatus()).body(response);
     }
+
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<?>> handleMaxUploadSizeExceeded(org.springframework.web.multipart.MaxUploadSizeExceededException ex, HttpServletRequest request) {
+        log.warn("MaxUploadSizeExceededException Message: {}", ex.getMessage());
+        ApiResponse<?> response = ApiResponse.fail(null, ErrorCode.FILE_SIZE_EXCEEDED, "File size exceeds the allowed limit (max 15MB for images, 200MB for videos, 10MB for documents)", request.getRequestURI());
+        return ResponseEntity.status(ErrorCode.FILE_SIZE_EXCEEDED.getStatus()).body(response);
+    }
 }

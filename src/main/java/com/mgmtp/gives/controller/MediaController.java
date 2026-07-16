@@ -27,7 +27,7 @@ public class MediaController {
 
     @PostMapping(value = "/upload/campaign", consumes = MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Upload campaign media", description = "Uploads an image, video, or PDF document for a campaign. Accepts image/jpeg, image/png, image/webp, image/gif (max 5MB); video/mp4, video/quicktime, video/x-msvideo, video/webm (max 50MB); application/pdf (max 10MB). Only image files can be set as cover. Optional `context` (CAMPAIGN or FINAL_REPORT, defaults to CAMPAIGN) excludes the media from the general campaign gallery when set to FINAL_REPORT.")
+    @Operation(summary = "Upload campaign media", description = "Uploads an image, video, or PDF document for a campaign. Accepts image/jpeg, image/png, image/webp, image/gif (max 15MB); video/mp4, video/quicktime, video/x-msvideo, video/webm (max 200MB); application/pdf (max 10MB). Only image files can be set as cover. Optional `context` (CAMPAIGN or FINAL_REPORT, defaults to CAMPAIGN) excludes the media from the general campaign gallery when set to FINAL_REPORT.")
     public ApiResponse<CampaignMediaResponse> uploadCampaignMedia(
             @RequestParam("file") MultipartFile file,
             @RequestParam("campaignId") Long campaignId,
@@ -56,7 +56,7 @@ public class MediaController {
 
     @PostMapping(value = "/upload/avatar", consumes = MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Upload user avatar", description = "Uploads an image file and updates the current user's avatar_url. Accepts image/jpeg, image/png, image/webp (max 5MB). Videos are rejected.")
+    @Operation(summary = "Upload user avatar", description = "Uploads an image file and updates the current user's avatar_url. Accepts image/jpeg, image/png, image/webp (max 15MB). Videos are rejected.")
     public ApiResponse<String> uploadAvatar(
             @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal CustomUserDetails userDetails) {

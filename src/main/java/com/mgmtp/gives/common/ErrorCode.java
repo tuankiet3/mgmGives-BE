@@ -58,7 +58,7 @@ public enum ErrorCode {
     MEDIA_NOT_DELETED(3004, "Media is not deleted, nothing to restore", HttpStatus.BAD_REQUEST),
     MEDIA_RESTORE_EXPIRED(3005, "Restore window has expired (14 days)", HttpStatus.BAD_REQUEST),
     UNSUPPORTED_FILE_TYPE(3006, "Unsupported file type", HttpStatus.BAD_REQUEST),
-    FILE_SIZE_EXCEEDED(3007, "File size exceeds the allowed limit", HttpStatus.BAD_REQUEST),
+    FILE_SIZE_EXCEEDED(3007, "File size exceeds the allowed limit. Max size: Image (15MB), Video (200MB), Document (10MB)", HttpStatus.BAD_REQUEST),
     IMAGE_ONLY(3008, "Only image files are allowed for avatar/cover", HttpStatus.BAD_REQUEST),
     PATH_TRAVERSAL_DETECTED(3009, "Invalid file path", HttpStatus.BAD_REQUEST),
     WEBEX_NOT_CONNECTED(4001, "Please connect your Webex account before creating a meeting", HttpStatus.BAD_REQUEST),
