@@ -1,16 +1,23 @@
 package com.mgmtp.gives.service.impl;
 
 import com.mgmtp.gives.common.ErrorCode;
+import com.mgmtp.gives.dto.campaign_task.CampaignTaskChangeAction;
+import com.mgmtp.gives.dto.campaign_task.CampaignTaskChangedPayload;
+import com.mgmtp.gives.dto.campaign_task.CampaignTaskActivityResponse;
 import com.mgmtp.gives.dto.campaign_task.CampaignTaskResponse;
 import com.mgmtp.gives.dto.campaign_task.CreateCampaignTaskRequest;
+import com.mgmtp.gives.dto.campaign_task.MoveCampaignTaskRequest;
 import com.mgmtp.gives.dto.campaign_task.TaskAttachmentResponse;
 import com.mgmtp.gives.dto.campaign_task.TaskAssignableMemberResponse;
 import com.mgmtp.gives.dto.campaign_task.UpdateCampaignTaskRequest;
+import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.*;
+import com.mgmtp.gives.enums.CampaignTaskActivityAction;
 import com.mgmtp.gives.enums.TaskStatus;
 import com.mgmtp.gives.enums.UserStatus;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
+import com.mgmtp.gives.event.task.CampaignTaskChangedEvent;
 import com.mgmtp.gives.repository.*;
 import com.mgmtp.gives.service.CampaignTaskService;
 import com.mgmtp.gives.service.MediaService;
@@ -21,7 +28,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
@@ -50,6 +59,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
     private final UserRepository userRepository;
     private final TaskAssignmentRepository taskAssignmentRepository;
     private final TaskAttachmentRepository taskAttachmentRepository;
+    private final CampaignTaskActivityRepository campaignTaskActivityRepository;
     private final CampaignAccessHelper campaignAccessHelper;
     private final MediaService mediaService;
     private final ApplicationEventPublisher eventPublisher;
@@ -64,13 +74,13 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         validateDueDate(request.dueDate(), campaign);
 
         // Validate assignees
-        List<User> assignees = resolveAndValidateAssignees(campaignId, request.assigneeIds(), currentUser);
+        List<User> assignees = resolveAndValidateAssignees(campaignId, request.assigneeIds());
 
         // Validate labels
         Set<CampaignTaskLabel> labels = resolveAndValidateLabels(campaignId, request.labelIds());
 
         TaskStatus initialStatus = request.status() == null ? TaskStatus.TODO : request.status();
-        CampaignTask task = CampaignTask.builder()
+        CampaignTask savedTask = CampaignTask.builder()
                 .campaign(campaign)
                 .title(request.title())
                 .description(request.description())
@@ -82,9 +92,6 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                 .updatedAt(LocalDateTime.now())
                 .build();
 
-        CampaignTask savedTask = campaignTaskRepository.save(task);
-
-        // Create assignments
         Set<TaskAssignment> assignments = new HashSet<>();
         for (User assignee : assignees) {
             TaskAssignment assignment = TaskAssignment.builder()
@@ -97,14 +104,20 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         savedTask.setAssignments(assignments);
         savedTask.setLabels(labels);
 
-        savedTask = campaignTaskRepository.save(savedTask);
+        CampaignTaskResponse response = saveAndPublish(
+                savedTask,
+                CampaignTaskChangeAction.CREATED,
+                currentUser,
+                activity(CampaignTaskActivityAction.TASK_CREATED,
+                        details("status", initialStatus.name())));
 
         log.info("Task created: campaignId={}, taskId={}, userId={}",
                 campaignId, savedTask.getId(), currentUser.getId());
 
         if (savedTask.getAssignments() != null && !savedTask.getAssignments().isEmpty()) {
             Set<NotificationRecipient> assigneesRecipients = savedTask.getAssignments().stream()
-                    .map(assignment -> new NotificationRecipient(assignment.getUser().getId(), assignment.getUser().getEmail()))
+                    .map(assignment -> new NotificationRecipient(assignment.getUser().getId(),
+                            assignment.getUser().getEmail()))
                     .collect(Collectors.toSet());
 
             // Publish event for in-app notification
@@ -113,8 +126,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                     savedTask.getId(),
                     savedTask.getTitle(),
                     savedTask.getDescription(),
-                    assigneesRecipients
-            ));
+                    assigneesRecipients));
 
             // Publish event for email notification
             eventPublisher.publishEvent(new TaskCreatedEmailEvent(
@@ -123,8 +135,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                     savedTask.getTitle(),
                     savedTask.getDescription(),
                     savedTask.getDueDate(),
-                    assigneesRecipients
-            ));
+                    assigneesRecipients));
         }
 
         return toResponse(savedTask);
@@ -133,119 +144,199 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
     @Override
     @Transactional
     public CampaignTaskResponse updateTask(Long taskId, UpdateCampaignTaskRequest request, User currentUser) {
-        CampaignTask task = findTask(taskId);
-        Long campaignId = task.getCampaign().getId();
+        CampaignTask savedTask = findTask(taskId);
+        Long campaignId = savedTask.getCampaign().getId();
 
-        boolean isAdmin = campaignAccessHelper.isCampaignAdmin(campaignId, currentUser);
-        boolean isAssignee = taskAssignmentRepository.existsByTaskIdAndUserId(taskId, currentUser.getId())
-                && campaignAccessHelper.isCampaignMember(campaignId, currentUser.getId());
+        TaskStatus previousStatus = savedTask.getStatus();
+        String previousTitle = savedTask.getTitle();
+        String previousDescription = savedTask.getDescription();
+        LocalDateTime previousDueDate = savedTask.getDueDate();
+        Map<Long, String> previousAssignees = assignmentNames(savedTask);
+        Map<Long, String> previousLabels = labelNames(savedTask);
 
-        if (!isAdmin && !isAssignee) {
+        boolean isAdmin = validateCanModifyTask(savedTask, currentUser);
+        if (!isAdmin && (request.assigneeIds() != null || request.labelIds() != null)) {
             throw new AppException(ErrorCode.UNAUTHORIZED_TASK_ACCESS);
         }
-        if (request.version() != null && !Objects.equals(request.version(), task.getVersion())) {
+        if (request.version() != null && !Objects.equals(request.version(), savedTask.getVersion())) {
             throw new AppException(ErrorCode.RESOURCE_UPDATE_CONFLICT);
         }
         if (request.title() != null && request.title().isBlank()) {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Task title cannot be blank");
         }
 
-        TaskStatus oldStatus = task.getStatus();
+        TaskStatus oldStatus = savedTask.getStatus();
         boolean descriptionChanged = request.description() != null
-                && !Objects.equals(request.description(), task.getDescription());
+                && !Objects.equals(request.description(), savedTask.getDescription());
 
         // Status update: Admin OR Assignee allowed
-        if (request.status() != null && request.status() != task.getStatus()) {
-            task.setStatus(request.status());
-            task.setPosition(nextActivePosition(campaignId, request.status()));
-        }
-
-        // Info update: Admin OR Assignee allowed
-        if (Boolean.TRUE.equals(request.clearDueDate()) && request.dueDate() != null) {
-            throw new AppException(ErrorCode.VALIDATION_ERROR, "Due date cannot be set and cleared at the same time");
-        }
-        if (request.title() != null || request.description() != null
-                || request.dueDate() != null || Boolean.TRUE.equals(request.clearDueDate())) {
-            if (request.title() != null) {
-                task.setTitle(request.title());
-            }
-            if (request.description() != null) {
-                task.setDescription(request.description());
-            }
-            if (Boolean.TRUE.equals(request.clearDueDate())) {
-                task.setDueDate(null);
-            } else if (request.dueDate() != null) {
-                validateDueDate(request.dueDate(), task.getCampaign());
-                task.setDueDate(request.dueDate());
-            }
-        }
-
-        task.setUpdatedAt(LocalDateTime.now());
-        CampaignTask savedTask = campaignTaskRepository.save(task);
-
-        log.info("Task updated: taskId={}, userId={}", taskId, currentUser.getId());
-
-        // Check if status changed
-        if (request.status() != null && request.status() != oldStatus) {
-            Set<NotificationRecipient> recipients = new HashSet<>();
-
-            // Add all current assignees
-            if (savedTask.getAssignments() != null) {
-                savedTask.getAssignments().stream()
-                        .map(a -> new NotificationRecipient(a.getUser().getId(), a.getUser().getEmail()))
-                        .forEach(recipients::add);
+        if (request.status() != null && request.status() != savedTask.getStatus()) {
+            List<User> requestedAssignees = request.assigneeIds() == null
+                    ? null
+                    : resolveAndValidateAssignees(campaignId, request.assigneeIds());
+            Set<CampaignTaskLabel> requestedLabels = request.labelIds() == null
+                    ? null
+                    : resolveAndValidateLabels(campaignId, request.labelIds());
+            boolean statusChanged = request.status() != null && request.status() != savedTask.getStatus();
+            if (statusChanged) {
+                if (savedTask.isArchived()) {
+                    throw new AppException(ErrorCode.VALIDATION_ERROR, "Archived tasks cannot be moved");
+                }
+                validateCanReopenCompletedTask(savedTask, request.status(), isAdmin);
+                savedTask.setStatus(request.status());
+                savedTask.setPosition(nextActivePosition(campaignId, request.status()));
             }
 
-            // Add Campaign Owner
-            if (savedTask.getCampaign().getUser() != null) {
-                recipients.add(new NotificationRecipient(
-                        savedTask.getCampaign().getUser().getId(),
-                        savedTask.getCampaign().getUser().getEmail()
-                ));
+            // Info update: Admin OR Assignee allowed
+            if (Boolean.TRUE.equals(request.clearDueDate()) && request.dueDate() != null) {
+                throw new AppException(ErrorCode.VALIDATION_ERROR,
+                        "Due date cannot be set and cleared at the same time");
+            }
+            if (request.title() != null || request.description() != null
+                    || request.dueDate() != null || Boolean.TRUE.equals(request.clearDueDate())) {
+                if (request.title() != null) {
+                    savedTask.setTitle(request.title());
+                }
+                if (request.description() != null) {
+                    savedTask.setDescription(request.description());
+                }
+                if (Boolean.TRUE.equals(request.clearDueDate())) {
+                    savedTask.setDueDate(null);
+                } else if (request.dueDate() != null) {
+                    validateDueDate(request.dueDate(), savedTask.getCampaign());
+                    savedTask.setDueDate(request.dueDate());
+                }
+            }
+            if (requestedAssignees != null) {
+                syncTaskAssignments(savedTask, requestedAssignees);
+            }
+            if (requestedLabels != null) {
+                savedTask.getLabels().clear();
+                savedTask.getLabels().addAll(requestedLabels);
             }
 
-            // Add Campaign Admins
-            List<NotificationRecipient> campaignAdmins = campaignMemberRepository
-                    .findRecipientsByCampaignIdAndRole(campaignId, CampaignMemberRole.CAMPAIGN_ADMIN);
-            if (campaignAdmins != null) {
-                recipients.addAll(campaignAdmins);
-            }
+            List<ActivityDraft> activities = collectUpdateActivities(
+                    savedTask,
+                    previousStatus,
+                    previousTitle,
+                    previousDescription,
+                    previousDueDate,
+                    previousAssignees,
+                    previousLabels);
+            savedTask.setUpdatedAt(LocalDateTime.now());
+            CampaignTaskResponse response = saveAndPublish(
+                    savedTask,
+                    statusChanged ? CampaignTaskChangeAction.MOVED : CampaignTaskChangeAction.UPDATED,
+                    currentUser,
+                    activities.toArray(ActivityDraft[]::new));
 
-            // Exclude the current user (action user)
-            recipients.removeIf(r -> r.userId().equals(currentUser.getId()));
+            log.info("Task updated: taskId={}, userId={}", taskId, currentUser.getId());
 
-            if (!recipients.isEmpty()) {
-                eventPublisher.publishEvent(new TaskStatusChangedEvent(
-                        campaignId,
-                        savedTask.getId(),
-                        savedTask.getTitle(),
-                        oldStatus,
-                        savedTask.getStatus(),
-                        recipients
-                ));
-            }
-        } else {
-            // Regular update (Title, Description, etc. changed without status change)
-            if (descriptionChanged && savedTask.getAssignments() != null && !savedTask.getAssignments().isEmpty()) {
-                Set<NotificationRecipient> assigneesRecipients = savedTask.getAssignments().stream()
-                        .map(assignment -> new NotificationRecipient(assignment.getUser().getId(), assignment.getUser().getEmail()))
-                        .collect(Collectors.toSet());
+            // Check if status changed
+            if (request.status() != null && request.status() != oldStatus) {
+                Set<NotificationRecipient> recipients = new HashSet<>();
+
+                // Add all current assignees
+                if (savedTask.getAssignments() != null) {
+                    savedTask.getAssignments().stream()
+                            .map(a -> new NotificationRecipient(a.getUser().getId(), a.getUser().getEmail()))
+                            .forEach(recipients::add);
+                }
+
+                // Add Campaign Owner
+                if (savedTask.getCampaign().getUser() != null) {
+                    recipients.add(new NotificationRecipient(
+                            savedTask.getCampaign().getUser().getId(),
+                            savedTask.getCampaign().getUser().getEmail()));
+                }
+
+                // Add Campaign Admins
+                List<NotificationRecipient> campaignAdmins = campaignMemberRepository
+                        .findRecipientsByCampaignIdAndRole(campaignId, CampaignMemberRole.CAMPAIGN_ADMIN);
+                if (campaignAdmins != null) {
+                    recipients.addAll(campaignAdmins);
+                }
 
                 // Exclude the current user (action user)
-                assigneesRecipients.removeIf(r -> r.userId().equals(currentUser.getId()));
+                recipients.removeIf(r -> r.userId().equals(currentUser.getId()));
 
-                if (!assigneesRecipients.isEmpty()) {
-                    eventPublisher.publishEvent(new TaskDescriptionUpdatedEvent(
+                if (!recipients.isEmpty()) {
+                    eventPublisher.publishEvent(new TaskStatusChangedEvent(
                             campaignId,
                             savedTask.getId(),
                             savedTask.getTitle(),
-                            assigneesRecipients
-                    ));
+                            oldStatus,
+                            savedTask.getStatus(),
+                            recipients));
+                }
+            } else {
+                // Regular update (Title, Description, etc. changed without status change)
+                if (descriptionChanged && savedTask.getAssignments() != null && !savedTask.getAssignments().isEmpty()) {
+                    Set<NotificationRecipient> assigneesRecipients = savedTask.getAssignments().stream()
+                            .map(assignment -> new NotificationRecipient(assignment.getUser().getId(),
+                                    assignment.getUser().getEmail()))
+                            .collect(Collectors.toSet());
+
+                    // Exclude the current user (action user)
+                    assigneesRecipients.removeIf(r -> r.userId().equals(currentUser.getId()));
+
+                    if (!assigneesRecipients.isEmpty()) {
+                        eventPublisher.publishEvent(new TaskDescriptionUpdatedEvent(
+                                campaignId,
+                                savedTask.getId(),
+                                savedTask.getTitle(),
+                                assigneesRecipients));
+                    }
                 }
             }
         }
-
         return toResponse(savedTask);
+    }
+
+    @Override
+    @Transactional
+    public CampaignTaskResponse moveTask(Long taskId, MoveCampaignTaskRequest request, User currentUser) {
+        CampaignTask task = findTask(taskId);
+        Long campaignId = task.getCampaign().getId();
+
+        boolean isAdmin = validateCanModifyTask(task, currentUser);
+        if (task.isArchived()) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Archived tasks cannot be moved");
+        }
+        validateCanReopenCompletedTask(task, request.status(), isAdmin);
+
+        if (!Objects.equals(task.getVersion(), request.expectedVersion())) {
+            throw new AppException(ErrorCode.RESOURCE_UPDATE_CONFLICT, toResponse(task));
+        }
+        TaskStatus previousStatus = task.getStatus();
+        if (request.position() != null) {
+            campaignTaskRepository.shiftPositionsAfter(
+                    campaignId, request.status(), request.position(), taskId);
+        }
+
+        LocalDateTime updatedAt = LocalDateTime.now();
+        int updatedRows = campaignTaskRepository.moveIfVersionMatches(
+                taskId, request.status().name(), request.expectedVersion(), request.position(), updatedAt);
+        if (updatedRows == 0) {
+            CampaignTask currentTask = findTask(taskId);
+            throw new AppException(ErrorCode.RESOURCE_UPDATE_CONFLICT, toResponse(currentTask));
+        }
+
+        CampaignTask movedTask = findTask(taskId);
+        CampaignTaskResponse response = toResponse(movedTask);
+        if (previousStatus != movedTask.getStatus()) {
+            recordActivities(
+                    movedTask,
+                    currentUser,
+                    List.of(activity(
+                            CampaignTaskActivityAction.STATUS_CHANGED,
+                            details("fromStatus", previousStatus.name(), "toStatus", movedTask.getStatus().name()))));
+        }
+        publishTaskChange(movedTask, response, CampaignTaskChangeAction.MOVED, currentUser);
+
+        log.info("Task moved: taskId={}, status={}, position={}, version={}, userId={}",
+                taskId, response.status(), response.position(), response.version(), currentUser.getId());
+        return response;
     }
 
     @Override
@@ -255,8 +346,16 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         campaignAccessHelper.validateCampaignAdmin(task.getCampaign().getId(), currentUser,
                 ErrorCode.UNAUTHORIZED_TASK_ACCESS);
 
+        boolean changed = task.getDeletedAt() == null;
         task.setDeletedAt(LocalDateTime.now());
-        campaignTaskRepository.save(task);
+        task.setUpdatedAt(LocalDateTime.now());
+        saveAndPublish(
+                task,
+                CampaignTaskChangeAction.DELETED,
+                currentUser,
+                changed
+                        ? activity(CampaignTaskActivityAction.TASK_DELETED, Map.of())
+                        : null);
         log.info("Task deleted (soft): taskId={}, userId={}", taskId, currentUser.getId());
     }
 
@@ -270,8 +369,14 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Only archived tasks can be permanently deleted");
         }
 
+        Long campaignId = task.getCampaign().getId();
+        Set<String> recipients = resolveTaskUpdateRecipients(task);
+        Long tombstoneVersion = task.getVersion() == null ? 1L : task.getVersion() + 1;
+        LocalDateTime deletedAt = LocalDateTime.now();
         task.getAttachments().forEach(attachment -> mediaService.softDeleteTaskFile(attachment.getStoredFilename()));
         campaignTaskRepository.delete(task);
+        campaignTaskRepository.flush();
+        publishTaskTombstone(campaignId, taskId, tombstoneVersion, deletedAt, currentUser, recipients);
         log.info("Task permanently deleted: taskId={}, userId={}", taskId, currentUser.getId());
     }
 
@@ -282,6 +387,19 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         campaignAccessHelper.validateCampaignMemberOrAdmin(
                 task.getCampaign().getId(), currentUser, ErrorCode.UNAUTHORIZED_TASK_ACCESS);
         return toResponse(task);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CampaignTaskActivityResponse> getTaskActivities(
+            Long taskId,
+            Pageable pageable,
+            User currentUser) {
+        CampaignTask task = findTask(taskId);
+        campaignAccessHelper.validateCampaignMemberOrAdmin(
+                task.getCampaign().getId(), currentUser, ErrorCode.UNAUTHORIZED_TASK_ACCESS);
+        return campaignTaskActivityRepository.findByTaskId(taskId, pageable)
+                .map(this::toActivityResponse);
     }
 
     @Override
@@ -315,29 +433,41 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
     @Transactional
     public CampaignTaskResponse archiveTask(Long taskId, User currentUser) {
         CampaignTask task = findTask(taskId);
-        campaignAccessHelper.validateCampaignAdmin(task.getCampaign().getId(), currentUser, ErrorCode.UNAUTHORIZED_TASK_ACCESS);
+        campaignAccessHelper.validateCampaignAdmin(task.getCampaign().getId(), currentUser,
+                ErrorCode.UNAUTHORIZED_TASK_ACCESS);
 
+        boolean changed = !task.isArchived();
         task.setArchived(true);
         task.setUpdatedAt(LocalDateTime.now());
 
-        CampaignTask savedTask = campaignTaskRepository.save(task);
+        CampaignTaskResponse response = saveAndPublish(
+                task,
+                CampaignTaskChangeAction.ARCHIVED,
+                currentUser,
+                changed ? activity(CampaignTaskActivityAction.TASK_ARCHIVED, Map.of()) : null);
         log.info("Task archived: taskId={}, userId={}", taskId, currentUser.getId());
-        return toResponse(savedTask);
+        return response;
     }
 
     @Override
     @Transactional
     public CampaignTaskResponse unarchiveTask(Long taskId, User currentUser) {
         CampaignTask task = findTask(taskId);
-        campaignAccessHelper.validateCampaignAdmin(task.getCampaign().getId(), currentUser, ErrorCode.UNAUTHORIZED_TASK_ACCESS);
+        campaignAccessHelper.validateCampaignAdmin(task.getCampaign().getId(), currentUser,
+                ErrorCode.UNAUTHORIZED_TASK_ACCESS);
 
+        boolean changed = task.isArchived();
         task.setPosition(nextActivePosition(task.getCampaign().getId(), task.getStatus()));
         task.setArchived(false);
         task.setUpdatedAt(LocalDateTime.now());
 
-        CampaignTask savedTask = campaignTaskRepository.save(task);
+        CampaignTaskResponse response = saveAndPublish(
+                task,
+                CampaignTaskChangeAction.UNARCHIVED,
+                currentUser,
+                changed ? activity(CampaignTaskActivityAction.TASK_UNARCHIVED, Map.of()) : null);
         log.info("Task unarchived: taskId={}, userId={}", taskId, currentUser.getId());
-        return toResponse(savedTask);
+        return response;
     }
 
     @Override
@@ -351,7 +481,11 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         }
         task.setDeletedAt(null);
         task.setUpdatedAt(LocalDateTime.now());
-        return toResponse(campaignTaskRepository.save(task));
+        return saveAndPublish(
+                task,
+                CampaignTaskChangeAction.RESTORED,
+                currentUser,
+                activity(CampaignTaskActivityAction.TASK_RESTORED, Map.of()));
     }
 
     @Override
@@ -377,8 +511,8 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
     @Override
     @Transactional
     public CampaignTaskResponse addAssignee(Long taskId, Long userId, User currentUser) {
-        CampaignTask task = findTask(taskId);
-        Long campaignId = task.getCampaign().getId();
+        CampaignTask savedTask = findTask(taskId);
+        Long campaignId = savedTask.getCampaign().getId();
         campaignAccessHelper.validateCampaignAdmin(campaignId, currentUser, ErrorCode.UNAUTHORIZED_TASK_ACCESS);
 
         if (taskAssignmentRepository.existsByTaskIdAndUserId(taskId, userId)) {
@@ -396,35 +530,40 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         }
 
         TaskAssignment assignment = TaskAssignment.builder()
-                .task(task)
+                .task(savedTask)
                 .user(assignee)
                 .assignedAt(LocalDateTime.now())
                 .build();
-        task.getAssignments().add(assignment);
-        task.setUpdatedAt(LocalDateTime.now());
+        savedTask.getAssignments().add(assignment);
+        savedTask.setUpdatedAt(LocalDateTime.now());
 
-        CampaignTask savedTask = campaignTaskRepository.save(task);
+        CampaignTaskResponse response = saveAndPublish(
+                savedTask,
+                CampaignTaskChangeAction.UPDATED,
+                currentUser,
+                activity(
+                        CampaignTaskActivityAction.ASSIGNEE_ADDED,
+                        details("userId", assignee.getId(), "name", displayName(assignee))));
         log.info("Assignee added: taskId={}, userId={}, addedBy={}", taskId, userId, currentUser.getId());
 
         if (assignee != null) {
-            Set<NotificationRecipient> recipients = Set.of(new NotificationRecipient(assignee.getId(), assignee.getEmail()));
+            Set<NotificationRecipient> recipients = Set
+                    .of(new NotificationRecipient(assignee.getId(), assignee.getEmail()));
             eventPublisher.publishEvent(new TaskAssignedEvent(
                     campaignId,
                     savedTask.getId(),
                     savedTask.getTitle(),
                     savedTask.getDescription(),
-                    recipients
-            ));
+                    recipients));
 
             // Publish event for email notification to the newly added assignee
             eventPublisher.publishEvent(new TaskCreatedEmailEvent(
                     campaignId,
-                    task.getCampaign().getTitle(),
+                    savedTask.getCampaign().getTitle(),
                     savedTask.getTitle(),
                     savedTask.getDescription(),
                     savedTask.getDueDate(),
-                    recipients
-            ));
+                    recipients));
         }
 
         return toResponse(savedTask);
@@ -433,22 +572,33 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
     @Override
     @Transactional
     public CampaignTaskResponse removeAssignee(Long taskId, Long userId, User currentUser) {
-        CampaignTask task = findTask(taskId);
-        Long campaignId = task.getCampaign().getId();
+        CampaignTask savedTask = findTask(taskId);
+        Long campaignId = savedTask.getCampaign().getId();
         campaignAccessHelper.validateCampaignAdmin(campaignId, currentUser, ErrorCode.UNAUTHORIZED_TASK_ACCESS);
 
         User unassignedUser = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
-        boolean removed = task.getAssignments().removeIf(a -> Objects.equals(a.getUser().getId(), userId));
+        String removedAssigneeName = savedTask.getAssignments().stream()
+                .filter(assignment -> Objects.equals(assignment.getUser().getId(), userId))
+                .map(assignment -> displayName(assignment.getUser()))
+                .findFirst()
+                .orElse(null);
+        boolean removed = savedTask.getAssignments().removeIf(a -> Objects.equals(a.getUser().getId(), userId));
 
         if (!removed) {
             throw new ResourceNotFoundException(ErrorCode.ASSIGNEE_NOT_FOUND);
         }
 
-        task.setUpdatedAt(LocalDateTime.now());
+        savedTask.setUpdatedAt(LocalDateTime.now());
 
-        CampaignTask savedTask = campaignTaskRepository.save(task);
+        CampaignTaskResponse response = saveAndPublish(
+                savedTask,
+                CampaignTaskChangeAction.UPDATED,
+                currentUser,
+                activity(
+                        CampaignTaskActivityAction.ASSIGNEE_REMOVED,
+                        details("userId", userId, "name", removedAssigneeName)));
         log.info("Assignee removed: taskId={}, userId={}, removedBy={}", taskId, userId, currentUser.getId());
 
         // Publish event to notify unassigned user
@@ -456,8 +606,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                 campaignId,
                 savedTask.getId(),
                 savedTask.getTitle(),
-                new NotificationRecipient(unassignedUser.getId(), unassignedUser.getEmail())
-        ));
+                new NotificationRecipient(unassignedUser.getId(), unassignedUser.getEmail())));
 
         return toResponse(savedTask);
     }
@@ -476,12 +625,20 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
             throw new AppException(ErrorCode.INVALID_TASK_LABELS);
         }
 
-        task.getLabels().add(label);
+        boolean added = task.getLabels().add(label);
         task.setUpdatedAt(LocalDateTime.now());
 
-        CampaignTask savedTask = campaignTaskRepository.save(task);
+        CampaignTaskResponse response = saveAndPublish(
+                task,
+                CampaignTaskChangeAction.UPDATED,
+                currentUser,
+                added
+                        ? activity(
+                                CampaignTaskActivityAction.LABEL_ADDED,
+                                details("labelId", label.getId(), "name", label.getName()))
+                        : null);
         log.info("Label added: taskId={}, labelId={}, addedBy={}", taskId, labelId, currentUser.getId());
-        return toResponse(savedTask);
+        return response;
     }
 
     @Override
@@ -491,12 +648,25 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         Long campaignId = task.getCampaign().getId();
         campaignAccessHelper.validateCampaignAdmin(campaignId, currentUser, ErrorCode.UNAUTHORIZED_TASK_ACCESS);
 
-        task.getLabels().removeIf(l -> Objects.equals(l.getId(), labelId));
+        String removedLabelName = task.getLabels().stream()
+                .filter(label -> Objects.equals(label.getId(), labelId))
+                .map(CampaignTaskLabel::getName)
+                .findFirst()
+                .orElse(null);
+        boolean removed = task.getLabels().removeIf(l -> Objects.equals(l.getId(), labelId));
         task.setUpdatedAt(LocalDateTime.now());
 
-        CampaignTask savedTask = campaignTaskRepository.save(task);
+        CampaignTaskResponse response = saveAndPublish(
+                task,
+                CampaignTaskChangeAction.UPDATED,
+                currentUser,
+                removed
+                        ? activity(
+                                CampaignTaskActivityAction.LABEL_REMOVED,
+                                details("labelId", labelId, "name", removedLabelName))
+                        : null);
         log.info("Label removed: taskId={}, labelId={}, removedBy={}", taskId, labelId, currentUser.getId());
-        return toResponse(savedTask);
+        return response;
     }
 
     private CampaignTask findTask(Long taskId) {
@@ -532,7 +702,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         }
     }
 
-    private List<User> resolveAndValidateAssignees(Long campaignId, List<Long> assigneeIds, User currentUser) {
+    private List<User> resolveAndValidateAssignees(Long campaignId, List<Long> assigneeIds) {
         if (assigneeIds == null || assigneeIds.isEmpty()) {
             return List.of();
         }
@@ -572,14 +742,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
     @Transactional
     public TaskAttachmentResponse addAttachment(Long taskId, MultipartFile file, User currentUser) {
         CampaignTask task = findTask(taskId);
-        Long campaignId = task.getCampaign().getId();
-
-        boolean isAdmin = campaignAccessHelper.isCampaignAdmin(campaignId, currentUser);
-        boolean isAssignee = taskAssignmentRepository.existsByTaskIdAndUserId(taskId, currentUser.getId());
-
-        if (!isAdmin && !isAssignee) {
-            throw new AppException(ErrorCode.UNAUTHORIZED_TASK_ACCESS);
-        }
+        validateCanModifyTask(task, currentUser);
 
         String storedFilename = mediaService.uploadTaskFile(file);
 
@@ -593,9 +756,22 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                 .uploadedAt(LocalDateTime.now())
                 .build();
 
-        TaskAttachment saved = taskAttachmentRepository.save(attachment);
-        log.info("Attachment added: taskId={}, attachmentId={}, uploadedBy={}", taskId, saved.getId(), currentUser.getId());
-        return toAttachmentResponse(saved);
+        task.getAttachments().add(attachment);
+        task.setUpdatedAt(LocalDateTime.now());
+        CampaignTask savedTask = saveTaskOrThrowConflict(task);
+        recordActivities(
+                savedTask,
+                currentUser,
+                List.of(activity(
+                        CampaignTaskActivityAction.ATTACHMENT_ADDED,
+                        details(
+                                "attachmentId", attachment.getId(),
+                                "name", attachment.getOriginalFilename()))));
+        CampaignTaskResponse response = toResponse(savedTask);
+        publishTaskChange(savedTask, response, CampaignTaskChangeAction.UPDATED, currentUser);
+        log.info("Attachment added: taskId={}, attachmentId={}, uploadedBy={}",
+                taskId, attachment.getId(), currentUser.getId());
+        return toAttachmentResponse(attachment);
     }
 
     @Override
@@ -614,9 +790,217 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
             throw new AppException(ErrorCode.UNAUTHORIZED_TASK_ACCESS);
         }
 
-        taskAttachmentRepository.delete(attachment);
+        task.getAttachments().removeIf(item -> Objects.equals(item.getId(), attachmentId));
         mediaService.softDeleteTaskFile(attachment.getStoredFilename());
-        log.info("Attachment removed: taskId={}, attachmentId={}, removedBy={}", taskId, attachmentId, currentUser.getId());
+        task.setUpdatedAt(LocalDateTime.now());
+        CampaignTask savedTask = saveTaskOrThrowConflict(task);
+        recordActivities(
+                savedTask,
+                currentUser,
+                List.of(activity(
+                        CampaignTaskActivityAction.ATTACHMENT_REMOVED,
+                        details(
+                                "attachmentId", attachmentId,
+                                "name", attachment.getOriginalFilename()))));
+        CampaignTaskResponse response = toResponse(savedTask);
+        publishTaskChange(savedTask, response, CampaignTaskChangeAction.UPDATED, currentUser);
+        log.info("Attachment removed: taskId={}, attachmentId={}, removedBy={}", taskId, attachmentId,
+                currentUser.getId());
+    }
+
+    private boolean validateCanModifyTask(CampaignTask task, User currentUser) {
+        Long campaignId = task.getCampaign().getId();
+        boolean isAdmin = campaignAccessHelper.isCampaignAdmin(campaignId, currentUser);
+        boolean isAssignee = taskAssignmentRepository.existsByTaskIdAndUserId(
+                task.getId(), currentUser.getId())
+                && campaignAccessHelper.isCampaignMember(campaignId, currentUser.getId());
+        if (!isAdmin && !isAssignee) {
+            throw new AppException(ErrorCode.UNAUTHORIZED_TASK_ACCESS);
+        }
+        return isAdmin;
+    }
+
+    private void validateCanReopenCompletedTask(
+            CampaignTask task,
+            TaskStatus targetStatus,
+            boolean isAdmin) {
+        if (task.getStatus() == TaskStatus.DONE && targetStatus != TaskStatus.DONE && !isAdmin) {
+            throw new AppException(ErrorCode.UNAUTHORIZED_TASK_STATUS_UPDATE);
+        }
+    }
+
+    private CampaignTaskResponse saveAndPublish(
+            CampaignTask task,
+            CampaignTaskChangeAction action,
+            User currentUser,
+            ActivityDraft... activities) {
+        CampaignTask savedTask = saveTaskOrThrowConflict(task);
+        recordActivities(savedTask, currentUser, Arrays.asList(activities));
+        CampaignTaskResponse response = toResponse(savedTask);
+        publishTaskChange(savedTask, response, action, currentUser);
+        return response;
+    }
+
+    private List<ActivityDraft> collectUpdateActivities(
+            CampaignTask task,
+            TaskStatus previousStatus,
+            String previousTitle,
+            String previousDescription,
+            LocalDateTime previousDueDate,
+            Map<Long, String> previousAssignees,
+            Map<Long, String> previousLabels) {
+        List<ActivityDraft> activities = new ArrayList<>();
+
+        if (previousStatus != task.getStatus()) {
+            activities.add(activity(
+                    CampaignTaskActivityAction.STATUS_CHANGED,
+                    details("fromStatus", previousStatus.name(), "toStatus", task.getStatus().name())));
+        }
+        if (!Objects.equals(previousTitle, task.getTitle())) {
+            activities.add(activity(
+                    CampaignTaskActivityAction.TITLE_UPDATED,
+                    details("fromTitle", previousTitle, "toTitle", task.getTitle())));
+        }
+        if (!Objects.equals(previousDescription, task.getDescription())) {
+            activities.add(activity(CampaignTaskActivityAction.DESCRIPTION_UPDATED, Map.of()));
+        }
+        if (!Objects.equals(previousDueDate, task.getDueDate())) {
+            activities.add(activity(
+                    CampaignTaskActivityAction.DUE_DATE_UPDATED,
+                    details(
+                            "fromDueDate", toActivityValue(previousDueDate),
+                            "toDueDate", toActivityValue(task.getDueDate()))));
+        }
+
+        Map<Long, String> currentAssignees = assignmentNames(task);
+        previousAssignees.forEach((userId, name) -> {
+            if (!currentAssignees.containsKey(userId)) {
+                activities.add(activity(
+                        CampaignTaskActivityAction.ASSIGNEE_REMOVED,
+                        details("userId", userId, "name", name)));
+            }
+        });
+        currentAssignees.forEach((userId, name) -> {
+            if (!previousAssignees.containsKey(userId)) {
+                activities.add(activity(
+                        CampaignTaskActivityAction.ASSIGNEE_ADDED,
+                        details("userId", userId, "name", name)));
+            }
+        });
+
+        Map<Long, String> currentLabels = labelNames(task);
+        previousLabels.forEach((labelId, name) -> {
+            if (!currentLabels.containsKey(labelId)) {
+                activities.add(activity(
+                        CampaignTaskActivityAction.LABEL_REMOVED,
+                        details("labelId", labelId, "name", name)));
+            }
+        });
+        currentLabels.forEach((labelId, name) -> {
+            if (!previousLabels.containsKey(labelId)) {
+                activities.add(activity(
+                        CampaignTaskActivityAction.LABEL_ADDED,
+                        details("labelId", labelId, "name", name)));
+            }
+        });
+
+        return activities;
+    }
+
+    private void recordActivities(
+            CampaignTask task,
+            User actor,
+            Collection<ActivityDraft> activities) {
+        List<CampaignTaskActivity> entities = new ArrayList<>();
+        for (ActivityDraft draft : activities) {
+            if (draft == null) {
+                continue;
+            }
+            entities.add(CampaignTaskActivity.builder()
+                    .task(task)
+                    .action(draft.action())
+                    .actor(actor)
+                    .actorName(displayName(actor))
+                    .details(draft.details())
+                    .build());
+        }
+        if (!entities.isEmpty()) {
+            campaignTaskActivityRepository.saveAll(entities);
+        }
+    }
+
+    private CampaignTaskActivityResponse toActivityResponse(CampaignTaskActivity activity) {
+        User actor = activity.getActor();
+        return new CampaignTaskActivityResponse(
+                activity.getId(),
+                activity.getAction(),
+                new CampaignTaskActivityResponse.ActorSummary(
+                        actor == null ? null : actor.getId(),
+                        activity.getActorName(),
+                        actor == null ? null : actor.getAvatarUrl()),
+                activity.getDetails(),
+                activity.getCreatedAt());
+    }
+
+    private Map<Long, String> assignmentNames(CampaignTask task) {
+        Map<Long, String> names = new LinkedHashMap<>();
+        task.getAssignments().stream()
+                .map(TaskAssignment::getUser)
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(User::getId))
+                .forEach(user -> names.put(user.getId(), displayName(user)));
+        return names;
+    }
+
+    private Map<Long, String> labelNames(CampaignTask task) {
+        Map<Long, String> names = new LinkedHashMap<>();
+        task.getLabels().stream()
+                .sorted(Comparator.comparing(CampaignTaskLabel::getId))
+                .forEach(label -> names.put(label.getId(), label.getName()));
+        return names;
+    }
+
+    private String displayName(User user) {
+        if (user == null) {
+            return "Unknown user";
+        }
+        if (user.getFullName() != null && !user.getFullName().isBlank()) {
+            return user.getFullName();
+        }
+        return user.getEmail() == null || user.getEmail().isBlank() ? "Unknown user" : user.getEmail();
+    }
+
+    private String toActivityValue(LocalDateTime value) {
+        return value == null ? null : value.toString();
+    }
+
+    private ActivityDraft activity(
+            CampaignTaskActivityAction action,
+            Map<String, Object> details) {
+        return new ActivityDraft(action, details);
+    }
+
+    private Map<String, Object> details(Object... keyValues) {
+        Map<String, Object> details = new LinkedHashMap<>();
+        for (int index = 0; index < keyValues.length; index += 2) {
+            details.put((String) keyValues[index], keyValues[index + 1]);
+        }
+        return details;
+    }
+
+    private record ActivityDraft(
+            CampaignTaskActivityAction action,
+            Map<String, Object> details) {
+    }
+
+    private CampaignTask saveTaskOrThrowConflict(CampaignTask task) {
+        try {
+            CampaignTask savedTask = campaignTaskRepository.save(task);
+            campaignTaskRepository.flush();
+            return savedTask;
+        } catch (ObjectOptimisticLockingFailureException ex) {
+            throw new AppException(ErrorCode.RESOURCE_UPDATE_CONFLICT);
+        }
     }
 
     private CampaignTaskResponse toResponse(CampaignTask task) {
@@ -670,6 +1054,75 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         campaignRepository.findByIdForUpdate(campaignId)
                 .orElseThrow(() -> new AppException(ErrorCode.CAMPAIGN_NOT_FOUND));
         return campaignTaskRepository.findMaxActivePositionByCampaignIdAndStatus(campaignId, status) + 1;
+    }
+
+    private Set<String> resolveTaskUpdateRecipients(CampaignTask task) {
+        Set<String> recipientEmails = new HashSet<>();
+        campaignMemberRepository.findMemberRecipientsByCampaignId(task.getCampaign().getId()).stream()
+                .map(NotificationRecipient::email)
+                .filter(Objects::nonNull)
+                .forEach(recipientEmails::add);
+        User owner = task.getCampaign().getUser();
+        if (owner != null && owner.getEmail() != null) {
+            recipientEmails.add(owner.getEmail());
+        }
+        return Set.copyOf(recipientEmails);
+    }
+
+    private void publishTaskChange(
+            CampaignTask task,
+            CampaignTaskResponse response,
+            CampaignTaskChangeAction action,
+            User currentUser) {
+        CampaignTaskChangedPayload payload = new CampaignTaskChangedPayload(
+                "TASK_CHANGED",
+                action,
+                response.campaignId(),
+                response.id(),
+                response.version(),
+                response,
+                response.updatedAt(),
+                currentUser.getId());
+        eventPublisher.publishEvent(new CampaignTaskChangedEvent(payload, resolveTaskUpdateRecipients(task)));
+    }
+
+    private void publishTaskTombstone(
+            Long campaignId,
+            Long taskId,
+            Long version,
+            LocalDateTime updatedAt,
+            User currentUser,
+            Set<String> recipients) {
+        CampaignTaskChangedPayload payload = new CampaignTaskChangedPayload(
+                "TASK_CHANGED",
+                CampaignTaskChangeAction.PERMANENTLY_DELETED,
+                campaignId,
+                taskId,
+                version,
+                null,
+                updatedAt,
+                currentUser.getId());
+        eventPublisher.publishEvent(new CampaignTaskChangedEvent(payload, recipients));
+    }
+
+    private void syncTaskAssignments(CampaignTask task, List<User> assignees) {
+        Set<Long> requestedUserIds = assignees.stream()
+                .map(User::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        task.getAssignments().removeIf(assignment -> !requestedUserIds.contains(assignment.getUser().getId()));
+
+        Set<Long> existingUserIds = task.getAssignments().stream()
+                .map(assignment -> assignment.getUser().getId())
+                .collect(java.util.stream.Collectors.toSet());
+        LocalDateTime assignedAt = LocalDateTime.now();
+        assignees.stream()
+                .filter(user -> !existingUserIds.contains(user.getId()))
+                .map(user -> TaskAssignment.builder()
+                        .task(task)
+                        .user(user)
+                        .assignedAt(assignedAt)
+                        .build())
+                .forEach(task.getAssignments()::add);
     }
 
     private TaskAttachmentResponse toAttachmentResponse(TaskAttachment attachment) {

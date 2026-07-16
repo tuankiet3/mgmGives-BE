@@ -1,10 +1,12 @@
 package com.mgmtp.gives.service;
 
 import com.mgmtp.gives.dto.campaign_task.CampaignTaskResponse;
+import com.mgmtp.gives.dto.campaign_task.CampaignTaskActivityResponse;
 import com.mgmtp.gives.dto.campaign_task.CreateCampaignTaskRequest;
 import com.mgmtp.gives.dto.campaign_task.TaskAttachmentResponse;
 import com.mgmtp.gives.dto.campaign_task.TaskAssignableMemberResponse;
 import com.mgmtp.gives.dto.campaign_task.UpdateCampaignTaskRequest;
+import com.mgmtp.gives.dto.campaign_task.MoveCampaignTaskRequest;
 import com.mgmtp.gives.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,11 +19,15 @@ public interface CampaignTaskService {
 
     CampaignTaskResponse updateTask(Long taskId, UpdateCampaignTaskRequest request, User currentUser);
 
+    CampaignTaskResponse moveTask(Long taskId, MoveCampaignTaskRequest request, User currentUser);
+
     void deleteTask(Long taskId, User currentUser);
 
     void permanentlyDeleteArchivedTask(Long taskId, User currentUser);
 
     CampaignTaskResponse getTaskById(Long taskId, User currentUser);
+
+    Page<CampaignTaskActivityResponse> getTaskActivities(Long taskId, Pageable pageable, User currentUser);
 
     Page<CampaignTaskResponse> getTasksByCampaign(Long campaignId, TaskStatus status, Long assigneeId,
             Boolean isArchived, Boolean isDeleted, Pageable pageable, User currentUser);

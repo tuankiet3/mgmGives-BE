@@ -38,6 +38,10 @@ public class CampaignTask extends BaseEntity {
     @Column(name = "position")
     private long position;
 
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     @ManyToOne
     @JoinColumn(name = "created_by")
     private User createdBy;
@@ -55,11 +59,7 @@ public class CampaignTask extends BaseEntity {
 
     @Builder.Default
     @ManyToMany
-    @JoinTable(
-            name = "task_labels",
-            joinColumns = @JoinColumn(name = "task_id"),
-            inverseJoinColumns = @JoinColumn(name = "label_id")
-    )
+    @JoinTable(name = "task_labels", joinColumns = @JoinColumn(name = "task_id"), inverseJoinColumns = @JoinColumn(name = "label_id"))
     private java.util.Set<CampaignTaskLabel> labels = new java.util.HashSet<>();
 
     @Builder.Default
@@ -69,6 +69,4 @@ public class CampaignTask extends BaseEntity {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
-    @Version
-    private Long version;
 }
