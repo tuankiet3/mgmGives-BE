@@ -7,7 +7,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
-@Component @RequiredArgsConstructor
+@Component
+@RequiredArgsConstructor
 public class DonationNotificationPublisher {
     private final ApplicationEventPublisher eventPublisher;
 
@@ -25,9 +26,7 @@ public class DonationNotificationPublisher {
                         donation.getUser().getId(),
                         donation.getType(),
                         donation.getAmount(),
-                        donation.getDetail()
-                )
-        );
+                        donation.getDetail()));
     }
 
     public void publishCampaignDonationConfirmedEvent(Donation donation) {
@@ -36,15 +35,13 @@ public class DonationNotificationPublisher {
                         donation.getId(),
                         donation.getCampaign().getId(),
                         donation.getCampaign().getTitle(),
-                        donation.getUser().getId(),
+                        donation.getUser() != null ? donation.getUser().getId() : null,
                         getDonorName(donation),
                         donation.isAnonymous(),
                         donation.getType(),
                         donation.getAmount(),
                         donation.getDetail(),
-                        donation.getConfirmedBy() != null ? donation.getConfirmedBy().getId() : null
-                )
-        );
+                        donation.getConfirmedBy() != null ? donation.getConfirmedBy().getId() : null));
     }
 
     private String getDonorName(Donation donation) {

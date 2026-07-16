@@ -180,6 +180,7 @@ public class DonationServiceImpl implements DonationService {
         }
 
         donation.setStatus(DonationStatus.SUCCESSFUL);
+        donation.setRejectReason(null);
         donation.setConfirmedBy(admin);
         donation.setConfirmedAt(LocalDateTime.now());
         Donation savedDonation = donationRepository.save(donation);
@@ -276,35 +277,6 @@ public class DonationServiceImpl implements DonationService {
         }
     }
 
-    @Override
-    @Transactional
-    public DonationResponse confirmPayOSDonation(Long donationId) {
-        log.info("Confirming PayOS payment for donation ID: {}", donationId);
-        Donation donation = donationRepository.findById(donationId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        ErrorCode.DONATE_NOT_FOUND,
-                        "Donation not found with ID: " + donationId));
-
-        if (donation.getStatus() != DonationStatus.PENDING) {
-            log.warn("Donation ID {} is already in status {}; ignoring duplicate webhook.", donationId,
-                    donation.getStatus());
-            return toResponse(donation);
-        }
-
-        donation.setStatus(DonationStatus.SUCCESSFUL);
-        donation.setConfirmedAt(LocalDateTime.now());
-        donation.setUpdatedAt(LocalDateTime.now());
-        Donation savedDonation = donationRepository.save(donation);
-
-        if (donation.getUser() != null && donation.getCampaign() != null) {
-            campaignFollowerService.autoFollow(donation.getUser().getId(), donation.getCampaign().getId());
-        }
-
-        publisher.publishDonationConfirmedEvents(savedDonation);
-        notificationService.broadcastDashboardUpdate();
-
-        return toResponse(savedDonation);
-    }
 
     @Override
     @Transactional
@@ -364,6 +336,7 @@ public class DonationServiceImpl implements DonationService {
         }
 
         donation.setStatus(DonationStatus.SUCCESSFUL);
+        donation.setRejectReason(null);
         donation.setConfirmedAt(LocalDateTime.now());
         donation.setUpdatedAt(LocalDateTime.now());
         Donation savedDonation = donationRepository.save(donation);
@@ -550,6 +523,7 @@ public class DonationServiceImpl implements DonationService {
         }
 
         donation.setStatus(DonationStatus.SUCCESSFUL);
+        donation.setRejectReason(null);
         donation.setConfirmedBy(currentUser);
         donation.setConfirmedAt(LocalDateTime.now());
         Donation savedDonation = donationRepository.save(donation);
@@ -590,6 +564,53 @@ public class DonationServiceImpl implements DonationService {
         sendRejectionNotifications(savedDonation, finalReason);
 
         return toResponse(savedDonation);
+    }
+
+    @Override
+    @Transactional
+    public DonationResponse editCampaignDonation(Long donationId, EditDonationRequest request, User currentUser) {
+        log.info("User {} is editing campaign donation ID: {}", currentUser.getEmail(), donationId);
+        Donation donation = donationRepository.findById(donationId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorCode.DONATE_NOT_FOUND,
+                        "Donation not found with ID: " + donationId));
+
+        if (!campaignMemberService.canManageCampaign(donation.getCampaign().getId(), currentUser)) {
+            throw new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE,
+                    "Only a Campaign Admin can edit donation details.");
+        }
+
+        if (donation.getStatus() != DonationStatus.PENDING && donation.getStatus() != DonationStatus.FAILED) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                    "Only pending or cancelled donations can be edited.");
+        }
+
+        if (donation.getType() == DonationType.MONEY && donation.getOrderCode() != null) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "PayOS donations cannot be edited.");
+        }
+
+        String note = (request.reason() != null) ? request.reason().trim() : "";
+
+        if (donation.getStatus() == DonationStatus.PENDING) {
+            donation.setRejectReason(note);
+            donation.setStatus(DonationStatus.REJECTED);
+            donation.setConfirmedAt(LocalDateTime.now());
+            donation.setUpdatedAt(LocalDateTime.now());
+            Donation saved = donationRepository.save(donation);
+            notificationService.broadcastDashboardUpdate();
+            sendRejectionNotifications(saved, note.isEmpty() ? "Invalid transaction details" : note);
+            return toResponse(saved);
+        } else { // DonationStatus.FAILED (Cancelled)
+            donation.setRejectReason(null);
+            donation.setStatus(DonationStatus.SUCCESSFUL);
+            donation.setConfirmedBy(currentUser);
+            donation.setConfirmedAt(LocalDateTime.now());
+            donation.setUpdatedAt(LocalDateTime.now());
+            Donation saved = donationRepository.save(donation);
+            publisher.publishDonationConfirmedEvents(saved);
+            notificationService.broadcastDashboardUpdate();
+            return toResponse(saved);
+        }
     }
 
     private void sendRejectionNotifications(Donation savedDonation, String reason) {

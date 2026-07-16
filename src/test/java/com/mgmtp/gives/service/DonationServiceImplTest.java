@@ -4,6 +4,7 @@ import com.mgmtp.gives.common.ErrorCode;
 import com.mgmtp.gives.dto.donation.PayOSRequest;
 import com.mgmtp.gives.dto.donation.PayOSResponse;
 import com.mgmtp.gives.dto.donation.DonationResponse;
+import com.mgmtp.gives.dto.donation.EditDonationRequest;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.Donation;
 import com.mgmtp.gives.entity.User;
@@ -12,7 +13,6 @@ import com.mgmtp.gives.enums.DonationStatus;
 import com.mgmtp.gives.enums.DonationType;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.exception.AppException;
-import com.mgmtp.gives.exception.ResourceNotFoundException;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.DonationRepository;
 import com.mgmtp.gives.security.CustomUserDetails;
@@ -35,7 +35,6 @@ import vn.payos.model.v2.paymentRequests.PaymentLink;
 import vn.payos.model.v2.paymentRequests.PaymentLinkStatus;
 import vn.payos.service.blocking.v2.paymentRequests.PaymentRequestsService;
 
-import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -106,10 +105,10 @@ class DonationServiceImplTest {
         testDonation.setStatus(DonationStatus.PENDING);
     }
 
-    private void setupMockSecurityContext(Long userId, UserRole role) {
+    private void setupMockSecurityContext(Long userId) {
         User user = new User();
         user.setId(userId);
-        user.setRole(role);
+        user.setRole(UserRole.USER);
         user.setEmail("user@example.com");
 
         CustomUserDetails userDetails = mock(CustomUserDetails.class);
@@ -125,7 +124,7 @@ class DonationServiceImplTest {
     }
 
     @Test
-    void createPayOSDonation_Success() throws Exception {
+    void createPayOSDonation_Success() {
         PayOSRequest request = new PayOSRequest(1L, 100000L, false, "Hello test");
         
         when(campaignRepository.findById(1L)).thenReturn(Optional.of(testCampaign));
@@ -172,7 +171,7 @@ class DonationServiceImplTest {
     }
 
     @Test
-    void createPayOSDonation_PayOSException_SetsStatusToFailed() throws Exception {
+    void createPayOSDonation_PayOSException_SetsStatusToFailed() {
         PayOSRequest request = new PayOSRequest(1L, 100000L, false, "Hello test");
         when(campaignRepository.findById(1L)).thenReturn(Optional.of(testCampaign));
         
@@ -224,7 +223,7 @@ class DonationServiceImplTest {
 
     @Test
     void cancelPayOSDonation_Success() {
-        setupMockSecurityContext(1L, UserRole.USER);
+        setupMockSecurityContext(1L);
         when(donationRepository.findById(10L)).thenReturn(Optional.of(testDonation));
         when(donationRepository.save(any(Donation.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -237,7 +236,7 @@ class DonationServiceImplTest {
 
     @Test
     void cancelPayOSDonation_Unauthorized_Bola() {
-        setupMockSecurityContext(99L, UserRole.USER); // Mock different user
+        setupMockSecurityContext(99L); // Mock different user
         when(donationRepository.findById(10L)).thenReturn(Optional.of(testDonation));
 
         AppException exception = assertThrows(AppException.class, () ->
@@ -248,8 +247,8 @@ class DonationServiceImplTest {
     }
 
     @Test
-    void verifyPayOSUserTransaction_Success() throws Exception {
-        setupMockSecurityContext(1L, UserRole.USER);
+    void verifyPayOSUserTransaction_Success() {
+        setupMockSecurityContext(1L);
         testDonation.setTransactionId("link-123");
         when(donationRepository.findById(10L)).thenReturn(Optional.of(testDonation));
         when(donationRepository.findByTransactionId("link-123")).thenReturn(Optional.of(testDonation));
@@ -268,8 +267,8 @@ class DonationServiceImplTest {
     }
 
     @Test
-    void verifyPayOSUserTransaction_Pending() throws Exception {
-        setupMockSecurityContext(1L, UserRole.USER);
+    void verifyPayOSUserTransaction_Pending() {
+        setupMockSecurityContext(1L);
         testDonation.setTransactionId("link-123");
         when(donationRepository.findById(10L)).thenReturn(Optional.of(testDonation));
 
@@ -287,7 +286,7 @@ class DonationServiceImplTest {
 
     @Test
     void verifyPayOSUserTransaction_AlreadySuccessful() {
-        setupMockSecurityContext(1L, UserRole.USER);
+        setupMockSecurityContext(1L);
         testDonation.setStatus(DonationStatus.SUCCESSFUL);
         when(donationRepository.findById(10L)).thenReturn(Optional.of(testDonation));
         DonationResponse response = donationService.verifyPayOSUserTransaction(10L);
@@ -347,5 +346,60 @@ class DonationServiceImplTest {
                 donationService.rejectCampaignDonation(10L, "Reason", testUser));
 
         assertEquals(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE, exception.getErrorCode());
+    }
+
+    @Test
+    void editCampaignDonation_PendingToRejected() {
+        testDonation.setStatus(DonationStatus.PENDING);
+        testDonation.setAmount(100000L);
+        EditDonationRequest request = new EditDonationRequest("Incorrect transaction code");
+
+        when(donationRepository.findById(10L)).thenReturn(Optional.of(testDonation));
+        when(campaignMemberService.canManageCampaign(1L, testUser)).thenReturn(true);
+        when(donationRepository.save(any(Donation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DonationResponse response = donationService.editCampaignDonation(10L, request, testUser);
+
+        assertNotNull(response);
+        assertEquals(DonationStatus.REJECTED, testDonation.getStatus());
+        assertEquals("Incorrect transaction code", testDonation.getRejectReason());
+        verify(notificationService).broadcastDashboardUpdate();
+    }
+
+    @Test
+    void editCampaignDonation_FailedToSuccessful_ClearsRejectReason() {
+        testDonation.setStatus(DonationStatus.FAILED);
+        testDonation.setRejectReason("Previous failure reason");
+        EditDonationRequest request = new EditDonationRequest("Bank transfer receipt verified");
+
+        when(donationRepository.findById(10L)).thenReturn(Optional.of(testDonation));
+        when(campaignMemberService.canManageCampaign(1L, testUser)).thenReturn(true);
+        when(donationRepository.save(any(Donation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DonationResponse response = donationService.editCampaignDonation(10L, request, testUser);
+
+        assertNotNull(response);
+        assertEquals(DonationStatus.SUCCESSFUL, testDonation.getStatus());
+        assertNull(testDonation.getRejectReason());
+        assertEquals(testUser, testDonation.getConfirmedBy());
+        verify(notificationService).broadcastDashboardUpdate();
+    }
+
+    @Test
+    void confirmCampaignDonation_ClearsLegacyRejectReason() {
+        testDonation.setStatus(DonationStatus.PENDING);
+        testDonation.setRejectReason("Legacy reject reason");
+
+        when(donationRepository.findById(10L)).thenReturn(Optional.of(testDonation));
+        when(campaignMemberService.canManageCampaign(1L, testUser)).thenReturn(true);
+        when(donationRepository.save(any(Donation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DonationResponse response = donationService.confirmCampaignDonation(10L, testUser);
+
+        assertNotNull(response);
+        assertEquals(DonationStatus.SUCCESSFUL, testDonation.getStatus());
+        assertNull(testDonation.getRejectReason());
+        assertEquals(testUser, testDonation.getConfirmedBy());
+        verify(notificationService).broadcastDashboardUpdate();
     }
 }

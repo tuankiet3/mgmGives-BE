@@ -6,6 +6,7 @@ import com.mgmtp.gives.dto.donation.DonationResponse;
 import com.mgmtp.gives.dto.donation.PayOSRequest;
 import com.mgmtp.gives.dto.donation.PayOSResponse;
 import com.mgmtp.gives.dto.donation.RejectRequest;
+import com.mgmtp.gives.dto.donation.EditDonationRequest;
 import com.mgmtp.gives.security.CustomUserDetails;
 import com.mgmtp.gives.service.DonationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -105,6 +106,15 @@ public class DonationController {
                                                         @AuthenticationPrincipal CustomUserDetails userDetails) {
         DonationResponse donation = donationService.rejectCampaignDonation(id, request.reason(), userDetails.getUser());
         return ApiResponse.success(donation, "Donation rejected successfully");
+    }
+
+    @PatchMapping("/{id}/edit")
+    @Operation(summary = "Edit a donation", description = "Allows a Campaign Admin to edit amount, description, or reject reason of a manual QR donation.")
+    public ApiResponse<DonationResponse> editDonation(@PathVariable Long id,
+                                                      @Valid @RequestBody EditDonationRequest request,
+                                                      @AuthenticationPrincipal CustomUserDetails userDetails) {
+        DonationResponse donation = donationService.editCampaignDonation(id, request, userDetails.getUser());
+        return ApiResponse.success(donation, "Donation details updated successfully");
     }
 
     @PatchMapping("/{id}/proof")

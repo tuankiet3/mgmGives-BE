@@ -23,8 +23,6 @@ public interface DonationService {
 
     PayOSResponse createPayOSDonation(PayOSRequest request, User user);
 
-    DonationResponse confirmPayOSDonation(Long donationId);
-
     DonationResponse cancelPayOSDonation(Long donationId);
 
     DonationResponse confirmPayOSDonationByPaymentLinkId(String paymentLinkId);
@@ -36,6 +34,8 @@ public interface DonationService {
     DonationResponse confirmCampaignDonation(Long donationId, User currentUser);
 
     DonationResponse rejectCampaignDonation(Long donationId, String reason, User currentUser);
+
+    DonationResponse editCampaignDonation(Long donationId, EditDonationRequest request, User currentUser);
 
     List<DonationResponse> getCampaignDonationsForAdmin(Long campaignId, User currentUser);
 
