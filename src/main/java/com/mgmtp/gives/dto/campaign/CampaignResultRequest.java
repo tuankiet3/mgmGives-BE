@@ -9,5 +9,6 @@ public record CampaignResultRequest(
         Long finalAmountRaised,
         String itemsSummary,
         String acknowledgements,
+        String taskSummary,
         List<Long> mediaIds
 ) {}

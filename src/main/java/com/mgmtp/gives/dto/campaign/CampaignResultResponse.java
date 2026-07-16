@@ -14,6 +14,7 @@ public class CampaignResultResponse {
     private Long finalAmountRaised;
     private String itemsSummary;
     private String acknowledgements;
+    private String taskSummary;
     private String publishedByName;
     private LocalDateTime publishedAt;
     private List<CampaignMediaResponse> media;
@@ -23,4 +24,6 @@ public class CampaignResultResponse {
     private long donorCount;
     private long volunteerCount;
     private double goalPercent;
+    private long taskCount;
+    private long completedTaskCount;
 }

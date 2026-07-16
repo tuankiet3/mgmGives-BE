@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface CampaignTaskRepository extends JpaRepository<CampaignTask, Long>, JpaSpecificationExecutor<CampaignTask> {
 
     @Query("""
@@ -20,4 +22,15 @@ public interface CampaignTaskRepository extends JpaRepository<CampaignTask, Long
     long findMaxActivePositionByCampaignIdAndStatus(
             @Param("campaignId") Long campaignId,
             @Param("status") TaskStatus status);
+
+    @Query("""
+            SELECT DISTINCT t
+            FROM CampaignTask t
+            LEFT JOIN FETCH t.assignments a
+            LEFT JOIN FETCH a.user
+            WHERE t.campaign.id = :campaignId
+              AND t.deletedAt IS NULL
+              AND t.isArchived = false
+            """)
+    List<CampaignTask> findActiveTasksWithAssignments(@Param("campaignId") Long campaignId);
 }

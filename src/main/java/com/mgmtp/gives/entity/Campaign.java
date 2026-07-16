@@ -147,6 +147,9 @@ public class Campaign extends BaseEntity {
     @Column(name = "acknowledgements", columnDefinition = "TEXT")
     private String acknowledgements;
 
+    @Column(name = "task_summary", columnDefinition = "TEXT")
+    private String taskSummary;
+
     @ManyToOne
     @JoinColumn(name = "result_published_by")
     private User resultPublishedBy;

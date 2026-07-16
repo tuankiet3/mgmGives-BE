@@ -30,7 +30,7 @@
             margin-bottom: 22px;
         }
         .stats-table td {
-            width: 25%;
+            width: 20%;
             padding: 12px 10px;
             border: 1px solid #e5e7eb;
             text-align: center;
@@ -126,6 +126,10 @@
             <span class="stats-value" th:text="${volunteerCount}">0</span>
             <span class="stats-label">Volunteers</span>
         </td>
+        <td th:if="${taskCount != null and taskCount &gt; 0}">
+            <span class="stats-value" th:text="${completedTaskCount} + '/' + ${taskCount}">0/0</span>
+            <span class="stats-label">Tasks Completed</span>
+        </td>
     </tr>
 </table>
 
@@ -142,6 +146,11 @@
 <div th:if="${acknowledgements != null and !#strings.isEmpty(acknowledgements)}">
     <h2 class="section-title">Acknowledgements</h2>
     <div class="content-block"><p th:text="${acknowledgements}"></p></div>
+</div>
+
+<div th:if="${taskSummary != null and !#strings.isEmpty(taskSummary)}">
+    <h2 class="section-title">Task &amp; Volunteer Work</h2>
+    <div class="content-block"><p th:text="${taskSummary}"></p></div>
 </div>
 
 <div th:if="${galleryMedia != null and !galleryMedia.isEmpty()}">

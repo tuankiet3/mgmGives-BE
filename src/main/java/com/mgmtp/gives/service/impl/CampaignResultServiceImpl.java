@@ -14,14 +14,17 @@ import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.Announcement;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.CampaignMedia;
+import com.mgmtp.gives.entity.CampaignTask;
 import com.mgmtp.gives.entity.Category;
 import com.mgmtp.gives.entity.Donation;
+import com.mgmtp.gives.entity.TaskAssignment;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.DonationType;
 import com.mgmtp.gives.enums.MediaContext;
 import com.mgmtp.gives.enums.NotificationType;
+import com.mgmtp.gives.enums.TaskStatus;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
 import com.mgmtp.gives.mapper.CampaignMediaMapper;
@@ -30,7 +33,9 @@ import com.mgmtp.gives.repository.CampaignFollowerRepository;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
+import com.mgmtp.gives.repository.CampaignTaskRepository;
 import com.mgmtp.gives.repository.DonationRepository;
+import com.mgmtp.gives.specification.CampaignTaskSpecifications;
 import com.mgmtp.gives.service.CampaignMemberService;
 import com.mgmtp.gives.service.CampaignResultService;
 import com.mgmtp.gives.service.EmailService;
@@ -40,6 +45,7 @@ import com.mgmtp.gives.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -91,6 +97,10 @@ public class CampaignResultServiceImpl implements CampaignResultService {
     private static final String PDF_FONT_FAMILY = "Noto Sans";
     private static final int PDF_IMAGE_MAX_DIMENSION = 640;
     private static final float PDF_IMAGE_JPEG_QUALITY = 0.7f;
+    // Task descriptions can be up to 5000 chars (CreateCampaignTaskRequest), far larger than
+    // any reasonable per-task prompt budget — truncated here, at the source, so a long
+    // description can never crowd out this task's own status/assignee fields downstream.
+    private static final int MAX_TASK_DESCRIPTION_LENGTH = 250;
 
     private final CampaignRepository campaignRepository;
     private final CampaignMemberRepository campaignMemberRepository;
@@ -104,6 +114,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
     private final TemplateEngine templateEngine;
     private final CampaignMediaRepository campaignMediaRepository;
     private final CampaignMediaMapper campaignMediaMapper;
+    private final CampaignTaskRepository campaignTaskRepository;
     private final MediaService mediaService;
     private final MailProps mailProps;
 
@@ -132,6 +143,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
         campaign.setFinalAmountRaised(finalAmount);
         campaign.setItemsSummary(request.itemsSummary());
         campaign.setAcknowledgements(request.acknowledgements());
+        campaign.setTaskSummary(request.taskSummary());
         campaign.setResultPosted(true);
         campaign.setResultPublishedBy(currentUser);
         campaign.setResultPublishedAt(LocalDateTime.now());
@@ -171,6 +183,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
         campaign.setFinalAmountRaised(finalAmount);
         campaign.setItemsSummary(request.itemsSummary());
         campaign.setAcknowledgements(request.acknowledgements());
+        campaign.setTaskSummary(request.taskSummary());
         campaign.setResultPublishedBy(currentUser);
         campaign.setResultPublishedAt(LocalDateTime.now());
         campaignRepository.save(campaign);
@@ -206,9 +219,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
         long donorCount = donationRepository.countDistinctDonorsByCampaignId(campaignId);
         long volunteerCount = campaignMemberRepository.countByCampaignIdAndRoleInCampaign(
                 campaignId, CampaignMemberRole.VOLUNTEER);
-        double goalPercent = campaign.getTarget() != null && campaign.getTarget() > 0
-                ? Math.min(100.0, (confirmedTotal * 100.0) / campaign.getTarget())
-                : 0.0;
+        double goalPercent = calculateGoalPercent(campaign.getTarget(), confirmedTotal);
 
         List<Donation> donations = donationRepository.findByCampaignIdAndStatus(campaignId, DonationStatus.SUCCESSFUL);
 
@@ -237,10 +248,18 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                 .map(CampaignResultServiceImpl::describeAnnouncement)
                 .toList();
 
+        List<CampaignTask> tasks = campaignTaskRepository.findActiveTasksWithAssignments(campaignId);
+        long taskCount = tasks.size();
+        long completedTaskCount = tasks.stream().filter(t -> t.getStatus() == TaskStatus.DONE).count();
+        List<String> taskDescriptions = tasks.stream()
+                .map(CampaignResultServiceImpl::describeTask)
+                .toList();
+
         return geminiService.generateCampaignResultDraft(campaign, new CampaignResultDraftContext(
                 confirmedTotal, donorCount, volunteerCount, goalPercent,
                 categories, durationDays, moneyDonationCount, goodsDonationCount,
-                announcements, goodsDescriptions, buildBiggestDonorDescription(donations)));
+                announcements, goodsDescriptions, buildBiggestDonorDescription(donations),
+                taskCount, completedTaskCount, taskDescriptions));
     }
 
     /**
@@ -269,11 +288,59 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                 });
     }
 
+    /**
+     * Intentionally uncapped: campaigns can be overfunded, and every reader of this value
+     * (web report, PDF, AI prompt) must show the true percent rather than silently hiding
+     * overfunding at 100%. Only visual elements with a fixed-width track (e.g. a progress bar)
+     * should clamp for display — clamp there, not here.
+     */
+    private static double calculateGoalPercent(Long target, long amount) {
+        return target != null && target > 0 ? (amount * 100.0) / target : 0.0;
+    }
+
     private static String describeAnnouncement(Announcement announcement) {
         String date = announcement.getPublishedAt() != null
                 ? announcement.getPublishedAt().format(ANNOUNCEMENT_DATE_FORMAT)
                 : "date unknown";
         return String.format("%s (%s)", announcement.getTitle(), date);
+    }
+
+    private static String describeTask(CampaignTask task) {
+        // Dedup by user id, not name — two different volunteers can share a display name,
+        // and deduping on the string would silently drop one of them from the credit.
+        String assignees = task.getAssignments().stream()
+                .map(TaskAssignment::getUser)
+                .filter(u -> u != null && u.getId() != null)
+                .collect(Collectors.toMap(User::getId, User::getFullName, (a, b) -> a, LinkedHashMap::new))
+                .values()
+                .stream()
+                .filter(name -> name != null && !name.isBlank())
+                .collect(Collectors.joining(", "));
+        String statusLabel = switch (task.getStatus()) {
+            case null -> "Unknown";
+            case TODO -> "To Do";
+            case IN_PROGRESS -> "In Progress";
+            case DONE -> "Done";
+        };
+        String description = task.getDescription() != null && !task.getDescription().isBlank()
+                ? truncate(task.getDescription(), MAX_TASK_DESCRIPTION_LENGTH)
+                : "No description";
+        // Uses " | " (not "; ") as the internal separator: joinForPrompt joins multiple task
+        // facts with "; ", so reusing it here would make the boundary between one task's
+        // assignee list and the next task's title ambiguous to the model. Free-text title/
+        // description could itself contain "|" (or the field-label words below), which would
+        // forge a fake field boundary, so both are stripped of the delimiter before assembly.
+        return String.format("task title \"%s\" | description: %s | status: %s | assignee(s): %s",
+                stripDelimiter(task.getTitle()), stripDelimiter(description), statusLabel,
+                assignees.isBlank() ? "Unassigned" : assignees);
+    }
+
+    private static String stripDelimiter(String value) {
+        return value == null ? "" : value.replace("|", "/");
+    }
+
+    private static String truncate(String value, int maxLength) {
+        return value.length() > maxLength ? value.substring(0, maxLength) + "…" : value;
     }
 
     /**
@@ -529,15 +596,17 @@ public class CampaignResultServiceImpl implements CampaignResultService {
 
     private byte[] renderResultPdf(Campaign campaign) {
         long totalRaised = campaign.getFinalAmountRaised() != null ? campaign.getFinalAmountRaised() : 0L;
-        double goalPercent = campaign.getTarget() != null && campaign.getTarget() > 0
-                ? Math.min(100.0, (totalRaised * 100.0) / campaign.getTarget())
-                : 0.0;
+        double goalPercent = calculateGoalPercent(campaign.getTarget(), totalRaised);
+        TaskCounts taskCounts = computeActiveTaskCounts(campaign.getId());
 
         Context context = new Context();
         context.setVariable("campaignName", campaign.getTitle());
         context.setVariable("resultSummary", campaign.getResultSummary());
         context.setVariable("itemsSummary", campaign.getItemsSummary());
         context.setVariable("acknowledgements", campaign.getAcknowledgements());
+        context.setVariable("taskSummary", campaign.getTaskSummary());
+        context.setVariable("taskCount", taskCounts.total());
+        context.setVariable("completedTaskCount", taskCounts.completed());
         context.setVariable("publishedByName", campaign.getResultPublishedBy() != null
                 ? campaign.getResultPublishedBy().getFullName() : null);
         context.setVariable("publishedAt", campaign.getResultPublishedAt() != null
@@ -679,9 +748,9 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                 : campaignMemberRepository.countByCampaignIdAndRoleInCampaign(campaign.getId(), CampaignMemberRole.VOLUNTEER);
 
         long amountForGoal = campaign.getFinalAmountRaised() != null ? campaign.getFinalAmountRaised() : confirmedTotal;
-        double goalPercent = campaign.getTarget() != null && campaign.getTarget() > 0
-                ? Math.min(100.0, (amountForGoal * 100.0) / campaign.getTarget())
-                : 0.0;
+        double goalPercent = calculateGoalPercent(campaign.getTarget(), amountForGoal);
+
+        TaskCounts taskCounts = computeActiveTaskCounts(campaign.getId());
 
         List<CampaignMediaResponse> mediaResponses = campaignMediaMapper.toResponseList(resultMedia);
 
@@ -691,6 +760,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                 .finalAmountRaised(campaign.getFinalAmountRaised())
                 .itemsSummary(campaign.getItemsSummary())
                 .acknowledgements(campaign.getAcknowledgements())
+                .taskSummary(campaign.getTaskSummary())
                 .publishedByName(campaign.getResultPublishedBy() != null
                         ? campaign.getResultPublishedBy().getFullName() : null)
                 .publishedAt(campaign.getResultPublishedAt())
@@ -699,6 +769,21 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                 .donorCount(donorCount)
                 .volunteerCount(volunteerCount)
                 .goalPercent(goalPercent)
+                .taskCount(taskCounts.total())
+                .completedTaskCount(taskCounts.completed())
                 .build();
+    }
+
+    private record TaskCounts(long total, long completed) {}
+
+    private TaskCounts computeActiveTaskCounts(Long campaignId) {
+        Specification<CampaignTask> activeTaskSpec = Specification
+                .where(CampaignTaskSpecifications.hasCampaignId(campaignId))
+                .and(CampaignTaskSpecifications.isNotDeleted())
+                .and(CampaignTaskSpecifications.hasIsArchived(false));
+        long total = campaignTaskRepository.count(activeTaskSpec);
+        long completed = campaignTaskRepository
+                .count(activeTaskSpec.and(CampaignTaskSpecifications.hasStatus(TaskStatus.DONE)));
+        return new TaskCounts(total, completed);
     }
 }
