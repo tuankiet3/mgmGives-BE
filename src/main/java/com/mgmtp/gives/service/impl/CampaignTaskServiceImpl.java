@@ -35,6 +35,7 @@ import java.util.*;
 public class CampaignTaskServiceImpl implements CampaignTaskService {
 
     private final CampaignTaskRepository campaignTaskRepository;
+    private final CampaignRepository campaignRepository;
     private final CampaignLabelRepository campaignLabelRepository;
     private final CampaignMemberRepository campaignMemberRepository;
     private final UserRepository userRepository;
@@ -66,6 +67,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                 .status(initialStatus)
                 .position(nextActivePosition(campaignId, initialStatus))
                 .dueDate(request.dueDate())
+                .version(0L)
                 .createdBy(currentUser)
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -104,6 +106,9 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
 
         if (!isAdmin && !isAssignee) {
             throw new AppException(ErrorCode.UNAUTHORIZED_TASK_ACCESS);
+        }
+        if (request.version() != null && !Objects.equals(request.version(), task.getVersion())) {
+            throw new AppException(ErrorCode.RESOURCE_UPDATE_CONFLICT);
         }
         if (request.title() != null && request.title().isBlank()) {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Task title cannot be blank");
@@ -521,10 +526,13 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                 attachments,
                 task.getCreatedAt(),
                 task.getUpdatedAt(),
-                task.getDeletedAt());
+                task.getDeletedAt(),
+                task.getVersion());
     }
 
     private long nextActivePosition(Long campaignId, TaskStatus status) {
+        campaignRepository.findByIdForUpdate(campaignId)
+                .orElseThrow(() -> new AppException(ErrorCode.CAMPAIGN_NOT_FOUND));
         return campaignTaskRepository.findMaxActivePositionByCampaignIdAndStatus(campaignId, status) + 1;
     }
 

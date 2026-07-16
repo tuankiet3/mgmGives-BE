@@ -20,7 +20,8 @@ public record CampaignTaskResponse(
         List<TaskAttachmentResponse> attachments,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
-        LocalDateTime deletedAt
+        LocalDateTime deletedAt,
+        Long version
 ) {
     public record UserSummary(
             Long id,

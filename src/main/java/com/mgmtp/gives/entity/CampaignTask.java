@@ -68,4 +68,7 @@ public class CampaignTask extends BaseEntity {
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    @Version
+    private Long version;
 }

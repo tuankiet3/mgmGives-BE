@@ -80,7 +80,8 @@ public enum ErrorCode {
     TASK_ALREADY_ASSIGNED(5010, "User is already assigned to this task", HttpStatus.BAD_REQUEST),
     TASK_DUE_DATE_BEFORE_CAMPAIGN_START(5011, "Task due date cannot be before campaign start date", HttpStatus.BAD_REQUEST),
     TASK_DUE_DATE_AFTER_CAMPAIGN_END(5012, "Task due date cannot be after campaign end date", HttpStatus.BAD_REQUEST),
-    ASSIGNEE_NOT_FOUND(5013, "Assignee not found in this task", HttpStatus.NOT_FOUND);
+    ASSIGNEE_NOT_FOUND(5013, "Assignee not found in this task", HttpStatus.NOT_FOUND),
+    RESOURCE_UPDATE_CONFLICT(5014, "This resource has been updated by another user. Please refresh and try again", HttpStatus.CONFLICT);
 
     private final int code;
     private final String message;

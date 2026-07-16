@@ -2,8 +2,10 @@ package com.mgmtp.gives.exception;
 
 import com.mgmtp.gives.common.ApiResponse;
 import com.mgmtp.gives.common.ErrorCode;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -23,6 +25,17 @@ public class GlobalExceptionHandler {
         ApiResponse<?> response = ApiResponse.fail(ex.getResult(), ex.getErrorCode(), message, request.getRequestURI());
 
         return ResponseEntity.status(ex.getErrorCode().getStatus()).body(response);
+    }
+
+    @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockException.class})
+    public ResponseEntity<ApiResponse<?>> handleOptimisticLocking(Exception ex, HttpServletRequest request) {
+        log.warn("Optimistic locking conflict: {}", ex.getMessage());
+        ApiResponse<?> response = ApiResponse.fail(
+                ErrorCode.RESOURCE_UPDATE_CONFLICT,
+                ErrorCode.RESOURCE_UPDATE_CONFLICT.getMessage(),
+                request.getRequestURI());
+
+        return ResponseEntity.status(ErrorCode.RESOURCE_UPDATE_CONFLICT.getStatus()).body(response);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

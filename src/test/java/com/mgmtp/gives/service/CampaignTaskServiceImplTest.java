@@ -9,6 +9,7 @@ import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.TaskStatus;
 import com.mgmtp.gives.repository.CampaignLabelRepository;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
+import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.CampaignTaskRepository;
 import com.mgmtp.gives.repository.TaskAssignmentRepository;
 import com.mgmtp.gives.repository.TaskAttachmentRepository;
@@ -41,6 +42,7 @@ import static org.mockito.Mockito.when;
 class CampaignTaskServiceImplTest {
 
     @Mock CampaignTaskRepository campaignTaskRepository;
+    @Mock CampaignRepository campaignRepository;
     @Mock CampaignLabelRepository campaignLabelRepository;
     @Mock CampaignMemberRepository campaignMemberRepository;
     @Mock UserRepository userRepository;
@@ -57,6 +59,7 @@ class CampaignTaskServiceImplTest {
         Campaign campaign = new Campaign();
         campaign.setId(3L);
         when(campaignAccessHelper.findCampaignOrThrow(3L)).thenReturn(campaign);
+        when(campaignRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(campaign));
         when(campaignTaskRepository.save(any(CampaignTask.class))).thenAnswer(invocation -> {
             CampaignTask task = invocation.getArgument(0);
             task.setId(11L);
@@ -89,13 +92,14 @@ class CampaignTaskServiceImplTest {
 
         when(campaignTaskRepository.findById(11L)).thenReturn(Optional.of(task));
         when(campaignAccessHelper.isCampaignAdmin(3L, admin)).thenReturn(true);
+        when(campaignRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(campaign));
         when(campaignTaskRepository.findMaxActivePositionByCampaignIdAndStatus(3L, TaskStatus.DONE))
                 .thenReturn(6L);
         when(campaignTaskRepository.save(task)).thenReturn(task);
 
         CampaignTaskResponse result = service.updateTask(
                 11L,
-                new UpdateCampaignTaskRequest(null, null, null, null, TaskStatus.DONE),
+                new UpdateCampaignTaskRequest(null, null, null, null, TaskStatus.DONE, null),
                 admin);
 
         assertEquals(TaskStatus.DONE, result.status());
@@ -138,7 +142,7 @@ class CampaignTaskServiceImplTest {
 
         CampaignTaskResponse result = service.updateTask(
                 11L,
-                new UpdateCampaignTaskRequest(null, null, null, true, null),
+                new UpdateCampaignTaskRequest(null, null, null, true, null, null),
                 admin);
 
         assertNull(result.dueDate());
@@ -160,6 +164,7 @@ class CampaignTaskServiceImplTest {
         task.setId(11L);
 
         when(campaignTaskRepository.findById(11L)).thenReturn(Optional.of(task));
+        when(campaignRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(campaign));
         when(campaignTaskRepository.findMaxActivePositionByCampaignIdAndStatus(3L, TaskStatus.TODO))
                 .thenReturn(2L);
         when(campaignTaskRepository.save(task)).thenReturn(task);

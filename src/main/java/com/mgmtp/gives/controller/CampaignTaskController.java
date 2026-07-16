@@ -19,6 +19,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.data.web.SortDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -68,7 +69,12 @@ public class CampaignTaskController {
             @RequestParam(required = false) Long assigneeId,
             @RequestParam(defaultValue = "false") Boolean isArchived,
             @RequestParam(defaultValue = "false") Boolean isDeleted,
-            @ParameterObject @PageableDefault(page = 0, size = 10, sort = "position", direction = Sort.Direction.ASC) Pageable pageable,
+            @ParameterObject
+            @PageableDefault(page = 0, size = 10)
+            @SortDefault.SortDefaults({
+                    @SortDefault(sort = "position", direction = Sort.Direction.ASC),
+                    @SortDefault(sort = "id", direction = Sort.Direction.ASC)
+            }) Pageable pageable,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         log.info("REST request to get tasks: campaignId={}, status={}, assigneeId={}, isArchived={}",
                 campaignId, status, assigneeId, isArchived);

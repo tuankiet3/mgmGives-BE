@@ -16,6 +16,8 @@ public record UpdateCampaignTaskRequest(
 
         Boolean clearDueDate,
 
-        TaskStatus status
+        TaskStatus status,
+
+        Long version
 ) {
 }
