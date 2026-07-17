@@ -5,6 +5,7 @@ import com.mgmtp.gives.dto.announcement.*;
 import com.mgmtp.gives.entity.Announcement;
 import com.mgmtp.gives.entity.AnnouncementReply;
 import com.mgmtp.gives.entity.User;
+import com.mgmtp.gives.event.notification.AnnouncementReplyCreatedEvent;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.mapper.AnnouncementReplyMapper;
 import com.mgmtp.gives.repository.AnnouncementReplyRepository;
@@ -17,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +44,7 @@ public class AnnouncementReplyServiceImpl implements AnnouncementReplyService {
     private final UserRepository userRepository;
     private final AnnouncementReplyMapper replyMapper;
     private final AnnouncementAccessAuthorizer announcementAccessAuthorizer;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -66,11 +69,28 @@ public class AnnouncementReplyServiceImpl implements AnnouncementReplyService {
 
         AnnouncementReply savedReply = replyRepository.save(reply);
         announcementRepository.incrementRepliesCount(announcement.getId());
+        eventPublisher.publishEvent(new AnnouncementReplyCreatedEvent(
+                campaignId,
+                announcementId,
+                announcement.getTitle(),
+                savedReply.getId(),
+                managedCurrentUser.getId(),
+                displayName(managedCurrentUser),
+                announcement.getCreatedBy() == null ? null : announcement.getCreatedBy().getId(),
+                inReplyTo == null || inReplyTo.getUser() == null ? null : inReplyTo.getUser().getId()
+        ));
 
         AnnouncementReplyResponse response = replyMapper.toResponse(savedReply);
 
         log.info("Reply created successfully: replyId={}, userId={}", savedReply.getId(), currentUser.getId());
         return response;
+    }
+
+    private static String displayName(User user) {
+        if (user.getFullName() != null && !user.getFullName().isBlank()) {
+            return user.getFullName();
+        }
+        return user.getEmail();
     }
 
     @Override
@@ -93,8 +113,7 @@ public class AnnouncementReplyServiceImpl implements AnnouncementReplyService {
             reply = replyRepository.save(reply);
             log.info("Reply updated: replyId={}", reply.getId());
 
-            AnnouncementReplyResponse response = replyMapper.toResponse(reply);
-            return response;
+            return replyMapper.toResponse(reply);
         }
 
         return replyMapper.toResponse(reply);
@@ -139,7 +158,7 @@ public class AnnouncementReplyServiceImpl implements AnnouncementReplyService {
     public ReplyPageResponse<AnnouncementReplyResponse> getReplies(Long campaignId, Long announcementId, Long cursor, int limit, String sort, User currentUser) {
         log.info("Fetching replies: campaignId={}, announcementId={}, cursor={}, limit={}, sort={}", campaignId, announcementId, cursor, limit, sort);
 
-        Announcement announcement = announcementAccessAuthorizer.requireAccessibleAnnouncement(campaignId, announcementId, currentUser);
+        announcementAccessAuthorizer.requireAccessibleAnnouncement(campaignId, announcementId, currentUser);
         if (!"asc".equalsIgnoreCase(sort) && !"desc".equalsIgnoreCase(sort)) {
             throw new AppException(ErrorCode.INVALID_ENUM_VALUE);
         }
@@ -356,7 +375,7 @@ public class AnnouncementReplyServiceImpl implements AnnouncementReplyService {
             Long replyId,
             User currentUser
     ) {
-        Announcement announcement = announcementAccessAuthorizer.requireAccessibleAnnouncement(campaignId, announcementId, currentUser);
+        announcementAccessAuthorizer.requireAccessibleAnnouncement(campaignId, announcementId, currentUser);
 
         return requireActiveReplyInAnnouncement(replyId, announcementId);
     }

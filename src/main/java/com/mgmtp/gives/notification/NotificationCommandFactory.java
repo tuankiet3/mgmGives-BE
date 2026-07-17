@@ -3,6 +3,8 @@ package com.mgmtp.gives.notification;
 import com.mgmtp.gives.dto.notification.CreateNotificationCommand;
 import com.mgmtp.gives.event.notification.*;
 
+import java.util.List;
+
 public interface NotificationCommandFactory {
     CreateNotificationCommand donationConfirmed(DonationConfirmedEvent event);
 
@@ -23,4 +25,6 @@ public interface NotificationCommandFactory {
     CreateNotificationCommand campaignUnjoinApproved(CampaignUnjoinApprovedEvent event);
 
     CreateNotificationCommand campaignUnjoinRejected(CampaignUnjoinRejectedEvent event);
+
+    List<CreateNotificationCommand> announcementReplyCreated(AnnouncementReplyCreatedEvent event);
 }
