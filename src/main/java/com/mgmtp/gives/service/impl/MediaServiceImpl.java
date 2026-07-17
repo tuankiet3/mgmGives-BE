@@ -5,6 +5,7 @@ import com.mgmtp.gives.dto.campaign.CampaignMediaResponse;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.CampaignMeeting;
 import com.mgmtp.gives.entity.CampaignMedia;
+import com.mgmtp.gives.entity.CampaignSpending;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignStatus;
@@ -224,6 +225,32 @@ public class MediaServiceImpl implements MediaService {
 
     @Override
     @Transactional
+    public CampaignMediaResponse uploadCampaignSpendingAttachment(
+            MultipartFile file,
+            Campaign campaign,
+            CampaignSpending spending) {
+        MediaValidationUtil.validateFile(file, false);
+
+        String detectedType = MediaValidationUtil.detectCategory(file.getContentType());
+        String filename = storeFile(file, "campaign spending attachment");
+
+        CampaignMedia media = CampaignMedia.builder()
+                .url(filename)
+                .mediaType(detectedType)
+                .isCover(false)
+                .campaign(campaign)
+                .spending(spending)
+                .build();
+
+        CampaignMedia saved = campaignMediaRepository.save(media);
+        log.info("Campaign spending attachment uploaded: id={}, file={}, type={}, campaignId={}, spendingId={}",
+                saved.getId(), filename, saved.getMediaType(), campaign.getId(), spending.getId());
+        return new CampaignMediaResponse(saved.getId(), saved.getUrl(), saved.getMediaType(), saved.isCover(),
+                saved.getCaption(), saved.getDisplayOrder(), saved.getContext().name());
+    }
+
+    @Override
+    @Transactional
     public CampaignMediaResponse softDeleteCampaignMedia(Long id, User currentUser) {
         CampaignMedia media = campaignMediaRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CAMPAIGN_MEDIA_NOT_FOUND,
@@ -257,6 +284,17 @@ public class MediaServiceImpl implements MediaService {
     @Override
     @Transactional
     public CampaignMediaResponse softDeleteCampaignMeetingAttachment(CampaignMedia media) {
+        if (media.getDeletedAt() != null) {
+            throw new AppException(ErrorCode.MEDIA_ALREADY_DELETED);
+        }
+        softDeleteMedia(media);
+        return new CampaignMediaResponse(media.getId(), media.getUrl(), media.getMediaType(), media.isCover(),
+                media.getCaption(), media.getDisplayOrder(), media.getContext().name());
+    }
+
+    @Override
+    @Transactional
+    public CampaignMediaResponse softDeleteCampaignSpendingAttachment(CampaignMedia media) {
         if (media.getDeletedAt() != null) {
             throw new AppException(ErrorCode.MEDIA_ALREADY_DELETED);
         }

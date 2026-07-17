@@ -81,7 +81,14 @@ public enum ErrorCode {
     TASK_DUE_DATE_BEFORE_CAMPAIGN_START(5011, "Task due date cannot be before campaign start date", HttpStatus.BAD_REQUEST),
     TASK_DUE_DATE_AFTER_CAMPAIGN_END(5012, "Task due date cannot be after campaign end date", HttpStatus.BAD_REQUEST),
     ASSIGNEE_NOT_FOUND(5013, "Assignee not found in this task", HttpStatus.NOT_FOUND),
-    RESOURCE_UPDATE_CONFLICT(5014, "This resource has been updated by another user. Please refresh and try again", HttpStatus.CONFLICT);
+    RESOURCE_UPDATE_CONFLICT(5014, "This resource has been updated by another user. Please refresh and try again", HttpStatus.CONFLICT),
+
+    SPENDING_NOT_FOUND(6001, "Spending entry not found", HttpStatus.NOT_FOUND),
+    UNAUTHORIZED_SPENDING_ACCESS(6002, "You do not have permission to manage spending for this campaign", HttpStatus.FORBIDDEN),
+    SPENDING_DATE_BEFORE_CAMPAIGN_START(6003, "Spending date cannot be before campaign start date", HttpStatus.BAD_REQUEST),
+    CAMPAIGN_NOT_IN_PROGRESS_FOR_SPENDING(6004, "Spending can only be logged while the campaign is in progress", HttpStatus.BAD_REQUEST),
+    SPENDING_DELETE_NOT_ALLOWED(6005, "Spending can only be deleted while the campaign is in progress", HttpStatus.BAD_REQUEST),
+    SPENDING_DATE_IN_FUTURE(6006, "Spending date cannot be in the future", HttpStatus.BAD_REQUEST);
 
     private final int code;
     private final String message;

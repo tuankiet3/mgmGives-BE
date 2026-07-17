@@ -4,6 +4,7 @@ import com.mgmtp.gives.dto.campaign.CampaignMediaResponse;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.CampaignMeeting;
 import com.mgmtp.gives.entity.CampaignMedia;
+import com.mgmtp.gives.entity.CampaignSpending;
 import com.mgmtp.gives.entity.User;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -37,9 +38,17 @@ public interface MediaService {
             CampaignMeeting meeting
     );
 
+    CampaignMediaResponse uploadCampaignSpendingAttachment(
+            MultipartFile file,
+            Campaign campaign,
+            CampaignSpending spending
+    );
+
     CampaignMediaResponse softDeleteCampaignMedia(Long id, User currentUser);
 
     CampaignMediaResponse softDeleteCampaignMeetingAttachment(CampaignMedia media);
+
+    CampaignMediaResponse softDeleteCampaignSpendingAttachment(CampaignMedia media);
 
     CampaignMedia restoreCampaignMedia(Long id);
 

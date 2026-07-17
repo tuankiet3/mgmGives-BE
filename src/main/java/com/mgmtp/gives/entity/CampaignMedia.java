@@ -27,6 +27,10 @@ public class CampaignMedia extends BaseEntity {
     @JoinColumn(name = "announcement_id")
     private Announcement announcement;
 
+    @ManyToOne
+    @JoinColumn(name = "spending_id")
+    private CampaignSpending spending;
+
     private String url;
 
     @Column(name = "media_type")

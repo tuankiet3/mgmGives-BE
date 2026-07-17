@@ -1,5 +1,6 @@
 package com.mgmtp.gives.dto.campaign;
 
+import com.mgmtp.gives.dto.campaign_spending.CampaignSpendingResponse;
 import lombok.Builder;
 import lombok.Data;
 
@@ -26,4 +27,9 @@ public class CampaignResultResponse {
     private double goalPercent;
     private long taskCount;
     private long completedTaskCount;
+
+    // Spending ledger, computed live (not part of the AI draft/publish workflow)
+    private List<CampaignSpendingResponse> spendingItems;
+    private long totalSpent;
+    private long remainingFunds;
 }

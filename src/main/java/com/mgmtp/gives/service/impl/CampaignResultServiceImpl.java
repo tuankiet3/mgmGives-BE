@@ -9,6 +9,7 @@ import com.mgmtp.gives.dto.campaign.CampaignResultResponse;
 import com.mgmtp.gives.dto.campaign.DonorNotificationInfo;
 import com.mgmtp.gives.dto.campaign.DonorThankYouContext;
 import com.mgmtp.gives.dto.campaign.CampaignMediaResponse;
+import com.mgmtp.gives.dto.campaign_spending.CampaignSpendingListResponse;
 import com.mgmtp.gives.dto.notification.CreateNotificationCommand;
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.Announcement;
@@ -38,6 +39,7 @@ import com.mgmtp.gives.repository.DonationRepository;
 import com.mgmtp.gives.specification.CampaignTaskSpecifications;
 import com.mgmtp.gives.service.CampaignMemberService;
 import com.mgmtp.gives.service.CampaignResultService;
+import com.mgmtp.gives.service.CampaignSpendingService;
 import com.mgmtp.gives.service.EmailService;
 import com.mgmtp.gives.service.GeminiService;
 import com.mgmtp.gives.service.MediaService;
@@ -116,6 +118,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
     private final CampaignTaskRepository campaignTaskRepository;
     private final MediaService mediaService;
     private final MailProps mailProps;
+    private final CampaignSpendingService campaignSpendingService;
 
     @Value("${app.media.upload-dir}")
     private String uploadDir;
@@ -623,6 +626,12 @@ public class CampaignResultServiceImpl implements CampaignResultService {
         context.setVariable("reportLink", buildReportLink(campaign.getId()));
         context.setVariable("galleryMedia", buildGalleryMedia(campaign));
 
+        CampaignSpendingListResponse spending =
+                campaignSpendingService.getSpendingsByCampaign(campaign.getId(), totalRaised);
+        context.setVariable("spendingItems", buildPdfSpendingItems(spending));
+        context.setVariable("totalSpent", NumberFormat.getNumberInstance(Locale.US).format(spending.totalSpent()));
+        context.setVariable("remainingFunds", NumberFormat.getNumberInstance(Locale.US).format(spending.remainingFunds()));
+
         String html = templateEngine.process("final-report-pdf", context);
 
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
@@ -737,6 +746,23 @@ public class CampaignResultServiceImpl implements CampaignResultService {
 
     private record PdfMediaItem(String url, boolean isVideo) {}
 
+    private record PdfSpendingItem(String description, String amount, String spentAt, String photoUrl) {}
+
+    /**
+     * Only the first photo per entry is embedded (same downscaled-data-URI approach as
+     * {@link #buildGalleryMedia}) - embedding every receipt photo at full resolution for every
+     * spending row would balloon the PDF the same way unbounded gallery images once did.
+     */
+    private List<PdfSpendingItem> buildPdfSpendingItems(CampaignSpendingListResponse spending) {
+        return spending.items().stream()
+                .map(item -> new PdfSpendingItem(
+                        item.description(),
+                        NumberFormat.getNumberInstance(Locale.US).format(item.amount()),
+                        item.spentAt().format(ANNOUNCEMENT_DATE_FORMAT),
+                        item.photos().isEmpty() ? null : buildImageDataUri(item.photos().get(0).getUrl())))
+                .toList();
+    }
+
     private CampaignResultResponse buildResponse(Campaign campaign, long confirmedTotal) {
         List<CampaignMedia> resultMedia = campaignMediaRepository
                 .findByCampaignIdAndContextAndDeletedAtIsNull(campaign.getId(), MediaContext.FINAL_REPORT);
@@ -758,6 +784,9 @@ public class CampaignResultServiceImpl implements CampaignResultService {
 
         List<CampaignMediaResponse> mediaResponses = campaignMediaMapper.toResponseList(resultMedia);
 
+        CampaignSpendingListResponse spending =
+                campaignSpendingService.getSpendingsByCampaign(campaign.getId(), confirmedTotal);
+
         return CampaignResultResponse.builder()
                 .campaignId(campaign.getId())
                 .resultSummary(campaign.getResultSummary())
@@ -775,6 +804,9 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                 .goalPercent(goalPercent)
                 .taskCount(taskCounts.total())
                 .completedTaskCount(taskCounts.completed())
+                .spendingItems(spending.items())
+                .totalSpent(spending.totalSpent())
+                .remainingFunds(spending.remainingFunds())
                 .build();
     }
 
