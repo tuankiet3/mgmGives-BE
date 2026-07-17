@@ -22,6 +22,11 @@ public class AnnouncementReply extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    // Flat contextual reference only; replies do not own a child collection or form nested threads.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "in_reply_to_id")
+    private AnnouncementReply inReplyTo;
+
     @Column(columnDefinition = "TEXT", nullable = false)
     private String content;
 
@@ -29,9 +34,9 @@ public class AnnouncementReply extends BaseEntity {
     @Column(name = "is_edited", nullable = false)
     private boolean isEdited = false;
 
+    // Null before persistence so Spring Data uses persist() for new replies rather than merge().
     @Version
-    @Builder.Default
-    private Long version = 0L;
+    private Long version;
 
     @LastModifiedDate
     @Column(name = "updated_at")

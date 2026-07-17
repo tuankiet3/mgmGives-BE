@@ -6,6 +6,7 @@ import com.mgmtp.gives.config.SecurityConfig;
 import com.mgmtp.gives.dto.announcement.AnnouncementReplyResponse;
 import com.mgmtp.gives.dto.announcement.CreateReplyRequest;
 import com.mgmtp.gives.dto.announcement.ReplyPageResponse;
+import com.mgmtp.gives.dto.announcement.ReplyContextResponse;
 import com.mgmtp.gives.dto.announcement.UpdateReplyRequest;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.UserRole;
@@ -81,7 +82,13 @@ class AnnouncementEngagementControllerTest {
                 new AnnouncementReplyResponse.UserSummary(10L, "User Name", null),
                 false,
                 LocalDateTime.now(),
-                LocalDateTime.now()
+                LocalDateTime.now(),
+                new AnnouncementReplyResponse.ReplyReference(
+                        99L,
+                        new AnnouncementReplyResponse.UserSummary(11L, "Referenced User", null),
+                        "Referenced content",
+                        false
+                )
         );
     }
 
@@ -113,7 +120,7 @@ class AnnouncementEngagementControllerTest {
 
     @Test
     void createReply_Success() throws Exception {
-        CreateReplyRequest request = new CreateReplyRequest("Reply Content");
+        CreateReplyRequest request = new CreateReplyRequest("Reply Content", 99L);
         when(replyService.createReply(eq(1L), eq(5L), any(CreateReplyRequest.class), any(User.class)))
                 .thenReturn(replyResponse);
 
@@ -124,12 +131,26 @@ class AnnouncementEngagementControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.result.id").value(100L))
-                .andExpect(jsonPath("$.result.content").value("Test Content"));
+                .andExpect(jsonPath("$.result.content").value("Test Content"))
+                .andExpect(jsonPath("$.result.inReplyTo.id").value(99L))
+                .andExpect(jsonPath("$.result.inReplyTo.createdBy.name").value("Referenced User"))
+                .andExpect(jsonPath("$.result.inReplyTo.content").value("Referenced content"));
     }
 
     @Test
     void createReply_ValidationError() throws Exception {
         CreateReplyRequest request = new CreateReplyRequest(""); // Empty reply content
+
+        mockMvc.perform(post("/api/campaigns/1/announcements/5/replies")
+                        .with(user(userDetails))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createReply_NonPositiveReferencedReplyId_ValidationError() throws Exception {
+        CreateReplyRequest request = new CreateReplyRequest("Reply Content", 0L);
 
         mockMvc.perform(post("/api/campaigns/1/announcements/5/replies")
                         .with(user(userDetails))
@@ -192,5 +213,20 @@ class AnnouncementEngagementControllerTest {
                         .with(user(userDetails))
                         .param("sort", "newest"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getReplyContext_Success() throws Exception {
+        ReplyContextResponse response = new ReplyContextResponse(List.of(replyResponse), 100L, 101L, 99L, true, true);
+        when(replyService.getReplyContext(eq(1L), eq(5L), eq(100L), eq(null), eq(null), eq(15), eq("desc"), any(User.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/api/campaigns/1/announcements/5/replies/100/context")
+                        .with(user(userDetails))
+                        .param("limit", "15")
+                        .param("sort", "desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.anchorReplyId").value(100L))
+                .andExpect(jsonPath("$.result.content[0].inReplyTo.content").value("Referenced content"));
     }
 }

@@ -8,4 +8,5 @@ public interface AnnouncementReplyService {
     AnnouncementReplyResponse updateReply(Long campaignId, Long announcementId, Long replyId, UpdateReplyRequest request, User currentUser);
     void deleteReply(Long campaignId, Long announcementId, Long replyId, User currentUser);
     ReplyPageResponse<AnnouncementReplyResponse> getReplies(Long campaignId, Long announcementId, Long cursor, int limit, String sort, User currentUser);
+    ReplyContextResponse getReplyContext(Long campaignId, Long announcementId, Long replyId, Long cursor, String direction, int limit, String sort, User currentUser);
 }

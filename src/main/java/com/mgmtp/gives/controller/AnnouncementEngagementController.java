@@ -109,4 +109,20 @@ public class AnnouncementEngagementController {
                 announcementId, cursor, limit, sort);
         return ApiResponse.success(replyService.getReplies(campaignId, announcementId, cursor, limit, sort, userDetails.getUser()));
     }
+
+    @GetMapping("/replies/{replyId}/context")
+    @Operation(summary = "Get a reply-centered announcement context")
+    public ApiResponse<ReplyContextResponse> getReplyContext(
+            @PathVariable Long campaignId,
+            @PathVariable Long announcementId,
+            @PathVariable Long replyId,
+            @RequestParam(required = false) Long cursor,
+            @RequestParam(required = false) @Pattern(regexp = "(?i)newer|older", message = "Direction must be newer or older") String direction,
+            @RequestParam(defaultValue = "15") @Min(value = 1, message = "Limit must be at least 1") @Max(value = 50, message = "Limit cannot exceed 50") int limit,
+            @RequestParam(defaultValue = "desc") @Pattern(regexp = "(?i)asc|desc", message = "Sort must be asc or desc") String sort,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ApiResponse.success(replyService.getReplyContext(
+                campaignId, announcementId, replyId, cursor, direction, limit, sort, userDetails.getUser()
+        ));
+    }
 }

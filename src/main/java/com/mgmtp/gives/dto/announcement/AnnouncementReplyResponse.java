@@ -9,12 +9,21 @@ public record AnnouncementReplyResponse(
         UserSummary createdBy,
         boolean isEdited,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        ReplyReference inReplyTo
 ) {
     public record UserSummary(
             Long id,
             String name,
             String avatarUrl
+    ) {
+    }
+
+    public record ReplyReference(
+            Long id,
+            UserSummary createdBy,
+            String content,
+            boolean isDeleted
     ) {
     }
 }

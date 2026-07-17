@@ -4,6 +4,7 @@ import com.mgmtp.gives.common.ErrorCode;
 import com.mgmtp.gives.dto.announcement.AnnouncementReplyResponse;
 import com.mgmtp.gives.dto.announcement.CreateReplyRequest;
 import com.mgmtp.gives.dto.announcement.ReplyPageResponse;
+import com.mgmtp.gives.dto.announcement.ReplyContextResponse;
 import com.mgmtp.gives.dto.announcement.UpdateReplyRequest;
 import com.mgmtp.gives.entity.Announcement;
 import com.mgmtp.gives.entity.AnnouncementReply;
@@ -14,6 +15,7 @@ import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.mapper.AnnouncementReplyMapper;
 import com.mgmtp.gives.repository.AnnouncementReplyRepository;
 import com.mgmtp.gives.repository.AnnouncementRepository;
+import com.mgmtp.gives.repository.UserRepository;
 import com.mgmtp.gives.security.AnnouncementAccessAuthorizer;
 import com.mgmtp.gives.service.impl.AnnouncementReplyServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +40,9 @@ class AnnouncementReplyServiceImplTest {
 
     @Mock
     private AnnouncementRepository announcementRepository;
+
+    @Mock
+    private UserRepository userRepository;
 
     @Mock
     private AnnouncementReplyMapper replyMapper;
@@ -102,13 +107,16 @@ class AnnouncementReplyServiceImplTest {
                     ),
                     r.isEdited(),
                     r.getCreatedAt(),
-                    r.getUpdatedAt()
+                    r.getUpdatedAt(),
+                    null
             );
         });
         lenient().when(announcementRepository.findByIdAndCampaignId(5L, 1L)).thenReturn(Optional.of(announcement));
+        lenient().when(userRepository.findById(author.getId())).thenReturn(Optional.of(author));
         replyService = new AnnouncementReplyServiceImpl(
                 replyRepository,
                 announcementRepository,
+                userRepository,
                 replyMapper,
                 new AnnouncementAccessAuthorizer(announcementRepository)
         );
@@ -124,6 +132,73 @@ class AnnouncementReplyServiceImplTest {
         assertNotNull(result);
         assertEquals("Original Content", result.content());
         verify(announcementRepository, times(1)).incrementRepliesCount(5L);
+        var savedReply = org.mockito.ArgumentCaptor.forClass(AnnouncementReply.class);
+        verify(replyRepository).save(savedReply.capture());
+        assertSame(author, savedReply.getValue().getUser());
+        assertNull(savedReply.getValue().getVersion());
+    }
+
+    @Test
+    void createReply_WithReplyContext_PersistsReference() {
+        AnnouncementReply referencedReply = new AnnouncementReply();
+        referencedReply.setId(99L);
+        referencedReply.setAnnouncement(announcement);
+        referencedReply.setUser(creator);
+
+        CreateReplyRequest request = new CreateReplyRequest("Reply Content", 99L);
+        when(replyRepository.findByIdAndAnnouncementIdWithUser(99L, 5L)).thenReturn(Optional.of(referencedReply));
+        when(replyRepository.save(any(AnnouncementReply.class))).thenReturn(reply);
+
+        replyService.createReply(1L, 5L, request, author);
+
+        var savedReply = org.mockito.ArgumentCaptor.forClass(AnnouncementReply.class);
+        verify(replyRepository).save(savedReply.capture());
+        assertSame(referencedReply, savedReply.getValue().getInReplyTo());
+    }
+
+    @Test
+    void createReply_ReferencedReplyNotFound_ThrowsException() {
+        CreateReplyRequest request = new CreateReplyRequest("Reply Content", 99L);
+        when(replyRepository.findByIdAndAnnouncementIdWithUser(99L, 5L)).thenReturn(Optional.empty());
+
+        AppException exception = assertThrows(AppException.class, () ->
+                replyService.createReply(1L, 5L, request, author)
+        );
+
+        assertEquals(ErrorCode.REPLY_NOT_FOUND, exception.getErrorCode());
+        verify(replyRepository, never()).save(any());
+        verify(announcementRepository, never()).incrementRepliesCount(anyLong());
+    }
+
+    @Test
+    void createReply_ReferencedReplyOutsideAnnouncement_ThrowsException() {
+        CreateReplyRequest request = new CreateReplyRequest("Reply Content", 99L);
+        when(replyRepository.findByIdAndAnnouncementIdWithUser(99L, 5L)).thenReturn(Optional.empty());
+
+        AppException exception = assertThrows(AppException.class, () ->
+                replyService.createReply(1L, 5L, request, author)
+        );
+
+        assertEquals(ErrorCode.REPLY_NOT_FOUND, exception.getErrorCode());
+        verify(replyRepository, never()).save(any());
+    }
+
+    @Test
+    void createReply_ReferencedReplyDeleted_ThrowsException() {
+        AnnouncementReply deletedReply = new AnnouncementReply();
+        deletedReply.setId(99L);
+        deletedReply.setAnnouncement(announcement);
+        deletedReply.setDeletedAt(java.time.LocalDateTime.now());
+
+        CreateReplyRequest request = new CreateReplyRequest("Reply Content", 99L);
+        when(replyRepository.findByIdAndAnnouncementIdWithUser(99L, 5L)).thenReturn(Optional.of(deletedReply));
+
+        AppException exception = assertThrows(AppException.class, () ->
+                replyService.createReply(1L, 5L, request, author)
+        );
+
+        assertEquals(ErrorCode.REPLY_NOT_FOUND, exception.getErrorCode());
+        verify(replyRepository, never()).save(any());
     }
 
     @Test
@@ -282,5 +357,95 @@ class AnnouncementReplyServiceImplTest {
         assertNotNull(response);
         assertEquals(3, response.content().size());
         assertNull(response.nextCursor());
+    }
+
+    @Test
+    void getReplyContext_Initial_ReturnsContiguousWindowAroundAnchor() {
+        AnnouncementReply anchor = replyWithId(50L);
+        when(replyRepository.findActiveReplyIdsAroundCursor(5L, 50L, 3, 3)).thenReturn(List.of(
+                replyContextCandidate(48L, 1), replyContextCandidate(52L, 0),
+                replyContextCandidate(49L, 1), replyContextCandidate(51L, 0)
+        ));
+        when(replyRepository.findActiveRepliesWithDetailsByAnnouncementIdAndIdIn(eq(5L), anyCollection()))
+                .thenReturn(List.of(replyWithId(49L), anchor, replyWithId(52L), replyWithId(48L), replyWithId(51L)));
+
+        ReplyContextResponse response = replyService.getReplyContext(1L, 5L, 50L, null, null, 5, "desc", author);
+
+        assertEquals(List.of(52L, 51L, 50L, 49L, 48L), response.content().stream().map(AnnouncementReplyResponse::id).toList());
+        assertEquals(52L, response.newerCursor());
+        assertEquals(48L, response.olderCursor());
+        assertFalse(response.hasNewer());
+        assertFalse(response.hasOlder());
+    }
+
+    @Test
+    void getReplyContext_NewerPage_ReturnsSortedPageAndCursor() {
+        AnnouncementReply anchor = replyWithId(50L);
+        when(replyRepository.findActiveReplyIdsAroundCursor(5L, 52L, 3, 0)).thenReturn(List.of(
+                replyContextCandidate(53L, 0), replyContextCandidate(54L, 0), replyContextCandidate(55L, 0)
+        ));
+        when(replyRepository.findActiveRepliesWithDetailsByAnnouncementIdAndIdIn(eq(5L), anyCollection()))
+                .thenReturn(List.of(replyWithId(54L), anchor, replyWithId(53L)));
+
+        ReplyContextResponse response = replyService.getReplyContext(1L, 5L, 50L, 52L, "newer", 2, "desc", author);
+
+        assertEquals(List.of(54L, 53L), response.content().stream().map(AnnouncementReplyResponse::id).toList());
+        assertEquals(54L, response.newerCursor());
+        assertTrue(response.hasNewer());
+        assertNull(response.olderCursor());
+    }
+
+    @Test
+    void getReplyContext_LimitOne_ExposesAnchorCursorsForBothDirections() {
+        AnnouncementReply anchor = replyWithId(50L);
+        when(replyRepository.findActiveReplyIdsAroundCursor(5L, 50L, 1, 1)).thenReturn(List.of(
+                replyContextCandidate(51L, 0), replyContextCandidate(49L, 1)
+        ));
+        when(replyRepository.findActiveRepliesWithDetailsByAnnouncementIdAndIdIn(eq(5L), anyCollection()))
+                .thenReturn(List.of(anchor));
+
+        ReplyContextResponse response = replyService.getReplyContext(1L, 5L, 50L, null, null, 1, "desc", author);
+
+        assertEquals(List.of(50L), response.content().stream().map(AnnouncementReplyResponse::id).toList());
+        assertEquals(50L, response.newerCursor());
+        assertEquals(50L, response.olderCursor());
+        assertTrue(response.hasNewer());
+        assertTrue(response.hasOlder());
+    }
+
+    @Test
+    void getReplyContext_AnchorUnavailableDuringHydration_ThrowsException() {
+        when(replyRepository.findActiveReplyIdsAroundCursor(5L, 50L, 3, 3)).thenReturn(List.of());
+        when(replyRepository.findActiveRepliesWithDetailsByAnnouncementIdAndIdIn(eq(5L), anyCollection()))
+                .thenReturn(List.of());
+
+        AppException exception = assertThrows(AppException.class, () ->
+                replyService.getReplyContext(1L, 5L, 50L, null, null, 5, "desc", author)
+        );
+
+        assertEquals(ErrorCode.REPLY_NOT_FOUND, exception.getErrorCode());
+    }
+
+    private AnnouncementReply replyWithId(Long id) {
+        AnnouncementReply result = new AnnouncementReply();
+        result.setId(id);
+        result.setAnnouncement(announcement);
+        result.setUser(author);
+        result.setContent("Content " + id);
+        return result;
+    }
+
+    private AnnouncementReplyRepository.ReplyContextCandidate replyContextCandidate(Long id, Integer side) {
+        return new AnnouncementReplyRepository.ReplyContextCandidate() {
+            @Override
+            public Long getId() {
+                return id;
+            }
+
+            @Override
+            public Integer getSide() {
+                return side;
+            }
+        };
     }
 }
