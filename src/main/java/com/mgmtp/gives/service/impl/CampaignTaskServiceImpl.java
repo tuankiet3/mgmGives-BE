@@ -24,6 +24,15 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import com.mgmtp.gives.dto.notification.NotificationRecipient;
+import com.mgmtp.gives.event.notification.TaskAssignedEvent;
+import com.mgmtp.gives.event.notification.TaskStatusChangedEvent;
+import com.mgmtp.gives.event.notification.TaskDescriptionUpdatedEvent;
+import com.mgmtp.gives.event.notification.TaskUnassignedEvent;
+import com.mgmtp.gives.event.notification.TaskCreatedEmailEvent;
+import com.mgmtp.gives.enums.CampaignMemberRole;
+import org.springframework.context.ApplicationEventPublisher;
+import java.util.stream.Collectors;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -43,6 +52,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
     private final TaskAttachmentRepository taskAttachmentRepository;
     private final CampaignAccessHelper campaignAccessHelper;
     private final MediaService mediaService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -91,6 +101,32 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
 
         log.info("Task created: campaignId={}, taskId={}, userId={}",
                 campaignId, savedTask.getId(), currentUser.getId());
+
+        if (savedTask.getAssignments() != null && !savedTask.getAssignments().isEmpty()) {
+            Set<NotificationRecipient> assigneesRecipients = savedTask.getAssignments().stream()
+                    .map(assignment -> new NotificationRecipient(assignment.getUser().getId(), assignment.getUser().getEmail()))
+                    .collect(Collectors.toSet());
+
+            // Publish event for in-app notification
+            eventPublisher.publishEvent(new TaskAssignedEvent(
+                    campaignId,
+                    savedTask.getId(),
+                    savedTask.getTitle(),
+                    savedTask.getDescription(),
+                    assigneesRecipients
+            ));
+
+            // Publish event for email notification
+            eventPublisher.publishEvent(new TaskCreatedEmailEvent(
+                    campaignId,
+                    campaign.getTitle(),
+                    savedTask.getTitle(),
+                    savedTask.getDescription(),
+                    savedTask.getDueDate(),
+                    assigneesRecipients
+            ));
+        }
+
         return toResponse(savedTask);
     }
 
@@ -113,6 +149,11 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         if (request.title() != null && request.title().isBlank()) {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Task title cannot be blank");
         }
+
+        TaskStatus oldStatus = task.getStatus();
+        boolean descriptionChanged = request.description() != null
+                && !Objects.equals(request.description(), task.getDescription());
+
         // Status update: Admin OR Assignee allowed
         if (request.status() != null && request.status() != task.getStatus()) {
             task.setStatus(request.status());
@@ -143,6 +184,67 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         CampaignTask savedTask = campaignTaskRepository.save(task);
 
         log.info("Task updated: taskId={}, userId={}", taskId, currentUser.getId());
+
+        // Check if status changed
+        if (request.status() != null && request.status() != oldStatus) {
+            Set<NotificationRecipient> recipients = new HashSet<>();
+
+            // Add all current assignees
+            if (savedTask.getAssignments() != null) {
+                savedTask.getAssignments().stream()
+                        .map(a -> new NotificationRecipient(a.getUser().getId(), a.getUser().getEmail()))
+                        .forEach(recipients::add);
+            }
+
+            // Add Campaign Owner
+            if (savedTask.getCampaign().getUser() != null) {
+                recipients.add(new NotificationRecipient(
+                        savedTask.getCampaign().getUser().getId(),
+                        savedTask.getCampaign().getUser().getEmail()
+                ));
+            }
+
+            // Add Campaign Admins
+            List<NotificationRecipient> campaignAdmins = campaignMemberRepository
+                    .findRecipientsByCampaignIdAndRole(campaignId, CampaignMemberRole.CAMPAIGN_ADMIN);
+            if (campaignAdmins != null) {
+                recipients.addAll(campaignAdmins);
+            }
+
+            // Exclude the current user (action user)
+            recipients.removeIf(r -> r.userId().equals(currentUser.getId()));
+
+            if (!recipients.isEmpty()) {
+                eventPublisher.publishEvent(new TaskStatusChangedEvent(
+                        campaignId,
+                        savedTask.getId(),
+                        savedTask.getTitle(),
+                        oldStatus,
+                        savedTask.getStatus(),
+                        recipients
+                ));
+            }
+        } else {
+            // Regular update (Title, Description, etc. changed without status change)
+            if (descriptionChanged && savedTask.getAssignments() != null && !savedTask.getAssignments().isEmpty()) {
+                Set<NotificationRecipient> assigneesRecipients = savedTask.getAssignments().stream()
+                        .map(assignment -> new NotificationRecipient(assignment.getUser().getId(), assignment.getUser().getEmail()))
+                        .collect(Collectors.toSet());
+
+                // Exclude the current user (action user)
+                assigneesRecipients.removeIf(r -> r.userId().equals(currentUser.getId()));
+
+                if (!assigneesRecipients.isEmpty()) {
+                    eventPublisher.publishEvent(new TaskDescriptionUpdatedEvent(
+                            campaignId,
+                            savedTask.getId(),
+                            savedTask.getTitle(),
+                            assigneesRecipients
+                    ));
+                }
+            }
+        }
+
         return toResponse(savedTask);
     }
 
@@ -303,6 +405,28 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
 
         CampaignTask savedTask = campaignTaskRepository.save(task);
         log.info("Assignee added: taskId={}, userId={}, addedBy={}", taskId, userId, currentUser.getId());
+
+        if (assignee != null) {
+            Set<NotificationRecipient> recipients = Set.of(new NotificationRecipient(assignee.getId(), assignee.getEmail()));
+            eventPublisher.publishEvent(new TaskAssignedEvent(
+                    campaignId,
+                    savedTask.getId(),
+                    savedTask.getTitle(),
+                    savedTask.getDescription(),
+                    recipients
+            ));
+
+            // Publish event for email notification to the newly added assignee
+            eventPublisher.publishEvent(new TaskCreatedEmailEvent(
+                    campaignId,
+                    task.getCampaign().getTitle(),
+                    savedTask.getTitle(),
+                    savedTask.getDescription(),
+                    savedTask.getDueDate(),
+                    recipients
+            ));
+        }
+
         return toResponse(savedTask);
     }
 
@@ -313,8 +437,11 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         Long campaignId = task.getCampaign().getId();
         campaignAccessHelper.validateCampaignAdmin(campaignId, currentUser, ErrorCode.UNAUTHORIZED_TASK_ACCESS);
 
+        User unassignedUser = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+
         boolean removed = task.getAssignments().removeIf(a -> Objects.equals(a.getUser().getId(), userId));
-        
+
         if (!removed) {
             throw new ResourceNotFoundException(ErrorCode.ASSIGNEE_NOT_FOUND);
         }
@@ -323,6 +450,15 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
 
         CampaignTask savedTask = campaignTaskRepository.save(task);
         log.info("Assignee removed: taskId={}, userId={}, removedBy={}", taskId, userId, currentUser.getId());
+
+        // Publish event to notify unassigned user
+        eventPublisher.publishEvent(new TaskUnassignedEvent(
+                campaignId,
+                savedTask.getId(),
+                savedTask.getTitle(),
+                new NotificationRecipient(unassignedUser.getId(), unassignedUser.getEmail())
+        ));
+
         return toResponse(savedTask);
     }
 

@@ -43,4 +43,14 @@ public interface EmailService {
             String attachmentFilename,
             String attachmentContentType
     );
+
+    void sendTaskAssignmentEmail(
+            String toEmail,
+            String assigneeName,
+            String campaignName,
+            String taskTitle,
+            String taskDescriptionSnippet,
+            String dueDate,
+            String taskUrl
+    );
 }

@@ -233,4 +233,28 @@ public class EmailServiceImpl implements EmailService {
         context.setVariable(TEMPLATE_VAR_LINK_TO_CAMPAIGN, linkToCampaign);
         return context;
     }
+
+    @Override
+    public void sendTaskAssignmentEmail(
+            String toEmail,
+            String assigneeName,
+            String campaignName,
+            String taskTitle,
+            String taskDescriptionSnippet,
+            String dueDate,
+            String taskUrl
+    ) {
+        log.info("Send task assignment email requested. to={}", toEmail);
+
+        Context context = new Context();
+        context.setVariable("assigneeName", assigneeName);
+        context.setVariable("campaignName", campaignName);
+        context.setVariable("taskTitle", taskTitle);
+        context.setVariable("taskDescriptionSnippet", taskDescriptionSnippet);
+        context.setVariable("dueDate", dueDate);
+        context.setVariable("taskUrl", taskUrl);
+
+        String subject = "You Have Been Assigned a New Task: " + taskTitle;
+        sendTemplatedEmail(toEmail, subject, "task-assignment", context);
+    }
 }

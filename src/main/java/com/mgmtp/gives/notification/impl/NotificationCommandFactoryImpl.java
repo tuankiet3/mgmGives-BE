@@ -10,6 +10,7 @@ import com.mgmtp.gives.notification.NotificationCommandFactory;
 import com.mgmtp.gives.notification.NotificationRecipientResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jsoup.Jsoup;
 import org.springframework.stereotype.Component;
 
 import java.util.Set;
@@ -130,5 +131,72 @@ public class NotificationCommandFactoryImpl implements NotificationCommandFactor
         }
 
         return String.format("%,d VND", amount);
+    }
+
+    @Override
+    public CreateNotificationCommand taskAssigned(TaskAssignedEvent event) {
+        return CreateNotificationCommand.builder()
+                .recipients(event.assignees())
+                .type(NotificationType.TASK_ASSIGNED)
+                .title("New task assigned")
+                .message("You have been assigned to task \"" + event.taskTitle() + "\".")
+                .linkUrl("/campaigns/" + event.campaignId() + "/tasks")
+                .build();
+    }
+
+    @Override
+    public CreateNotificationCommand taskDescriptionUpdated(TaskDescriptionUpdatedEvent event) {
+        return CreateNotificationCommand.builder()
+                .recipients(event.recipients())
+                .type(NotificationType.TASK_ASSIGNED)
+                .title("Task description updated")
+                .message("The description of task \"" + event.taskTitle() + "\" has been updated.")
+                .linkUrl("/campaigns/" + event.campaignId() + "/tasks")
+                .build();
+    }
+
+    @Override
+    public CreateNotificationCommand taskUnassigned(TaskUnassignedEvent event) {
+        return CreateNotificationCommand.builder()
+                .recipients(java.util.Set.of(event.recipient()))
+                .type(NotificationType.TASK_ASSIGNED)
+                .title("Task assignment removed")
+                .message("You have been unassigned from task \"" + event.taskTitle() + "\".")
+                .linkUrl("/campaigns/" + event.campaignId() + "/tasks")
+                .build();
+    }
+
+    private String getPlainTextSnippet(String html) {
+        if (html == null) {
+            return "";
+        }
+        String text = Jsoup.parse(html).text();
+        if (text.length() > 120) {
+            return text.substring(0, 117) + "...";
+        }
+        return text;
+    }
+
+    @Override
+    public CreateNotificationCommand taskStatusChanged(TaskStatusChangedEvent event) {
+        return CreateNotificationCommand.builder()
+                .recipients(event.recipients())
+                .type(NotificationType.TASK_ASSIGNED)
+                .title("Task status updated")
+                .message("Task \"" + event.taskTitle() + "\" status has been changed from " +
+                        formatTaskStatus(event.oldStatus()) + " to " + formatTaskStatus(event.newStatus()) + ".")
+                .linkUrl("/campaigns/" + event.campaignId() + "/tasks")
+                .build();
+    }
+
+    private String formatTaskStatus(com.mgmtp.gives.enums.TaskStatus status) {
+        if (status == null) {
+            return "Unknown";
+        }
+        return switch (status) {
+            case TODO -> "To do";
+            case IN_PROGRESS -> "In progress";
+            case DONE -> "Done";
+        };
     }
 }

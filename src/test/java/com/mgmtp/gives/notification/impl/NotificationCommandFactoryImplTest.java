@@ -3,7 +3,12 @@ package com.mgmtp.gives.notification.impl;
 import com.mgmtp.gives.dto.notification.CreateNotificationCommand;
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.NotificationType;
 import com.mgmtp.gives.event.notification.CampaignStatusChangedEvent;
+import com.mgmtp.gives.event.notification.TaskAssignedEvent;
+import com.mgmtp.gives.event.notification.TaskDescriptionUpdatedEvent;
+import com.mgmtp.gives.event.notification.TaskUnassignedEvent;
+import com.mgmtp.gives.event.notification.TaskStatusChangedEvent;
 import com.mgmtp.gives.notification.NotificationRecipientResolver;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -85,5 +90,94 @@ class NotificationCommandFactoryImplTest {
         assertEquals(recipients, command.recipients());
         verify(recipientResolver).campaignOwnerAndFollowers(100L);
         verify(recipientResolver, never()).campaignOwner(100L);
+    }
+
+    @Test
+    void taskAssigned_createsCorrectNotificationCommand() {
+        NotificationRecipient assignee1 = new NotificationRecipient(2L, "assignee1@example.com");
+        NotificationRecipient assignee2 = new NotificationRecipient(3L, "assignee2@example.com");
+        Set<NotificationRecipient> assignees = Set.of(assignee1, assignee2);
+
+        String title = "Complete the report";
+
+        CreateNotificationCommand command = notificationCommandFactory.taskAssigned(
+                new TaskAssignedEvent(
+                        4L,
+                        10L,
+                        title,
+                        "Desc",
+                        assignees
+                )
+        );
+
+        assertEquals(assignees, command.recipients());
+        assertEquals(NotificationType.TASK_ASSIGNED, command.type());
+        assertEquals("New task assigned", command.title());
+        assertEquals("You have been assigned to task \"Complete the report\".", command.message());
+        assertEquals("/campaigns/4/tasks", command.linkUrl());
+    }
+
+    @Test
+    void taskDescriptionUpdated_createsCorrectNotificationCommand() {
+        NotificationRecipient assignee = new NotificationRecipient(2L, "assignee@example.com");
+        Set<NotificationRecipient> recipients = Set.of(assignee);
+
+        CreateNotificationCommand command = notificationCommandFactory.taskDescriptionUpdated(
+                new TaskDescriptionUpdatedEvent(
+                        4L,
+                        10L,
+                        "Report Task",
+                        recipients
+                )
+        );
+
+        assertEquals(recipients, command.recipients());
+        assertEquals(NotificationType.TASK_ASSIGNED, command.type());
+        assertEquals("Task description updated", command.title());
+        assertEquals("The description of task \"Report Task\" has been updated.", command.message());
+        assertEquals("/campaigns/4/tasks", command.linkUrl());
+    }
+
+    @Test
+    void taskUnassigned_createsCorrectNotificationCommand() {
+        NotificationRecipient assignee = new NotificationRecipient(2L, "assignee@example.com");
+
+        CreateNotificationCommand command = notificationCommandFactory.taskUnassigned(
+                new TaskUnassignedEvent(
+                        4L,
+                        10L,
+                        "Report Task",
+                        assignee
+                )
+        );
+
+        assertEquals(Set.of(assignee), command.recipients());
+        assertEquals(NotificationType.TASK_ASSIGNED, command.type());
+        assertEquals("Task assignment removed", command.title());
+        assertEquals("You have been unassigned from task \"Report Task\".", command.message());
+        assertEquals("/campaigns/4/tasks", command.linkUrl());
+    }
+
+    @Test
+    void taskStatusChanged_createsCorrectNotificationCommand() {
+        NotificationRecipient assignee = new NotificationRecipient(2L, "assignee@example.com");
+        Set<NotificationRecipient> recipients = Set.of(assignee);
+
+        CreateNotificationCommand command = notificationCommandFactory.taskStatusChanged(
+                new TaskStatusChangedEvent(
+                        4L,
+                        10L,
+                        "Report Task",
+                        com.mgmtp.gives.enums.TaskStatus.TODO,
+                        com.mgmtp.gives.enums.TaskStatus.IN_PROGRESS,
+                        recipients
+                )
+        );
+
+        assertEquals(recipients, command.recipients());
+        assertEquals(NotificationType.TASK_ASSIGNED, command.type());
+        assertEquals("Task status updated", command.title());
+        assertEquals("Task \"Report Task\" status has been changed from To do to In progress.", command.message());
+        assertEquals("/campaigns/4/tasks", command.linkUrl());
     }
 }

@@ -9,4 +9,12 @@ public interface NotificationCommandFactory {
     CreateNotificationCommand campaignDonationConfirmed(CampaignDonationConfirmedEvent event);
 
     CreateNotificationCommand campaignStatusChanged(CampaignStatusChangedEvent event);
+
+    CreateNotificationCommand taskAssigned(TaskAssignedEvent event);
+
+    CreateNotificationCommand taskStatusChanged(TaskStatusChangedEvent event);
+
+    CreateNotificationCommand taskDescriptionUpdated(TaskDescriptionUpdatedEvent event);
+
+    CreateNotificationCommand taskUnassigned(TaskUnassignedEvent event);
 }

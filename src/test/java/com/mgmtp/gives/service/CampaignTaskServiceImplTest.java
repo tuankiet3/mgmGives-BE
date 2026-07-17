@@ -17,6 +17,7 @@ import com.mgmtp.gives.repository.UserRepository;
 import com.mgmtp.gives.service.impl.CampaignTaskServiceImpl;
 import com.mgmtp.gives.util.CampaignAccessHelper;
 import jakarta.validation.Validation;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -50,6 +51,7 @@ class CampaignTaskServiceImplTest {
     @Mock TaskAttachmentRepository taskAttachmentRepository;
     @Mock CampaignAccessHelper campaignAccessHelper;
     @Mock MediaService mediaService;
+    @Mock ApplicationEventPublisher eventPublisher;
 
     @InjectMocks CampaignTaskServiceImpl service;
 
@@ -217,5 +219,71 @@ class CampaignTaskServiceImplTest {
         user.setFullName("User " + id);
         user.setEmail("user" + id + "@example.com");
         return user;
+    }
+
+    @Test
+    void createTaskPublishesTaskCreatedEmailEventWhenAssigneesExist() {
+        User admin = user(7L);
+        Campaign campaign = new Campaign();
+        campaign.setId(3L);
+        campaign.setTitle("mgmGives Campaign");
+        
+        User assignee = user(8L);
+        assignee.setStatus(com.mgmtp.gives.enums.UserStatus.ACTIVE);
+        
+        when(campaignAccessHelper.findCampaignOrThrow(3L)).thenReturn(campaign);
+        when(campaignRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(campaign));
+        when(userRepository.findById(8L)).thenReturn(Optional.of(assignee));
+        when(campaignAccessHelper.isCampaignMember(3L, 8L)).thenReturn(true);
+        
+        when(campaignTaskRepository.save(any(CampaignTask.class))).thenAnswer(invocation -> {
+            CampaignTask task = invocation.getArgument(0);
+            task.setId(11L);
+            return task;
+        });
+
+        CreateCampaignTaskRequest request = new CreateCampaignTaskRequest(
+                "Launch",
+                "Prepare launch materials",
+                null,
+                List.of(8L),
+                List.of(),
+                TaskStatus.TODO
+        );
+
+        service.createTask(3L, request, admin);
+
+        verify(eventPublisher).publishEvent(any(com.mgmtp.gives.event.notification.TaskCreatedEmailEvent.class));
+        verify(eventPublisher).publishEvent(any(com.mgmtp.gives.event.notification.TaskAssignedEvent.class));
+    }
+
+    @Test
+    void addAssigneePublishesTaskCreatedEmailEvent() {
+        User admin = user(7L);
+        Campaign campaign = new Campaign();
+        campaign.setId(3L);
+        campaign.setTitle("mgmGives Campaign");
+        
+        CampaignTask task = CampaignTask.builder()
+                .campaign(campaign)
+                .title("Move me")
+                .status(TaskStatus.TODO)
+                .createdBy(admin)
+                .build();
+        task.setId(11L);
+        task.setAssignments(new java.util.HashSet<>());
+        
+        User assignee = user(8L);
+        assignee.setStatus(com.mgmtp.gives.enums.UserStatus.ACTIVE);
+        
+        when(campaignTaskRepository.findById(11L)).thenReturn(Optional.of(task));
+        when(campaignAccessHelper.isCampaignMember(3L, 8L)).thenReturn(true);
+        when(userRepository.findById(8L)).thenReturn(Optional.of(assignee));
+        when(campaignTaskRepository.save(any(CampaignTask.class))).thenReturn(task);
+        
+        service.addAssignee(11L, 8L, admin);
+        
+        verify(eventPublisher).publishEvent(any(com.mgmtp.gives.event.notification.TaskAssignedEvent.class));
+        verify(eventPublisher).publishEvent(any(com.mgmtp.gives.event.notification.TaskCreatedEmailEvent.class));
     }
 }

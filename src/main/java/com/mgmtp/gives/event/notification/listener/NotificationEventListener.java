@@ -49,4 +49,66 @@ public class NotificationEventListener {
                 notificationCommandFactory.campaignStatusChanged(event)
         );
     }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleTaskAssigned(TaskAssignedEvent event) {
+        log.info(
+                "Handling task assigned event: campaignId={}, taskId={}, recipientCount={}",
+                event.campaignId(),
+                event.taskId(),
+                event.assignees().size()
+        );
+
+        notificationService.createNotification(
+                notificationCommandFactory.taskAssigned(event)
+        );
+    }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleTaskStatusChanged(TaskStatusChangedEvent event) {
+        log.info(
+                "Handling task status changed event: campaignId={}, taskId={}, oldStatus={}, newStatus={}, recipientCount={}",
+                event.campaignId(),
+                event.taskId(),
+                event.oldStatus(),
+                event.newStatus(),
+                event.recipients().size()
+        );
+
+        notificationService.createNotification(
+                notificationCommandFactory.taskStatusChanged(event)
+        );
+    }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleTaskDescriptionUpdated(TaskDescriptionUpdatedEvent event) {
+        log.info(
+                "Handling task description updated event: campaignId={}, taskId={}, recipientCount={}",
+                event.campaignId(),
+                event.taskId(),
+                event.recipients().size()
+        );
+
+        notificationService.createNotification(
+                notificationCommandFactory.taskDescriptionUpdated(event)
+        );
+    }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleTaskUnassigned(TaskUnassignedEvent event) {
+        log.info(
+                "Handling task unassigned event: campaignId={}, taskId={}, recipientUserId={}",
+                event.campaignId(),
+                event.taskId(),
+                event.recipient().userId()
+        );
+
+        notificationService.createNotification(
+                notificationCommandFactory.taskUnassigned(event)
+        );
+    }
 }
