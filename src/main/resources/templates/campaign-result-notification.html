@@ -18,9 +18,33 @@
         are now available!
     </p>
 
-    <p>
+    <p th:if="${isVolunteer}">
         Thank you for your dedication and hard work as a volunteer.
         Your contribution made a real difference and we are truly grateful for your efforts.
+    </p>
+
+    <th:block th:if="${isDonor}">
+        <p th:if="${!#strings.isEmpty(aiMessage)}"
+           style="white-space:pre-line;"
+           th:text="${aiMessage}">
+        </p>
+        <p th:if="${#strings.isEmpty(aiMessage)}">
+            <th:block th:if="${!#strings.isEmpty(formattedAmount)}">
+                Thank you for your generous donation of
+                <strong>
+                    <span th:text="${formattedAmount}"></span> VND
+                </strong>.
+            </th:block>
+            <th:block th:if="${#strings.isEmpty(formattedAmount)}">
+                Thank you for your generous contribution.
+            </th:block>
+            Together, we made it happen!
+        </p>
+    </th:block>
+
+    <p th:if="${isFollowerOnly}">
+        Thank you so much for following and supporting this campaign.
+        Your interest and encouragement truly mattered to everyone involved.
     </p>
 
     <p th:if="${reportLink != null}">
@@ -31,7 +55,7 @@
     </p>
 
     <p style="color:#6b7280;font-size:12px;margin-top:32px;">
-        You received this email because you volunteered for this campaign on MgmGives.
+        You received this email because you supported this campaign on MgmGives.
     </p>
 
 </div>

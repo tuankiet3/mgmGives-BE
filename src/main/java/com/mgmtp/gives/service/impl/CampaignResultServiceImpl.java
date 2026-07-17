@@ -75,7 +75,6 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -385,85 +384,104 @@ public class CampaignResultServiceImpl implements CampaignResultService {
         byte[] reportPdf = tryRenderResultPdf(campaign);
         String reportPdfFilename = "final-report-" + campaign.getId() + ".pdf";
 
-        // --- Followers (single query) ---
-        List<User> followerUsers = campaignFollowerRepository.findFollowerUsersByCampaignId(campaign.getId());
-        if (!followerUsers.isEmpty()) {
-            Set<NotificationRecipient> followerRecipients = followerUsers.stream()
-                    .map(u -> new NotificationRecipient(u.getId(), u.getEmail()))
-                    .collect(Collectors.toCollection(LinkedHashSet::new));
-            notificationService.createNotification(CreateNotificationCommand.builder()
-                    .recipients(followerRecipients)
-                    .type(NotificationType.CAMPAIGN_RESULT_POSTED)
-                    .title("Campaign Results Published")
-                    .message("The final results for \"" + campaignName + "\" have been posted. "
-                            + "Thank you for following and supporting this campaign — your interest truly mattered to us!")
-                    .linkUrl(linkUrl)
-                    .build());
-            for (User user : followerUsers) {
-                emailService.sendHtmlEmail(
-                        user.getEmail(),
-                        RESULT_EMAIL_SUBJECT_PREFIX + campaignName,
-                        buildFollowerEmailBody(user.getFullName(), campaignName));
-            }
-        }
+        Map<Long, ResultRecipient> recipients = collectResultRecipients(campaign);
+        boolean hasDonors = recipients.values().stream().anyMatch(r -> r.donor);
+        Map<Long, String> aiThankYouMessages = hasDonors ? generateDonorThankYouMessages(campaign) : Map.of();
 
-        // --- Volunteers (single query) ---
-        List<User> volunteerUsers =
-                campaignMemberRepository.findUsersByCampaignIdAndRole(campaign.getId(), CampaignMemberRole.VOLUNTEER);
-        if (!volunteerUsers.isEmpty()) {
-            Set<NotificationRecipient> volunteerRecipients = volunteerUsers.stream()
-                    .map(u -> new NotificationRecipient(u.getId(), u.getEmail()))
-                    .collect(Collectors.toCollection(LinkedHashSet::new));
+        for (ResultRecipient recipient : recipients.values()) {
             notificationService.createNotification(CreateNotificationCommand.builder()
-                    .recipients(volunteerRecipients)
+                    .recipients(Set.of(new NotificationRecipient(recipient.userId, recipient.email)))
                     .type(NotificationType.CAMPAIGN_RESULT_POSTED)
                     .title("Campaign Results Published")
-                    .message("The final results for \"" + campaignName + "\" are now available. "
-                            + "Thank you for your dedication and hard work — your contribution made a real difference!")
-                    .linkUrl(linkUrl)
-                    .build());
-            for (User user : volunteerUsers) {
-                String subject = RESULT_EMAIL_SUBJECT_PREFIX + campaignName;
-                String body = buildVolunteerEmailBody(user.getFullName(), campaignName, reportLink);
-                if (reportPdf != null) {
-                    emailService.sendHtmlEmailWithAttachment(
-                            user.getEmail(), subject, body, reportPdf, reportPdfFilename, "application/pdf");
-                } else {
-                    emailService.sendHtmlEmail(user.getEmail(), subject, body);
-                }
-            }
-        }
-
-        // --- Donors (personalized with donation amount) ---
-        List<DonorNotificationInfo> donors =
-                donationRepository.findDonorNotificationInfoByCampaignId(campaign.getId(), DonationStatus.SUCCESSFUL);
-        Map<Long, String> aiThankYouMessages = generateDonorThankYouMessages(campaign);
-        for (DonorNotificationInfo donor : donors) {
-            // totalAmount is null for donors who only gave goods (GOODS donations carry no amount)
-            String formattedAmount = donor.totalAmount() != null && donor.totalAmount() > 0
-                    ? NumberFormat.getNumberInstance(Locale.US).format(donor.totalAmount())
-                    : null;
-            String donationThanks = formattedAmount != null
-                    ? "Thank you for your generous donation of " + formattedAmount + " VND — together, we made it happen!"
-                    : "Thank you for your generous contribution — together, we made it happen!";
-            notificationService.createNotification(CreateNotificationCommand.builder()
-                    .recipients(Set.of(new NotificationRecipient(donor.userId(), donor.email())))
-                    .type(NotificationType.CAMPAIGN_RESULT_POSTED)
-                    .title("Campaign Results Published")
-                    .message("The final results for \"" + campaignName + "\" are now available. " + donationThanks)
+                    .message(buildResultNotificationMessage(campaignName, recipient))
                     .linkUrl(linkUrl)
                     .build());
 
             String subject = RESULT_EMAIL_SUBJECT_PREFIX + campaignName;
-            String body = buildDonorEmailBody(donor.fullName(), campaignName, formattedAmount,
-                    aiThankYouMessages.get(donor.userId()), reportLink);
-            if (reportPdf != null) {
+            String body = buildResultEmailBody(recipient, campaignName,
+                    aiThankYouMessages.get(recipient.userId),
+                    recipient.receivesReport() ? reportLink : null);
+            if (reportPdf != null && recipient.receivesReport()) {
                 emailService.sendHtmlEmailWithAttachment(
-                        donor.email(), subject, body, reportPdf, reportPdfFilename, "application/pdf");
+                        recipient.email, subject, body, reportPdf, reportPdfFilename, "application/pdf");
             } else {
-                emailService.sendHtmlEmail(donor.email(), subject, body);
+                emailService.sendHtmlEmail(recipient.email, subject, body);
             }
         }
+    }
+
+    /**
+     * Merged view of one user's roles in a campaign. A user can be a follower, volunteer and
+     * donor at once (donating or volunteering auto-follows the campaign), so recipients are
+     * merged by user id to guarantee exactly one email and one notification per user.
+     */
+    private static final class ResultRecipient {
+        private final Long userId;
+        private final String email;
+        private final String fullName;
+        private boolean follower;
+        private boolean volunteer;
+        private boolean donor;
+        private String formattedDonationAmount;
+
+        private ResultRecipient(Long userId, String email, String fullName) {
+            this.userId = userId;
+            this.email = email;
+            this.fullName = fullName;
+        }
+
+        /** Following is implied for volunteers and donors, so it is only thanked on its own. */
+        private boolean isFollowerOnly() {
+            return follower && !volunteer && !donor;
+        }
+
+        private boolean receivesReport() {
+            return volunteer || donor;
+        }
+    }
+
+    private Map<Long, ResultRecipient> collectResultRecipients(Campaign campaign) {
+        Map<Long, ResultRecipient> recipients = new LinkedHashMap<>();
+        for (User user : campaignFollowerRepository.findFollowerUsersByCampaignId(campaign.getId())) {
+            recipientFor(recipients, user.getId(), user.getEmail(), user.getFullName()).follower = true;
+        }
+        for (User user : campaignMemberRepository.findUsersByCampaignIdAndRole(
+                campaign.getId(), CampaignMemberRole.VOLUNTEER)) {
+            recipientFor(recipients, user.getId(), user.getEmail(), user.getFullName()).volunteer = true;
+        }
+        for (DonorNotificationInfo donor : donationRepository.findDonorNotificationInfoByCampaignId(
+                campaign.getId(), DonationStatus.SUCCESSFUL)) {
+            ResultRecipient recipient = recipientFor(recipients, donor.userId(), donor.email(), donor.fullName());
+            recipient.donor = true;
+            // totalAmount is null for donors who only gave goods (GOODS donations carry no amount)
+            recipient.formattedDonationAmount = donor.totalAmount() != null && donor.totalAmount() > 0
+                    ? NumberFormat.getNumberInstance(Locale.US).format(donor.totalAmount())
+                    : null;
+        }
+        return recipients;
+    }
+
+    private static ResultRecipient recipientFor(
+            Map<Long, ResultRecipient> recipients, Long userId, String email, String fullName) {
+        return recipients.computeIfAbsent(userId, id -> new ResultRecipient(id, email, fullName));
+    }
+
+    private String buildResultNotificationMessage(String campaignName, ResultRecipient recipient) {
+        StringBuilder message = new StringBuilder(
+                "The final results for \"" + campaignName + "\" are now available.");
+        if (recipient.volunteer) {
+            message.append(" Thank you for your dedication and hard work — your contribution made a real difference!");
+        }
+        if (recipient.donor) {
+            message.append(' ').append(recipient.formattedDonationAmount != null
+                    ? "Thank you for your generous donation of " + recipient.formattedDonationAmount
+                            + " VND — together, we made it happen!"
+                    : "Thank you for your generous contribution — together, we made it happen!");
+        }
+        if (recipient.isFollowerOnly()) {
+            message.append(" Thank you for following and supporting this campaign — your interest truly mattered to us!");
+        }
+        return message.toString();
     }
 
     /**
@@ -522,34 +540,20 @@ public class CampaignResultServiceImpl implements CampaignResultService {
         return sb.toString();
     }
 
-    private String buildFollowerEmailBody(String fullName, String campaignName) {
-        Context context = new Context();
-        context.setVariable("fullName", fullName);
-        context.setVariable("campaignName", campaignName);
-        return templateEngine.process("follower-result-notification", context);
-    }
-
-    private String buildVolunteerEmailBody(String fullName, String campaignName, String reportLink) {
-        Context context = new Context();
-        context.setVariable("fullName", fullName);
-        context.setVariable("campaignName", campaignName);
-        context.setVariable("reportLink", reportLink);
-        return templateEngine.process("volunteer-result-notification", context);
-    }
-
-    private String buildDonorEmailBody(String fullName, String campaignName, String formattedAmount, String aiMessage,
+    private String buildResultEmailBody(ResultRecipient recipient, String campaignName, String aiMessage,
             String reportLink) {
         Context context = new Context();
 
-        context.setVariable("fullName", fullName);
+        context.setVariable("fullName", recipient.fullName);
         context.setVariable("campaignName", campaignName);
-        context.setVariable("formattedAmount", formattedAmount);
+        context.setVariable("isVolunteer", recipient.volunteer);
+        context.setVariable("isDonor", recipient.donor);
+        context.setVariable("isFollowerOnly", recipient.isFollowerOnly());
+        context.setVariable("formattedAmount", recipient.formattedDonationAmount);
         context.setVariable("aiMessage", aiMessage);
         context.setVariable("reportLink", reportLink);
 
-        return templateEngine.process(
-                "donor-result-notification",
-                context);
+        return templateEngine.process("campaign-result-notification", context);
     }
 
     private Campaign findAndValidateCampaign(Long campaignId) {
