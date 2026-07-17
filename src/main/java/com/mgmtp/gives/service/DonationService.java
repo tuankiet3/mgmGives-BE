@@ -12,7 +12,7 @@ import java.util.List;
 public interface DonationService {
     DonationResponse createDonation(DonationRequest request, User user);
 
-    List<DonationResponse> getMyDonations(Long userId);
+    Page<DonationResponse> getMyDonations(Long userId, DonationStatus status, DonationType type, Boolean anonymous, String search, Pageable pageable);
 
     List<DonationResponse> getPublicDonationsByCampaignId(Long campaignId);
 

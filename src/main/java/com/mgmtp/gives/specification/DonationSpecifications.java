@@ -27,6 +27,14 @@ public final class DonationSpecifications {
         return (root, query, cb) -> campaignId == null ? null : cb.equal(root.get("campaign").get("id"), campaignId);
     }
 
+    public static Specification<Donation> hasUserId(Long userId) {
+        return (root, query, cb) -> userId == null ? null : cb.equal(root.get("user").get("id"), userId);
+    }
+
+    public static Specification<Donation> isAnonymous(Boolean anonymous) {
+        return (root, query, cb) -> anonymous == null ? null : cb.equal(root.get("isAnonymous"), anonymous);
+    }
+
     public static Specification<Donation> matchesSearch(String search) {
         return (root, query, cb) -> {
             if (search == null || search.trim().isEmpty()) {
@@ -39,7 +47,8 @@ public final class DonationSpecifications {
             return cb.or(
                 cb.like(cb.lower(userJoin.get("fullName")), pattern),
                 cb.like(cb.lower(campaignJoin.get("title")), pattern),
-                cb.like(cb.lower(root.get("transactionId")), pattern)
+                cb.like(cb.lower(root.get("transactionId")), pattern),
+                cb.like(cb.lower(root.get("transactionDescription")), pattern)
             );
         };
     }

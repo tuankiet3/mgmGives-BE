@@ -140,9 +140,15 @@ public class DonationServiceImpl implements DonationService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<DonationResponse> getMyDonations(Long userId) {
-        List<Donation> donations = donationRepository.findByUserIdOrderByCreatedAtDesc(userId);
-        return donations.stream().map(this::toResponse).toList();
+    public Page<DonationResponse> getMyDonations(Long userId, DonationStatus status, DonationType type,
+            Boolean anonymous, String search, Pageable pageable) {
+        Specification<Donation> spec = Specification.allOf(
+                hasUserId(userId),
+                hasStatus(status),
+                hasType(type),
+                isAnonymous(anonymous),
+                matchesSearch(search));
+        return donationRepository.findAll(spec, pageable).map(this::toResponse);
     }
 
     @Override

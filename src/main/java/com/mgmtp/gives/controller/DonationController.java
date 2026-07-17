@@ -1,12 +1,15 @@
 package com.mgmtp.gives.controller;
 
 import com.mgmtp.gives.common.ApiResponse;
+import com.mgmtp.gives.common.PageResponse;
 import com.mgmtp.gives.dto.donation.DonationRequest;
 import com.mgmtp.gives.dto.donation.DonationResponse;
 import com.mgmtp.gives.dto.donation.PayOSRequest;
 import com.mgmtp.gives.dto.donation.PayOSResponse;
 import com.mgmtp.gives.dto.donation.RejectRequest;
 import com.mgmtp.gives.dto.donation.EditDonationRequest;
+import com.mgmtp.gives.enums.DonationStatus;
+import com.mgmtp.gives.enums.DonationType;
 import com.mgmtp.gives.security.CustomUserDetails;
 import com.mgmtp.gives.service.DonationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,6 +17,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -40,9 +47,16 @@ public class DonationController {
 
     @GetMapping("/me")
     @Operation(summary = "Get current user's donations", description = "Retrieve a list of donations submitted by the current authenticated user.")
-    public ApiResponse<List<DonationResponse>> getMyDonations(@AuthenticationPrincipal CustomUserDetails userDetails) {
-        List<DonationResponse> responseList = donationService.getMyDonations(userDetails.getUser().getId());
-        return ApiResponse.success(responseList);
+    public ApiResponse<PageResponse<DonationResponse>> getMyDonations(
+            @RequestParam(required = false) DonationStatus status,
+            @RequestParam(required = false) DonationType type,
+            @RequestParam(required = false) Boolean anonymous,
+            @RequestParam(required = false) String search,
+            @org.springdoc.core.annotations.ParameterObject @PageableDefault(page = 0, size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        Page<DonationResponse> responsePage = donationService.getMyDonations(
+                userDetails.getUser().getId(), status, type, anonymous, search, pageable);
+        return ApiResponse.success(PageResponse.of(responsePage, responsePage.getContent()));
     }
 
     @GetMapping
