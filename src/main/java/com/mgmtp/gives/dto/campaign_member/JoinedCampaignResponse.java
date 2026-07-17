@@ -23,6 +23,7 @@ public record JoinedCampaignResponse(
         String role,
         LocalDateTime joinedAt,
         String coverImageUrl,
-        List<CategoryResponse> categories
+        List<CategoryResponse> categories,
+        boolean hasPendingUnjoinRequest
 ) {
 }

@@ -6,21 +6,27 @@ import com.mgmtp.gives.dto.campaign_follower.CampaignAggregatesContext;
 import com.mgmtp.gives.dto.campaign_member.CampaignMemberFilterCriteria;
 import com.mgmtp.gives.dto.campaign_member.CampaignMemberResponse;
 import com.mgmtp.gives.dto.campaign_member.JoinedCampaignResponse;
+import com.mgmtp.gives.dto.campaign_member.UnjoinCampaignResponse;
+import com.mgmtp.gives.dto.campaign_member.UnjoinRequestResponse;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.CampaignMember;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.TaskStatus;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.mapper.CampaignMemberMapper;
 import com.mgmtp.gives.entity.CampaignMedia;
+import com.mgmtp.gives.notification.publisher.CampaignNotificationPublisher;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.DonationRepository;
+import com.mgmtp.gives.repository.TaskAssignmentRepository;
 import com.mgmtp.gives.service.CampaignFollowerService;
 import com.mgmtp.gives.service.CampaignMemberService;
+import com.mgmtp.gives.util.CampaignAccessHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
@@ -41,6 +47,9 @@ public class CampaignMemberServiceImpl implements CampaignMemberService {
     private final CampaignMemberMapper campaignMemberMapper;
     private final DonationRepository donationRepository;
     private final CampaignMediaRepository campaignMediaRepository;
+    private final TaskAssignmentRepository taskAssignmentRepo;
+    private final CampaignAccessHelper campaignAccessHelper;
+    private final CampaignNotificationPublisher campaignNotificationPublisher;
 
     @Transactional @Override
     public CampaignMemberResponse joinCampaign(User user, Long campaignId) {
@@ -166,20 +175,111 @@ public class CampaignMemberServiceImpl implements CampaignMemberService {
     }
 
     @Transactional @Override
-    public void unjoinCampaign(User user, Long campaignId) {
-        boolean isAdmin = campaignMemberRepo.existsByCampaignIdAndUserIdAndRoleInCampaign(
-                campaignId, user.getId(), CampaignMemberRole.CAMPAIGN_ADMIN);
-        if (isAdmin) {
+    public UnjoinCampaignResponse unjoinCampaign(User user, Long campaignId) {
+        CampaignMember member = campaignMemberRepo.findByCampaignIdAndUserId(campaignId, user.getId())
+                .orElse(null);
+        if (member == null) {
+            log.debug("Unjoin skipped because member record does not exist: userId={}, campaignId={}", user.getId(), campaignId);
+            return new UnjoinCampaignResponse(UnjoinCampaignResponse.Status.LEFT);
+        }
+
+        if (member.getRoleInCampaign() == CampaignMemberRole.CAMPAIGN_ADMIN) {
             throw new AppException(ErrorCode.CAMPAIGN_ADMIN_CANNOT_LEAVE);
         }
 
-        long deleted = campaignMemberRepo.deleteByCampaignIdAndUserId(campaignId, user.getId());
-
-        if (deleted > 0) {
-            log.info("User unjoined campaign: userId={}, campaignId={}", user.getId(), campaignId);
-        } else {
-            log.debug("Unjoin skipped because member record does not exist: userId={}, campaignId={}", user.getId(), campaignId);
+        if (member.getUnjoinRequestedAt() != null) {
+            return new UnjoinCampaignResponse(UnjoinCampaignResponse.Status.PENDING_APPROVAL);
         }
+
+        boolean hasActiveTask = taskAssignmentRepo.existsByUserIdAndCampaignIdAndTaskStatusNot(
+                user.getId(), campaignId, TaskStatus.DONE);
+
+        if (hasActiveTask) {
+            member.setUnjoinRequestedAt(LocalDateTime.now());
+            campaignMemberRepo.save(member);
+            campaignNotificationPublisher.publishUnjoinRequested(member.getCampaign(), user);
+            log.info("Unjoin request submitted, pending admin approval: userId={}, campaignId={}", user.getId(), campaignId);
+            return new UnjoinCampaignResponse(UnjoinCampaignResponse.Status.PENDING_APPROVAL);
+        }
+
+        taskAssignmentRepo.deleteByUserIdAndCampaignIdAndTaskStatusNot(user.getId(), campaignId, TaskStatus.DONE);
+        campaignMemberRepo.deleteByCampaignIdAndUserId(campaignId, user.getId());
+        log.info("User unjoined campaign: userId={}, campaignId={}", user.getId(), campaignId);
+        return new UnjoinCampaignResponse(UnjoinCampaignResponse.Status.LEFT);
+    }
+
+    @Transactional @Override
+    public void cancelUnjoinRequest(User user, Long campaignId) {
+        CampaignMember member = campaignMemberRepo.findByCampaignIdAndUserId(campaignId, user.getId())
+                .filter(cm -> cm.getUnjoinRequestedAt() != null)
+                .orElseThrow(() -> new AppException(ErrorCode.CAMPAIGN_UNJOIN_REQUEST_NOT_FOUND));
+
+        member.setUnjoinRequestedAt(null);
+        campaignMemberRepo.save(member);
+        log.info("Unjoin request cancelled: userId={}, campaignId={}", user.getId(), campaignId);
+    }
+
+    @Transactional(readOnly = true) @Override
+    public PageResponse<UnjoinRequestResponse> getUnjoinRequests(Long campaignId, User admin, Pageable pageable) {
+        campaignAccessHelper.validateCampaignAdmin(campaignId, admin, ErrorCode.UNAUTHORIZED_CAMPAIGN_ACCESS);
+
+        Page<CampaignMember> page = campaignMemberRepo.findByCampaignIdAndUnjoinRequestedAtIsNotNull(campaignId, pageable);
+
+        java.util.List<Long> userIds = page.getContent().stream()
+                .map(member -> member.getUser().getId())
+                .toList();
+        java.util.Map<Long, Long> activeTaskCountByUserId = new java.util.HashMap<>();
+        if (!userIds.isEmpty()) {
+            for (Object[] row : taskAssignmentRepo.countByUserIdsAndCampaignIdAndTaskStatusNot(
+                    userIds, campaignId, TaskStatus.DONE)) {
+                activeTaskCountByUserId.put((Long) row[0], (Long) row[1]);
+            }
+        }
+
+        java.util.List<UnjoinRequestResponse> content = page.getContent().stream()
+                .map(member -> new UnjoinRequestResponse(
+                        member.getUser().getId(),
+                        member.getUser().getFullName(),
+                        member.getUser().getAvatarUrl(),
+                        member.getUnjoinRequestedAt(),
+                        activeTaskCountByUserId.getOrDefault(member.getUser().getId(), 0L)
+                ))
+                .toList();
+        return PageResponse.of(page, content);
+    }
+
+    @Transactional @Override
+    public void approveUnjoinRequest(Long campaignId, Long targetUserId, User admin) {
+        campaignAccessHelper.validateCampaignAdmin(campaignId, admin, ErrorCode.UNAUTHORIZED_CAMPAIGN_ACCESS);
+
+        CampaignMember member = campaignMemberRepo.findByCampaignIdAndUserId(campaignId, targetUserId)
+                .filter(cm -> cm.getUnjoinRequestedAt() != null)
+                .orElseThrow(() -> new AppException(ErrorCode.CAMPAIGN_UNJOIN_REQUEST_NOT_FOUND));
+
+        Campaign campaign = member.getCampaign();
+        User targetUser = member.getUser();
+
+        taskAssignmentRepo.deleteByUserIdAndCampaignIdAndTaskStatusNot(targetUserId, campaignId, TaskStatus.DONE);
+        campaignMemberRepo.deleteByCampaignIdAndUserId(campaignId, targetUserId);
+
+        campaignNotificationPublisher.publishUnjoinApproved(campaign, targetUser);
+        log.info("Unjoin request approved: campaignId={}, userId={}, approvedBy={}", campaignId, targetUserId, admin.getId());
+    }
+
+    @Transactional @Override
+    public void rejectUnjoinRequest(Long campaignId, Long targetUserId, String reason, User admin) {
+        campaignAccessHelper.validateCampaignAdmin(campaignId, admin, ErrorCode.UNAUTHORIZED_CAMPAIGN_ACCESS);
+
+        CampaignMember member = campaignMemberRepo.findByCampaignIdAndUserId(campaignId, targetUserId)
+                .filter(cm -> cm.getUnjoinRequestedAt() != null)
+                .orElseThrow(() -> new AppException(ErrorCode.CAMPAIGN_UNJOIN_REQUEST_NOT_FOUND));
+
+        member.setUnjoinRequestedAt(null);
+        campaignMemberRepo.save(member);
+
+        campaignNotificationPublisher.publishUnjoinRejected(member.getCampaign(), member.getUser(), reason);
+        log.info("Unjoin request rejected: campaignId={}, userId={}, rejectedBy={}, reason='{}'",
+                campaignId, targetUserId, admin.getId(), reason);
     }
 
     @Transactional(readOnly = true) @Override

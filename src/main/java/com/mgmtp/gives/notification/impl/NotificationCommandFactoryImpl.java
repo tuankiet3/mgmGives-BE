@@ -95,6 +95,45 @@ public class NotificationCommandFactoryImpl implements NotificationCommandFactor
                 .build();
     }
 
+    public CreateNotificationCommand campaignUnjoinRequested(CampaignUnjoinRequestedEvent event) {
+        return CreateNotificationCommand.builder()
+                .recipients(recipientResolver.campaignAdmins(event.campaignId()))
+                .type(NotificationType.CAMPAIGN_UNJOIN_REQUESTED)
+                .title("Unjoin request awaiting approval")
+                .message(
+                        event.requesterName() + " wants to unjoin campaign \"" + event.campaignTitle() +
+                                "\" but still has an assigned task. Review the request to approve or reject it."
+                )
+                .linkUrl("/campaigns/" + event.campaignId() + "/unjoin-requests")
+                .build();
+    }
+
+    public CreateNotificationCommand campaignUnjoinApproved(CampaignUnjoinApprovedEvent event) {
+        return CreateNotificationCommand.builder()
+                .recipients(recipientResolver.singleUser(event.userId()))
+                .type(NotificationType.CAMPAIGN_UNJOIN_APPROVED)
+                .title("Unjoin request approved")
+                .message(
+                        "Your request to unjoin campaign \"" + event.campaignTitle() +
+                                "\" has been approved. You are no longer a member of this campaign."
+                )
+                .linkUrl("/campaigns/" + event.campaignId())
+                .build();
+    }
+
+    public CreateNotificationCommand campaignUnjoinRejected(CampaignUnjoinRejectedEvent event) {
+        return CreateNotificationCommand.builder()
+                .recipients(recipientResolver.singleUser(event.userId()))
+                .type(NotificationType.CAMPAIGN_UNJOIN_REJECTED)
+                .title("Unjoin request rejected")
+                .message(
+                        "Your request to unjoin campaign \"" + event.campaignTitle() +
+                                "\" was rejected: " + event.reason()
+                )
+                .linkUrl("/campaigns/" + event.campaignId())
+                .build();
+    }
+
     private String buildCampaignStatusChangedTitle(CampaignStatus newStatus) {
         return switch (newStatus) {
             case APPROVED -> "Campaign approved";

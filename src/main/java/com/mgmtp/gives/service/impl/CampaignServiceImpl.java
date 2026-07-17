@@ -528,9 +528,11 @@ public class CampaignServiceImpl implements CampaignService {
         if (currentUser != null) {
             response.setIsJoined(isJoined(campaign.getId(), currentUser.getId()));
             response.setIsFollowed(isFollowed(campaign.getId(), currentUser.getId()));
+            response.setHasPendingUnjoinRequest(hasPendingUnjoinRequest(campaign.getId(), currentUser.getId()));
         } else {
             response.setIsJoined(false);
             response.setIsFollowed(false);
+            response.setHasPendingUnjoinRequest(false);
         }
 
         // 5. Donation Config fields
@@ -594,9 +596,11 @@ public class CampaignServiceImpl implements CampaignService {
             if (currentUser != null) {
                 response.setIsJoined(isJoined(campaign.getId(), currentUser.getId()));
                 response.setIsFollowed(isFollowed(campaign.getId(), currentUser.getId()));
+                response.setHasPendingUnjoinRequest(hasPendingUnjoinRequest(campaign.getId(), currentUser.getId()));
             } else {
                 response.setIsJoined(false);
                 response.setIsFollowed(false);
+                response.setHasPendingUnjoinRequest(false);
             }
 
             response.setDonationMethod(campaign.getDonationMethod());
@@ -622,6 +626,13 @@ public class CampaignServiceImpl implements CampaignService {
     public boolean isJoined(Long campaignId, Long userId) {
         return campaignMemberRepository.existsByCampaignIdAndUserIdAndRoleInCampaign(campaignId, userId,
                 CampaignMemberRole.VOLUNTEER);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasPendingUnjoinRequest(Long campaignId, Long userId) {
+        return campaignMemberRepository.findByCampaignIdAndUserId(campaignId, userId)
+                .map(cm -> cm.getUnjoinRequestedAt() != null)
+                .orElse(false);
     }
 
     @Override

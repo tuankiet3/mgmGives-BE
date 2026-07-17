@@ -17,4 +17,10 @@ public interface NotificationCommandFactory {
     CreateNotificationCommand taskDescriptionUpdated(TaskDescriptionUpdatedEvent event);
 
     CreateNotificationCommand taskUnassigned(TaskUnassignedEvent event);
+
+    CreateNotificationCommand campaignUnjoinRequested(CampaignUnjoinRequestedEvent event);
+
+    CreateNotificationCommand campaignUnjoinApproved(CampaignUnjoinApprovedEvent event);
+
+    CreateNotificationCommand campaignUnjoinRejected(CampaignUnjoinRejectedEvent event);
 }

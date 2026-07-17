@@ -26,6 +26,8 @@ public abstract class CampaignMemberMapper {
     @Mapping(target = "joinedAt", source = "joinedAt")
     @Mapping(target = "coverImageUrl", ignore = true)
     @Mapping(target = "categories", source = "campaign.categories")
+    @Mapping(target = "hasPendingUnjoinRequest",
+            expression = "java(campaignMember.getUnjoinRequestedAt() != null)")
     public abstract JoinedCampaignResponse toJoinedResponse(CampaignMember campaignMember,
             @org.mapstruct.Context CampaignAggregatesContext context,
             @org.mapstruct.Context Map<Long, String> coverImageMap);

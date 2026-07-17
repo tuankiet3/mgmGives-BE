@@ -5,10 +5,14 @@ import com.mgmtp.gives.common.PageResponse;
 import com.mgmtp.gives.dto.campaign_member.CampaignMemberFilterCriteria;
 import com.mgmtp.gives.dto.campaign_member.CampaignMemberResponse;
 import com.mgmtp.gives.dto.campaign_member.JoinedCampaignResponse;
+import com.mgmtp.gives.dto.campaign_member.RejectUnjoinRequest;
+import com.mgmtp.gives.dto.campaign_member.UnjoinCampaignResponse;
+import com.mgmtp.gives.dto.campaign_member.UnjoinRequestResponse;
 import com.mgmtp.gives.security.CustomUserDetails;
 import com.mgmtp.gives.service.CampaignMemberService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -57,13 +61,71 @@ public class CampaignMemberController {
     @DeleteMapping("/{campaignId}/members")
     @Operation(
             summary = "Unjoin a campaign",
-            description = "Allows the current user to unjoin a campaign. Not allowed if the user has been assigned tasks."
+            description = "Unjoins immediately, unless the user still has a non-DONE assigned task in the campaign, " +
+                    "in which case an unjoin request is created pending campaign admin approval."
     )
-    public ResponseEntity<Void> unjoinCampaign(
+    public ResponseEntity<?> unjoinCampaign(
             @AuthenticationPrincipal CustomUserDetails customUserDetails,
             @PathVariable Long campaignId) {
 
-        service.unjoinCampaign(customUserDetails.getUser(), campaignId);
+        UnjoinCampaignResponse result = service.unjoinCampaign(customUserDetails.getUser(), campaignId);
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    @DeleteMapping("/{campaignId}/members/unjoin-request")
+    @Operation(
+            summary = "Cancel a pending unjoin request",
+            description = "Allows the current user to cancel their own pending unjoin request before the admin responds."
+    )
+    public ResponseEntity<?> cancelUnjoinRequest(
+            @AuthenticationPrincipal CustomUserDetails customUserDetails,
+            @PathVariable Long campaignId) {
+
+        service.cancelUnjoinRequest(customUserDetails.getUser(), campaignId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{campaignId}/members/unjoin-requests")
+    @Operation(
+            summary = "List pending unjoin requests",
+            description = "Campaign admin only. Returns the paginated list of members waiting for unjoin approval."
+    )
+    public ResponseEntity<?> getUnjoinRequests(
+            @AuthenticationPrincipal CustomUserDetails customUserDetails,
+            @PathVariable Long campaignId,
+            @PageableDefault(size = 10, sort = "unjoinRequestedAt", direction = Sort.Direction.ASC) Pageable pageable) {
+
+        PageResponse<UnjoinRequestResponse> result =
+                service.getUnjoinRequests(campaignId, customUserDetails.getUser(), pageable);
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    @PutMapping("/{campaignId}/members/{userId}/unjoin-request/approve")
+    @Operation(
+            summary = "Approve a pending unjoin request",
+            description = "Campaign admin only. Unassigns the member's tasks and removes them from the campaign."
+    )
+    public ResponseEntity<?> approveUnjoinRequest(
+            @AuthenticationPrincipal CustomUserDetails customUserDetails,
+            @PathVariable Long campaignId,
+            @PathVariable Long userId) {
+
+        service.approveUnjoinRequest(campaignId, userId, customUserDetails.getUser());
+        return ResponseEntity.ok(ApiResponse.success(null, "Unjoin request approved successfully"));
+    }
+
+    @PutMapping("/{campaignId}/members/{userId}/unjoin-request/reject")
+    @Operation(
+            summary = "Reject a pending unjoin request",
+            description = "Campaign admin only. Requires a rejection reason; the member remains in the campaign."
+    )
+    public ResponseEntity<?> rejectUnjoinRequest(
+            @AuthenticationPrincipal CustomUserDetails customUserDetails,
+            @PathVariable Long campaignId,
+            @PathVariable Long userId,
+            @Valid @RequestBody RejectUnjoinRequest request) {
+
+        service.rejectUnjoinRequest(campaignId, userId, request.reason(), customUserDetails.getUser());
+        return ResponseEntity.ok(ApiResponse.success(null, "Unjoin request rejected successfully"));
     }
 }

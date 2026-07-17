@@ -2,8 +2,10 @@ package com.mgmtp.gives.notification.impl;
 
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.User;
+import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.notification.NotificationRecipientResolver;
 import com.mgmtp.gives.repository.CampaignFollowerRepository;
+import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,7 @@ import java.util.*;
 public class NotificationRecipientResolverImpl implements NotificationRecipientResolver {
 
     private final CampaignFollowerRepository campaignFollowerRepository;
+    private final CampaignMemberRepository campaignMemberRepository;
     private final CampaignRepository campaignRepository;
     private final UserRepository userRepository;
 
@@ -94,6 +97,20 @@ public class NotificationRecipientResolverImpl implements NotificationRecipientR
                     new NotificationRecipient(follower.getId(), follower.getEmail())
             );
         }
+
+        return new LinkedHashSet<>(recipients.values());
+    }
+
+    @Override
+    public Set<NotificationRecipient> campaignAdmins(Long campaignId) {
+        Map<Long, NotificationRecipient> recipients = new LinkedHashMap<>();
+
+        for (NotificationRecipient owner : campaignOwner(campaignId)) {
+            recipients.put(owner.userId(), owner);
+        }
+
+        campaignMemberRepository.findRecipientsByCampaignIdAndRole(campaignId, CampaignMemberRole.CAMPAIGN_ADMIN)
+                .forEach(recipient -> recipients.put(recipient.userId(), recipient));
 
         return new LinkedHashSet<>(recipients.values());
     }

@@ -34,6 +34,7 @@ public class CampaignResponse {
     private Boolean isEditable;
     private Boolean isFollowed;
     private Boolean isJoined;
+    private Boolean hasPendingUnjoinRequest;
     private Long volunteersCount;
     private Long donorsCount;
     private LocalDateTime createdAt;

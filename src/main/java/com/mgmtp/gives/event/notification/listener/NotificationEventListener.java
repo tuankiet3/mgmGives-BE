@@ -111,4 +111,43 @@ public class NotificationEventListener {
                 notificationCommandFactory.taskUnassigned(event)
         );
     }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleCampaignUnjoinRequested(CampaignUnjoinRequestedEvent event) {
+        log.info(
+                "Notification event received: campaign unjoin requested, campaignId={}, requesterId={}",
+                event.campaignId(), event.requesterId()
+        );
+
+        notificationService.createNotification(
+                notificationCommandFactory.campaignUnjoinRequested(event)
+        );
+    }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleCampaignUnjoinApproved(CampaignUnjoinApprovedEvent event) {
+        log.info(
+                "Notification event received: campaign unjoin approved, campaignId={}, userId={}",
+                event.campaignId(), event.userId()
+        );
+
+        notificationService.createNotification(
+                notificationCommandFactory.campaignUnjoinApproved(event)
+        );
+    }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleCampaignUnjoinRejected(CampaignUnjoinRejectedEvent event) {
+        log.info(
+                "Notification event received: campaign unjoin rejected, campaignId={}, userId={}",
+                event.campaignId(), event.userId()
+        );
+
+        notificationService.createNotification(
+                notificationCommandFactory.campaignUnjoinRejected(event)
+        );
+    }
 }

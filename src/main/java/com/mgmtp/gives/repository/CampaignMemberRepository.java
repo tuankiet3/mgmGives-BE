@@ -106,4 +106,17 @@ public interface CampaignMemberRepository extends JpaRepository<CampaignMember, 
                         @Param("campaignId") Long campaignId,
                         @Param("role") CampaignMemberRole role);
 
+        @Query(value = """
+                        SELECT cm
+                        FROM CampaignMember cm
+                        JOIN FETCH cm.user u
+                        WHERE cm.campaign.id = :campaignId AND cm.unjoinRequestedAt IS NOT NULL
+                        """, countQuery = """
+                        SELECT COUNT(cm)
+                        FROM CampaignMember cm
+                        WHERE cm.campaign.id = :campaignId AND cm.unjoinRequestedAt IS NOT NULL
+                        """)
+        Page<CampaignMember> findByCampaignIdAndUnjoinRequestedAtIsNotNull(
+                        @Param("campaignId") Long campaignId, Pageable pageable);
+
 }

@@ -35,4 +35,7 @@ public class CampaignMember {
 
     @Column(name = "joined_at")
     private LocalDateTime joinedAt;
+
+    @Column(name = "unjoin_requested_at")
+    private LocalDateTime unjoinRequestedAt;
 }

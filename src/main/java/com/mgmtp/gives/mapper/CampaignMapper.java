@@ -31,6 +31,7 @@ public abstract class CampaignMapper {
     @Mapping(target = "isEditable", ignore = true)
     @Mapping(target = "isFollowed", ignore = true)
     @Mapping(target = "isJoined", ignore = true)
+    @Mapping(target = "hasPendingUnjoinRequest", ignore = true)
     @Mapping(target = "volunteersCount", ignore = true)
     @Mapping(target = "donorsCount", ignore = true)
     @Mapping(target = "isCampaignAdmin", expression = "java(resolveIsCampaignAdmin(campaign, currentUserId, isSystemAdmin))")
