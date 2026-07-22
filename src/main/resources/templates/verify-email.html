@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html xmlns:th="http://thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Verify Your Email</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #eef2f7; font-family: 'Segoe UI', Arial, sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #eef2f7; padding: 36px 16px;">
+    <tr>
+        <td align="center">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 640px; background-color: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 18px 45px rgba(15, 23, 42, 0.12);">
+                <tr>
+                    <td style="background-color: #14213d; padding: 30px 34px;">
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                            <tr>
+                                <td>
+                                    <div style="color: #ffffff; font-size: 25px; font-weight: 800; letter-spacing: 0.2px;">mgmGives</div>
+                                    <div style="color: #b8c7e0; font-size: 13px; margin-top: 6px;">Account verification</div>
+                                </td>
+                                <td align="right">
+                                    <span style="display: inline-block; background-color: #dbeafe; color: #1d4ed8; border-radius: 999px; padding: 8px 13px; font-size: 12px; font-weight: 700;">Verify</span>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding: 38px 34px 12px;">
+                        <p style="margin: 0 0 10px; color: #64748b; font-size: 14px;">Hi <strong style="color: #1e293b;" th:text="${fullName}">User</strong>,</p>
+                        <h1 style="margin: 0 0 14px; color: #111827; font-size: 28px; line-height: 1.2; font-weight: 800;">Verify your email address</h1>
+                        <p style="margin: 0; color: #475569; font-size: 15px; line-height: 1.7;">Thanks for registering with mgmGives. Confirm your email address to activate your account and start using the platform.</p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td align="center" style="padding: 24px 34px 20px;">
+                        <a th:href="${link}" style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 15px 32px; border-radius: 9px; text-decoration: none; font-weight: 800; font-size: 15px;">Verify Email Address</a>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding: 0 34px 18px;">
+                        <div style="background-color: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; border-radius: 10px; padding: 14px 16px; font-size: 13px; line-height: 1.5;">
+                            This verification link expires in 24 hours.
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding: 0 34px 34px;">
+                        <div style="border-top: 1px solid #e5e7eb; padding-top: 18px; color: #64748b; font-size: 12px; line-height: 1.6;">
+                            If the button does not work, copy and paste this URL into your browser:<br>
+                            <a th:href="${link}" th:text="${link}" style="color: #2563eb; word-break: break-all;">Verification link</a>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

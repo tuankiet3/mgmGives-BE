@@ -1,0 +1,46 @@
+package com.mgmtp.gives.dto.donation;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.mgmtp.gives.enums.DonationStatus;
+import com.mgmtp.gives.enums.DonationType;
+import lombok.Builder;
+import lombok.Data;
+import java.time.LocalDateTime;
+
+@Data
+@Builder
+public class DonationAdminResponse {
+    private Long id;
+    private Long campaignId;
+    private String campaignName;
+    private Long userId;
+    private String userName;
+    private String userEmail;
+    private DonationType type;
+    private Long amount;
+    private String detail;
+    
+    @JsonProperty("isAnonymous")
+    private boolean isAnonymous;
+    
+    private DonationStatus status;
+    private String transactionId;
+    private String transactionDescription;
+    private String transactionProofUrl;
+    private Long confirmedById;
+    private String confirmedByName;
+    private LocalDateTime confirmedAt;
+    private String rejectReason;
+    
+    private String message;
+    
+    @JsonProperty("isMessageHidden")
+    private boolean isMessageHidden;
+    
+    private String goodsCondition;
+    private String goodsCategory;
+    private String deliveryMethod;
+    
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+}
