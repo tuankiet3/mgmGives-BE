@@ -38,6 +38,10 @@ services:
         value: Admin
       - key: FROM_MAIL
         sync: false
+      - key: MAIL_HOST
+        value: smtp-relay.brevo.com
+      - key: MAIL_PORT
+        value: 2525
       - key: MAIL_USERNAME
         sync: false
       - key: MAIL_PASSWORD
@@ -46,6 +50,12 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
+      - key: GOOGLE_REDIRECT_URI
+        value: https://mgm-gives-api.onrender.com/login/oauth2/code/google
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODELS
+        value: gemini-2.5-flash,gemini-2.5-flash-lite
       - key: WEBEX_CLIENT_ID
         sync: false
       - key: WEBEX_CLIENT_SECRET
