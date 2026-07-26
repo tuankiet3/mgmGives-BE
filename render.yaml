@@ -6,7 +6,7 @@ services:
     region: singapore
     branch: develop
     autoDeployTrigger: commit
-    healthCheckPath: /actuator/health
+    healthCheckPath: /api/categories
     dockerfilePath: ./Dockerfile
     dockerContext: .
     envVars:
