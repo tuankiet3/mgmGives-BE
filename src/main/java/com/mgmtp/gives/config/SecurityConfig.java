@@ -5,6 +5,7 @@ import com.mgmtp.gives.security.JwtAuthenticationFilter;
 import com.mgmtp.gives.security.JwtAuthenticationEntryPoint;
 import com.mgmtp.gives.security.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -32,6 +33,10 @@ public class SecurityConfig {
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
     private final MailProps mailProps;
+
+    @Value("${app.cors.allowed-origins}")
+    private String allowedOrigins;
+
     private static final String[] PUBLIC_ENDPOINTS = {
             "/api/auth/register",
             "/api/auth/login",
@@ -46,14 +51,10 @@ public class SecurityConfig {
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
+            "/actuator/health",
+            "/actuator/health/**",
             "/error",
             "/ws/**"
-    };
-
-    private static final String[] ALLOWED_ORIGINS = {
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "https://app.example.com"
     };
 
     @Bean
@@ -83,7 +84,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of(ALLOWED_ORIGINS));
+        configuration.setAllowedOriginPatterns(List.of(AllowedOrigins.parse(allowedOrigins)));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Content-Type", "Authorization", "Idempotency-Key"));
         configuration.setAllowCredentials(true);

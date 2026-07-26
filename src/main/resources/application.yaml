@@ -53,6 +53,8 @@ spring:
               - email
 
 app:
+  cors:
+    allowed-origins: ${APP_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
   jwt:
     secret: ${JWT_SECRET}
     access-token-expiration: ${JWT_ACCESS_EXPIRATION:900000}
@@ -81,7 +83,20 @@ app:
     scopes: ${WEBEX_SCOPES:meeting:schedules_read meeting:schedules_write spark:people_read spark:rooms_read}
     time-zone: ${WEBEX_TIME_ZONE:Asia/Bangkok}
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${PORT:${SERVER_PORT:8080}}
+  forward-headers-strategy: framework
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
 
 logging:
   file:
