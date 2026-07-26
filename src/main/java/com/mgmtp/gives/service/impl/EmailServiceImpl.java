@@ -44,12 +44,14 @@ public class EmailServiceImpl implements EmailService {
     private final TemplateEngine templateEngine;
 
     @Override
+    @Async("notificationExecutor")
     public void sendVerificationEmail(String toEmail, String fullName, String token) {
         log.info("Send verification email requested. to={}", toEmail);
         sendEmail(toEmail, fullName, token, TokenType.VERIFY_EMAIL);
     }
 
     @Override
+    @Async("notificationExecutor")
     public void sendResetPasswordEmail(String toEmail, String fullName, String token) {
         log.info("Send reset password email requested. to={}", toEmail);
         sendEmail(toEmail, fullName, token, TokenType.RESET_PASSWORD);
