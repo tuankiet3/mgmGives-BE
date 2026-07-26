@@ -1,6 +1,6 @@
 # Deploy backend on Render
 
-The repository contains a Render Blueprint in `render.yaml`. It builds the existing multi-stage Docker image, runs the service on Render's `PORT`, and checks `/actuator/health`.
+The repository contains a Render Blueprint in `render.yaml`. It builds the existing multi-stage Docker image, runs the service on Render's `PORT`, and checks the public database-backed `/api/categories` endpoint.
 
 ## Prerequisites
 
