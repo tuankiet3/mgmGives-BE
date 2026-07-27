@@ -28,6 +28,7 @@ import java.nio.charset.StandardCharsets;
 public class EmailServiceImpl implements EmailService {
     private final MailProps mailProps;
     private final JavaMailSender mailSender;
+    private final BrevoEmailClient brevoEmailClient;
     private static final String SENDER_NAME = "mgmGives";
     private static final String TEMPLATE_VAR_FULL_NAME = "fullName";
     private static final String TEMPLATE_VAR_LINK = "link";
@@ -80,6 +81,12 @@ public class EmailServiceImpl implements EmailService {
 
     @Async
     public void executeSend(String toEmail, String content, TokenType type) {
+        if (brevoEmailClient.isConfigured()) {
+            brevoEmailClient.sendHtml(toEmail, type.getSubject(), content);
+            log.info("Email sent successfully through Brevo API. type={}, to={}", type, toEmail);
+            return;
+        }
+
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, type.isMultipart(), StandardCharsets.UTF_8.name());
@@ -100,6 +107,11 @@ public class EmailServiceImpl implements EmailService {
     @Async
     @Override
     public void sendHtmlEmail(String toEmail, String subject, String htmlContent) {
+        if (brevoEmailClient.isConfigured()) {
+            brevoEmailClient.sendHtml(toEmail, subject, htmlContent);
+            return;
+        }
+
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, false, StandardCharsets.UTF_8.name());
@@ -125,6 +137,18 @@ public class EmailServiceImpl implements EmailService {
             String attachmentFilename,
             String attachmentContentType
     ) {
+        if (brevoEmailClient.isConfigured()) {
+            brevoEmailClient.sendHtml(
+                    toEmail,
+                    subject,
+                    htmlContent,
+                    attachmentBytes,
+                    attachmentFilename,
+                    attachmentContentType
+            );
+            return;
+        }
+
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name());
@@ -193,6 +217,11 @@ public class EmailServiceImpl implements EmailService {
     }
 
     private void sendRawHtmlEmail(String toEmail, String subject, String content) {
+        if (brevoEmailClient.isConfigured()) {
+            brevoEmailClient.sendHtml(toEmail, subject, content);
+            return;
+        }
+
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, false, StandardCharsets.UTF_8.name());
