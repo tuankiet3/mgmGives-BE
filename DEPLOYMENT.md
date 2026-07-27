@@ -35,7 +35,7 @@ When Render creates the Blueprint, it prompts for every value marked `sync: fals
 
 The Blueprint uses Brevo SMTP on port `2525`, sets the Google callback to
 `https://mgm-gives-api.onrender.com/login/oauth2/code/google`, and tries
-`gemini-2.5-flash` before `gemini-2.5-flash-lite`.
+`gemini-flash-latest` before the stable `gemini-3.6-flash` fallback.
 
 ## Recommended deployment order
 
