@@ -15,6 +15,7 @@ import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.TaskStatus;
+import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.mapper.CampaignMemberMapper;
 import com.mgmtp.gives.entity.CampaignMedia;
@@ -286,6 +287,9 @@ public class CampaignMemberServiceImpl implements CampaignMemberService {
     public boolean canManageCampaign(Long campaignId, User user) {
         if (user == null) {
             return false;
+        }
+        if (user.getRole() == UserRole.ADMIN) {
+            return true;
         }
         return campaignMemberRepo.existsByCampaignIdAndUserIdAndRoleInCampaign(
                 campaignId, user.getId(), CampaignMemberRole.CAMPAIGN_ADMIN);
