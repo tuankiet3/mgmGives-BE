@@ -38,7 +38,7 @@ public class GeminiServiceImpl implements GeminiService {
     @Value("${app.gemini.api-key}")
     private String apiKey;
 
-    @Value("${app.gemini.models:gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3-flash-preview,gemini-3.1-flash-lite}")
+    @Value("${app.gemini.models:gemini-flash-latest,gemini-3.6-flash}")
     private String modelsConfig;
 
     @Value("${app.gemini.donor-batch-size:20}")
@@ -123,9 +123,7 @@ public class GeminiServiceImpl implements GeminiService {
     private String callGeminiWithFallback(String prompt, Long campaignId) {
         Map<String, Object> requestBody = Map.of(
                 "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))),
-                "generationConfig", Map.of(
-                        "responseMimeType", "application/json",
-                        "temperature", 0.7)
+                "generationConfig", Map.of("responseMimeType", "application/json")
         );
 
         List<String> models = getModelPriorityList();
@@ -161,7 +159,7 @@ public class GeminiServiceImpl implements GeminiService {
             }
         }
 
-        log.error("All Gemini models rate limited. campaignId={}", campaignId);
+        log.error("No configured Gemini model completed the request. campaignId={}", campaignId);
         throw new AppException(ErrorCode.GEMINI_API_ERROR);
     }
 
