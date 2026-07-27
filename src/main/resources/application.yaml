@@ -67,6 +67,7 @@ app:
   mail:
     from-mail: ${FROM_MAIL:noreply@example.com}
     frontend-url: ${FRONTEND_URL:http://localhost:3000}
+    brevo-api-key: ${BREVO_API_KEY:}
     verify-expiration: ${MAIL_VERIFY_EXPIRATION:864000000}
     reset-expiration: ${MAIL_RESET_EXPIRATION:864000000}
   media:

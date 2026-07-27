@@ -13,5 +13,6 @@ import org.springframework.stereotype.Component;
 public class MailProps {
     private String frontendUrl;
     private String fromMail;
+    private String brevoApiKey;
     private long verifyExpiration;
 }
