@@ -10,6 +10,7 @@ import com.mgmtp.gives.entity.Notification;
 import com.mgmtp.gives.entity.Announcement;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.DonationType;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.mapper.CampaignMapper;
@@ -70,10 +71,11 @@ public class DashboardServiceImpl implements DashboardService {
                 DonationType.MONEY
         );
 
-        // 2. Count Completed Campaigns (COMPLETED) that current user joined
-        long completedCampaignsCount = campaignMemberRepository.countByUserIdAndCampaignStatus(
+        // 2. Count Completed Campaigns (COMPLETED) that current user joined as VOLUNTEER
+        long completedCampaignsCount = campaignMemberRepository.countByUserIdAndCampaignStatusAndRoleInCampaign(
                 currentUser.getId(),
-                CampaignStatus.COMPLETED
+                CampaignStatus.COMPLETED,
+                CampaignMemberRole.VOLUNTEER
         );
 
         // 3. Count Followed Campaigns for the current user

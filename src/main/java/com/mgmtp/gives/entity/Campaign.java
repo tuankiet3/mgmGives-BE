@@ -3,6 +3,7 @@ package com.mgmtp.gives.entity;
 import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.DonationMethod;
+import com.mgmtp.gives.enums.MemberListVisibility;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -42,7 +43,7 @@ public class Campaign extends BaseEntity {
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "donation_method", columnDefinition = "donation_method")
     @Builder.Default
-    private DonationMethod donationMethod = DonationMethod.PAYOS;
+    private DonationMethod donationMethod = DonationMethod.MANUAL_QR;
 
     @Column(name = "bank_name")
     private String bankName;
@@ -162,5 +163,11 @@ public class Campaign extends BaseEntity {
 
     @Column(name = "final_volunteer_count")
     private Long finalVolunteerCount;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "member_list_visibility", columnDefinition = "member_list_visibility")
+    @Builder.Default
+    private MemberListVisibility memberListVisibility = MemberListVisibility.MEMBERS_ONLY;
 
 }

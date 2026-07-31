@@ -39,5 +39,7 @@ public interface DonationService {
 
     List<DonationResponse> getCampaignDonationsForAdmin(Long campaignId, User currentUser);
 
+    DonationResponse toggleDonationAmountVisibility(Long donationId, boolean hidden, User currentUser);
+
     DonationResponse submitManualProof(Long donationId, String proofUrl, User user);
 }

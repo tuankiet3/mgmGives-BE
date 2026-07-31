@@ -142,6 +142,11 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException(UNAUTHORIZED, "Your account has been banned.");
         }
 
+        if (UserStatus.INACTIVE.equals(user.getStatus())) {
+            log.warn("Login failed: account inactive. userId={}, email={}", user.getId(), email);
+            throw new AppException(ACCOUNT_INACTIVE, "Your account is not yet activated. Please check your email to activate your account.");
+        }
+
         if (user.getLockedUntil() != null) {
             if (user.getLockedUntil().isAfter(LocalDateTime.now())) {
                 log.warn("Login failed: account locked until {}. userId={}, email={}",

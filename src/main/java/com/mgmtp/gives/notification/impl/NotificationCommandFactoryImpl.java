@@ -13,6 +13,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 @Component @RequiredArgsConstructor @Slf4j
@@ -226,6 +229,45 @@ public class NotificationCommandFactoryImpl implements NotificationCommandFactor
                         formatTaskStatus(event.oldStatus()) + " to " + formatTaskStatus(event.newStatus()) + ".")
                 .linkUrl("/campaigns/" + event.campaignId() + "/tasks")
                 .build();
+    }
+
+    @Override
+    public List<CreateNotificationCommand> announcementReplyCreated(AnnouncementReplyCreatedEvent event) {
+        List<CreateNotificationCommand> commands = new ArrayList<>(2);
+        Long directRecipientId = event.referencedReplyAuthorId();
+
+        if (isEligibleRecipient(directRecipientId, event.replyAuthorId())) {
+            commands.add(CreateNotificationCommand.builder()
+                    .recipients(recipientResolver.singleUser(directRecipientId))
+                    .type(NotificationType.ANNOUNCEMENT_REPLY)
+                    .title("New reply to your comment")
+                    .message(event.replyAuthorName() + " replied to your comment on \"" + event.announcementTitle() + "\".")
+                    .linkUrl(replyLink(event))
+                    .build());
+        }
+
+        if (isEligibleRecipient(event.announcementPublisherId(), event.replyAuthorId())
+                && !Objects.equals(event.announcementPublisherId(), directRecipientId)) {
+            commands.add(CreateNotificationCommand.builder()
+                    .recipients(recipientResolver.singleUser(event.announcementPublisherId()))
+                    .type(NotificationType.ANNOUNCEMENT_REPLY)
+                    .title("New reply on \"" + event.announcementTitle() + "\"")
+                    .message(event.replyAuthorName() + " replied to your announcement.")
+                    .linkUrl(replyLink(event))
+                    .build());
+        }
+
+        return commands;
+    }
+
+    private static boolean isEligibleRecipient(Long recipientId, Long replyAuthorId) {
+        return recipientId != null && !Objects.equals(recipientId, replyAuthorId);
+    }
+
+    private static String replyLink(AnnouncementReplyCreatedEvent event) {
+        return "/campaigns/" + event.campaignId()
+                + "/announcements/" + event.announcementId()
+                + "?reply=" + event.announcementId() + ":" + event.replyId();
     }
 
     private String formatTaskStatus(com.mgmtp.gives.enums.TaskStatus status) {

@@ -41,6 +41,7 @@ public class SecurityConfig {
             "/api/auth/register",
             "/api/auth/login",
             "/api/auth/verify",
+            "/api/auth/resend-activation",
             "/api/auth/forgot-password",
             "/api/auth/reset-password",
             "/api/auth/refresh",
@@ -74,6 +75,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/media/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/categories").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/public/campaigns", "/api/public/campaigns/*").permitAll()
+                        // Volunteer roster is guest-visible; the service decides per viewer
+                        // whether to return the member list or just the aggregate count.
+                        .requestMatchers(HttpMethod.GET, "/api/campaigns/*/members").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

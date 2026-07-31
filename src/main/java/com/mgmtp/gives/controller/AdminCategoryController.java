@@ -87,6 +87,16 @@ public class AdminCategoryController {
         return ApiResponse.<Void>success(null);
     }
 
+    @DeleteMapping("/{id}/permanent")
+    @Operation(summary = "Permanently delete category", description = "Permanently deletes an archived category by its ID.")
+    public ApiResponse<?> permanentDeleteCategory(
+            @Parameter(description = "The ID of the category to permanently delete", required = true, example = "1")
+            @PathVariable Long id) {
+        adminCategoryService.permanentDeleteCategory(id);
+
+        return ApiResponse.<Void>success(null);
+    }
+
     @PostMapping("/{id}/restore")
     @Operation(summary = "Restore category", description = "Restores a soft-deleted category by its ID.")
     public ApiResponse<?> restoreCategory(

@@ -226,6 +226,33 @@ public class CategoryServiceImpl implements UserCategoryService, AdminCategorySe
     }
 
     @Override
+    @Transactional
+    public void permanentDeleteCategory(Long id) {
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> {
+                    log.warn("Permanent delete category failed: not found. id={}", id);
+                    return new AppException(CATEGORY_NOT_FOUND);
+                });
+
+        if (category.getDeletedAt() == null) {
+            log.warn("Permanent delete category failed: category is not archived. id={}", id);
+            throw new AppException(VALIDATION_ERROR, "Only archived categories can be permanently deleted.");
+        }
+
+        long assignedCampaigns = campaignRepository.countCampaignsByCategoryId(id);
+        if (assignedCampaigns > 0) {
+            log.warn("Permanent delete category failed: category is assigned to {} campaigns. id={}", assignedCampaigns, id);
+            throw new AppException(
+                    VALIDATION_ERROR,
+                    "Cannot permanently delete this category because it is assigned to " + assignedCampaigns + " campaigns. Please remove it from those campaigns first."
+            );
+        }
+
+        categoryRepository.delete(category);
+        log.info("Category permanently deleted: id={}, name={}", id, category.getName());
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public CategoryDeleteCheckResponse checkCategoryDeletion(Long id) {
         if (!categoryRepository.existsById(id)) {

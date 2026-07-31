@@ -1,0 +1,1 @@
+ALTER TABLE donations ADD COLUMN is_amount_hidden BOOLEAN NOT NULL DEFAULT TRUE;

@@ -24,6 +24,9 @@ import java.util.List;
  *                          admin/assignees when creating the task — same trust level as the
  *                          campaign description and goods descriptions elsewhere in this record,
  *                          not scrubbed of names or other detail the author chose to include.
+ * @param spendingDescriptions per-entry fund usage: amount, admin-authored description, and
+ *                          date spent, e.g. "500,000 VND - Purchased 20 blankets for the
+ *                          shelter (Jun 5, 2026)". Same trust level as taskDescriptions.
  */
 public record CampaignResultDraftContext(
         long totalRaised,
@@ -39,5 +42,6 @@ public record CampaignResultDraftContext(
         String biggestDonor,
         long taskCount,
         long completedTaskCount,
-        List<String> taskDescriptions) {
+        List<String> taskDescriptions,
+        List<String> spendingDescriptions) {
 }

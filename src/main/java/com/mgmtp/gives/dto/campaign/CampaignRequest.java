@@ -9,7 +9,7 @@ import java.util.Set;
 
 public record CampaignRequest(
         @NotBlank(message = "Title is required")
-        @Size(max = 255, message = "Title must not exceed 255 characters")
+        @Size(max = 100, message = "Title must not exceed 100 characters")
         String title,
         String description,
         Set<Long> categories,
@@ -39,6 +39,6 @@ public record CampaignRequest(
             CampaignPriority priority,
             CampaignStatus status
     ) {
-        this(title, description, categories, acceptsMoney, acceptsGoods, target, startDate, endDate, priority, status, DonationMethod.PAYOS, null, null, null, null, null);
+        this(title, description, categories, acceptsMoney, acceptsGoods, target, startDate, endDate, priority, status, DonationMethod.MANUAL_QR, null, null, null, null, null);
     }
 }

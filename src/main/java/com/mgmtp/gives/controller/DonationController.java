@@ -106,6 +106,15 @@ public class DonationController {
         return ApiResponse.success(donation, "Message status updated successfully");
     }
 
+    @PatchMapping("/{id}/amount/visibility")
+    @Operation(summary = "Toggle donation amount visibility", description = "Allows the donor or admin to toggle the visibility of the donation amount.")
+    public ApiResponse<DonationResponse> toggleAmountVisibility(@PathVariable Long id,
+                                                                @RequestParam boolean hidden,
+                                                                @AuthenticationPrincipal CustomUserDetails userDetails) {
+        DonationResponse donation = donationService.toggleDonationAmountVisibility(id, hidden, userDetails.getUser());
+        return ApiResponse.success(donation, "Donation amount visibility updated successfully");
+    }
+
     @PatchMapping("/{id}/confirm")
     @Operation(summary = "Confirm a donation", description = "Allows a Campaign Admin to confirm a pending manual QR donation.")
     public ApiResponse<DonationResponse> confirmDonation(@PathVariable Long id,

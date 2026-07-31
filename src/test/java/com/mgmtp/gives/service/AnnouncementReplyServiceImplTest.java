@@ -11,6 +11,7 @@ import com.mgmtp.gives.entity.AnnouncementReply;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.UserRole;
+import com.mgmtp.gives.event.notification.AnnouncementReplyCreatedEvent;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.mapper.AnnouncementReplyMapper;
 import com.mgmtp.gives.repository.AnnouncementReplyRepository;
@@ -24,6 +25,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,6 +48,9 @@ class AnnouncementReplyServiceImplTest {
 
     @Mock
     private AnnouncementReplyMapper replyMapper;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private AnnouncementReplyServiceImpl replyService;
 
@@ -83,6 +88,8 @@ class AnnouncementReplyServiceImplTest {
         announcement = new Announcement();
         announcement.setId(5L);
         announcement.setCampaign(campaign);
+        announcement.setCreatedBy(creator);
+        announcement.setTitle("Campaign update");
         announcement.setRepliesCount(0);
 
         reply = new AnnouncementReply();
@@ -118,7 +125,8 @@ class AnnouncementReplyServiceImplTest {
                 announcementRepository,
                 userRepository,
                 replyMapper,
-                new AnnouncementAccessAuthorizer(announcementRepository)
+                new AnnouncementAccessAuthorizer(announcementRepository),
+                eventPublisher
         );
     }
 
@@ -136,6 +144,12 @@ class AnnouncementReplyServiceImplTest {
         verify(replyRepository).save(savedReply.capture());
         assertSame(author, savedReply.getValue().getUser());
         assertNull(savedReply.getValue().getVersion());
+
+        var event = org.mockito.ArgumentCaptor.forClass(AnnouncementReplyCreatedEvent.class);
+        verify(eventPublisher).publishEvent(event.capture());
+        assertEquals(100L, event.getValue().replyId());
+        assertEquals(20L, event.getValue().announcementPublisherId());
+        assertNull(event.getValue().referencedReplyAuthorId());
     }
 
     @Test
@@ -154,6 +168,10 @@ class AnnouncementReplyServiceImplTest {
         var savedReply = org.mockito.ArgumentCaptor.forClass(AnnouncementReply.class);
         verify(replyRepository).save(savedReply.capture());
         assertSame(referencedReply, savedReply.getValue().getInReplyTo());
+
+        var event = org.mockito.ArgumentCaptor.forClass(AnnouncementReplyCreatedEvent.class);
+        verify(eventPublisher).publishEvent(event.capture());
+        assertEquals(20L, event.getValue().referencedReplyAuthorId());
     }
 
     @Test
@@ -168,6 +186,7 @@ class AnnouncementReplyServiceImplTest {
         assertEquals(ErrorCode.REPLY_NOT_FOUND, exception.getErrorCode());
         verify(replyRepository, never()).save(any());
         verify(announcementRepository, never()).incrementRepliesCount(anyLong());
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -181,6 +200,7 @@ class AnnouncementReplyServiceImplTest {
 
         assertEquals(ErrorCode.REPLY_NOT_FOUND, exception.getErrorCode());
         verify(replyRepository, never()).save(any());
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test

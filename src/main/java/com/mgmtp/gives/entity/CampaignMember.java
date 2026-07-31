@@ -38,4 +38,13 @@ public class CampaignMember {
 
     @Column(name = "unjoin_requested_at")
     private LocalDateTime unjoinRequestedAt;
+
+    /**
+     * Member-level opt-out from the campaign's public roster. Only consulted when the
+     * campaign's memberListVisibility is PUBLIC; admins and fellow members always see
+     * the full list regardless of this flag.
+     */
+    @Builder.Default
+    @Column(name = "hidden_from_public_list", nullable = false)
+    private boolean hiddenFromPublicList = false;
 }

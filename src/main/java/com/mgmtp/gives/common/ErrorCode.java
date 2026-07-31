@@ -54,6 +54,7 @@ public enum ErrorCode {
     UNAUTHORIZED_REPLY_ACTION(2020, "You do not have permission to perform this action on this reply",
             HttpStatus.FORBIDDEN),
     CAMPAIGN_UNJOIN_REQUEST_NOT_FOUND(2021, "No pending unjoin request found for this member", HttpStatus.NOT_FOUND),
+    CAMPAIGN_MEMBER_NOT_FOUND(2022, "You are not a member of this campaign", HttpStatus.NOT_FOUND),
 
     CAMPAIGN_MEDIA_NOT_FOUND(3001, "Campaign media not found", HttpStatus.NOT_FOUND),
     MEDIA_NOT_FOUND(3002, "Media file not found", HttpStatus.NOT_FOUND),
@@ -72,6 +73,7 @@ public enum ErrorCode {
     MEETING_TIME_CONFLICT(4004, "This campaign already has a meeting scheduled during this time", HttpStatus.CONFLICT),
     DONATE_NOT_FOUND(3010, "Donate not found", HttpStatus.NOT_FOUND),
     NOTIFICATION_NOT_FOUND(3011, "Notification not found", HttpStatus.NOT_FOUND),
+    DONATION_NOT_PENDING(3012, "Only pending donations can have proof submitted", HttpStatus.BAD_REQUEST),
 
     TASK_NOT_FOUND(5001, "Task not found", HttpStatus.NOT_FOUND),
     UNAUTHORIZED_TASK_ACCESS(5002, "You do not have permission to manage tasks for this campaign",

@@ -5,6 +5,7 @@ import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.NotificationType;
 import com.mgmtp.gives.event.notification.CampaignStatusChangedEvent;
+import com.mgmtp.gives.event.notification.AnnouncementReplyCreatedEvent;
 import com.mgmtp.gives.event.notification.TaskAssignedEvent;
 import com.mgmtp.gives.event.notification.TaskDescriptionUpdatedEvent;
 import com.mgmtp.gives.event.notification.TaskUnassignedEvent;
@@ -16,10 +17,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.anyLong;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -179,5 +182,49 @@ class NotificationCommandFactoryImplTest {
         assertEquals("Task status updated", command.title());
         assertEquals("Task \"Report Task\" status has been changed from To do to In progress.", command.message());
         assertEquals("/campaigns/4/tasks", command.linkUrl());
+    }
+
+    @Test
+    void announcementReplyCreated_NotifiesPublisherAndReferencedReplyAuthor() {
+        NotificationRecipient publisher = new NotificationRecipient(1L, "publisher@example.com");
+        NotificationRecipient referencedAuthor = new NotificationRecipient(2L, "commenter@example.com");
+        when(recipientResolver.singleUser(1L)).thenReturn(Set.of(publisher));
+        when(recipientResolver.singleUser(2L)).thenReturn(Set.of(referencedAuthor));
+
+        List<CreateNotificationCommand> commands = notificationCommandFactory.announcementReplyCreated(
+                new AnnouncementReplyCreatedEvent(10L, 20L, "Water update", 30L, 3L, "Linh", 1L, 2L)
+        );
+
+        assertEquals(2, commands.size());
+        assertEquals(Set.of(referencedAuthor), commands.get(0).recipients());
+        assertEquals("New reply to your comment", commands.get(0).title());
+        assertEquals(Set.of(publisher), commands.get(1).recipients());
+        assertEquals("New reply on \"Water update\"", commands.get(1).title());
+        assertEquals(NotificationType.ANNOUNCEMENT_REPLY, commands.get(0).type());
+        assertEquals("/campaigns/10/announcements/20?reply=20:30", commands.get(0).linkUrl());
+    }
+
+    @Test
+    void announcementReplyCreated_DeduplicatesPublisherWhoWasDirectlyRepliedTo() {
+        NotificationRecipient publisher = new NotificationRecipient(1L, "publisher@example.com");
+        when(recipientResolver.singleUser(1L)).thenReturn(Set.of(publisher));
+
+        List<CreateNotificationCommand> commands = notificationCommandFactory.announcementReplyCreated(
+                new AnnouncementReplyCreatedEvent(10L, 20L, "Water update", 30L, 3L, "Linh", 1L, 1L)
+        );
+
+        assertEquals(1, commands.size());
+        assertEquals("New reply to your comment", commands.getFirst().title());
+        verify(recipientResolver).singleUser(1L);
+    }
+
+    @Test
+    void announcementReplyCreated_ExcludesReplyAuthorFromEveryRecipientRule() {
+        List<CreateNotificationCommand> commands = notificationCommandFactory.announcementReplyCreated(
+                new AnnouncementReplyCreatedEvent(10L, 20L, "Water update", 30L, 1L, "Linh", 1L, 1L)
+        );
+
+        assertEquals(List.of(), commands);
+        verify(recipientResolver, never()).singleUser(anyLong());
     }
 }

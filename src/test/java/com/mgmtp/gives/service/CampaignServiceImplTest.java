@@ -8,6 +8,7 @@ import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.DonationMethod;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
@@ -111,7 +112,13 @@ class CampaignServiceImplTest {
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(10),
                 CampaignPriority.HIGH,
-                CampaignStatus.PENDING);
+                CampaignStatus.PENDING,
+                DonationMethod.MANUAL_QR,
+                "MB Bank",
+                "MB",
+                "970422",
+                "123456789",
+                "Nguyen Van A");
 
         draftRequest = new CampaignRequest(
                 "Kon Tum Water Project",
@@ -607,7 +614,13 @@ class CampaignServiceImplTest {
                 validRequest.startDate(),
                 validRequest.endDate(),
                 validRequest.priority(),
-                null // null status preserves existing status
+                null, // null status preserves existing status
+                validRequest.donationMethod(),
+                validRequest.bankName(),
+                validRequest.bankCode(),
+                validRequest.bankBin(),
+                validRequest.bankAccountNumber(),
+                validRequest.bankAccountHolderName()
         );
 
         Campaign result = campaignService.updateCampaign(100L, adminRequest, testAdmin);

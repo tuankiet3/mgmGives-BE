@@ -61,8 +61,8 @@ public class DonationScheduledTasks {
                     } else if (status == PaymentLinkStatus.CANCELLED ||
                                status == PaymentLinkStatus.EXPIRED ||
                                status == PaymentLinkStatus.FAILED) {
-                        log.info("Donation ID {} is in terminal state {}. Updating status to FAILED in DB.", donation.getId(), status);
-                        donation.setStatus(DonationStatus.FAILED);
+                        log.info("Donation ID {} is in terminal state {}. Updating status to CANCELLED in DB.", donation.getId(), status);
+                        donation.setStatus(DonationStatus.CANCELLED);
                         donation.setUpdatedAt(LocalDateTime.now());
                         donationRepository.save(donation);
                     }
@@ -88,7 +88,7 @@ public class DonationScheduledTasks {
                         continue; // Skip manual QR campaigns from auto-expiring
                     }
                     log.info("Auto-expiring stale PENDING donation ID: {}", donation.getId());
-                    donation.setStatus(DonationStatus.FAILED);
+                    donation.setStatus(DonationStatus.CANCELLED);
                     donation.setUpdatedAt(LocalDateTime.now());
                     donationRepository.save(donation);
                 }

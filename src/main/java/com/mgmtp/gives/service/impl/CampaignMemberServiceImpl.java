@@ -5,6 +5,8 @@ import com.mgmtp.gives.common.PageResponse;
 import com.mgmtp.gives.dto.campaign_follower.CampaignAggregatesContext;
 import com.mgmtp.gives.dto.campaign_member.CampaignMemberFilterCriteria;
 import com.mgmtp.gives.dto.campaign_member.CampaignMemberResponse;
+import com.mgmtp.gives.dto.campaign_member.CampaignRosterMemberResponse;
+import com.mgmtp.gives.dto.campaign_member.CampaignRosterResponse;
 import com.mgmtp.gives.dto.campaign_member.JoinedCampaignResponse;
 import com.mgmtp.gives.dto.campaign_member.UnjoinCampaignResponse;
 import com.mgmtp.gives.dto.campaign_member.UnjoinRequestResponse;
@@ -14,8 +16,10 @@ import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.MemberListVisibility;
 import com.mgmtp.gives.enums.TaskStatus;
 import com.mgmtp.gives.enums.UserRole;
+import com.mgmtp.gives.event.campaign_member.CampaignRosterChangedEvent;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.mapper.CampaignMemberMapper;
 import com.mgmtp.gives.entity.CampaignMedia;
@@ -30,6 +34,7 @@ import com.mgmtp.gives.service.CampaignMemberService;
 import com.mgmtp.gives.util.CampaignAccessHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -51,6 +56,7 @@ public class CampaignMemberServiceImpl implements CampaignMemberService {
     private final TaskAssignmentRepository taskAssignmentRepo;
     private final CampaignAccessHelper campaignAccessHelper;
     private final CampaignNotificationPublisher campaignNotificationPublisher;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional @Override
     public CampaignMemberResponse joinCampaign(User user, Long campaignId) {
@@ -94,6 +100,7 @@ public class CampaignMemberServiceImpl implements CampaignMemberService {
             log.warn("Auto-follow failed after join: userId={}, campaignId={}", user.getId(), campaignId, e);
         }
 
+        eventPublisher.publishEvent(new CampaignRosterChangedEvent(campaignId));
         log.info("User joined campaign: userId={}, campaignId={}", user.getId(), campaignId);
 
         return new CampaignMemberResponse(
@@ -205,6 +212,7 @@ public class CampaignMemberServiceImpl implements CampaignMemberService {
 
         taskAssignmentRepo.deleteByUserIdAndCampaignIdAndTaskStatusNot(user.getId(), campaignId, TaskStatus.DONE);
         campaignMemberRepo.deleteByCampaignIdAndUserId(campaignId, user.getId());
+        eventPublisher.publishEvent(new CampaignRosterChangedEvent(campaignId));
         log.info("User unjoined campaign: userId={}, campaignId={}", user.getId(), campaignId);
         return new UnjoinCampaignResponse(UnjoinCampaignResponse.Status.LEFT);
     }
@@ -263,6 +271,7 @@ public class CampaignMemberServiceImpl implements CampaignMemberService {
         taskAssignmentRepo.deleteByUserIdAndCampaignIdAndTaskStatusNot(targetUserId, campaignId, TaskStatus.DONE);
         campaignMemberRepo.deleteByCampaignIdAndUserId(campaignId, targetUserId);
 
+        eventPublisher.publishEvent(new CampaignRosterChangedEvent(campaignId));
         campaignNotificationPublisher.publishUnjoinApproved(campaign, targetUser);
         log.info("Unjoin request approved: campaignId={}, userId={}, approvedBy={}", campaignId, targetUserId, admin.getId());
     }
@@ -293,5 +302,71 @@ public class CampaignMemberServiceImpl implements CampaignMemberService {
         }
         return campaignMemberRepo.existsByCampaignIdAndUserIdAndRoleInCampaign(
                 campaignId, user.getId(), CampaignMemberRole.CAMPAIGN_ADMIN);
+    }
+    @Transactional(readOnly = true) @Override
+    public CampaignRosterResponse getCampaignRoster(Long campaignId, User viewer) {
+        Campaign campaign = campaignAccessHelper.findCampaignOrThrow(campaignId);
+        MemberListVisibility visibility = campaign.getMemberListVisibility();
+
+        boolean viewerIsAdmin = viewer != null && campaignAccessHelper.isCampaignAdmin(campaignId, viewer);
+        CampaignMember viewerMembership = viewer == null ? null
+                : campaignMemberRepo.findByCampaignIdAndUserId(campaignId, viewer.getId()).orElse(null);
+        boolean viewerIsMember = viewerMembership != null;
+        Boolean viewerHidden = viewerMembership != null ? viewerMembership.isHiddenFromPublicList() : null;
+
+        // PUBLIC only opens the list to signed-in users (member or not) - a fully
+        // anonymous visitor always sees just the aggregate count, never the member list.
+        boolean membersVisible = viewerIsAdmin || viewerIsMember
+                || (viewer != null && visibility == MemberListVisibility.PUBLIC);
+
+        long totalVolunteers;
+        java.util.List<CampaignRosterMemberResponse> members = java.util.List.of();
+        if (membersVisible) {
+            java.util.List<CampaignMember> volunteers =
+                    campaignMemberRepo.findByCampaignIdAndRoleWithUser(campaignId, CampaignMemberRole.VOLUNTEER);
+            totalVolunteers = volunteers.size();
+
+            // The self-hide flag only shields members from outsiders; admins and fellow
+            // members always see the full roster.
+            boolean applyHiddenFilter = !viewerIsAdmin && !viewerIsMember;
+            members = volunteers.stream()
+                    .filter(cm -> !applyHiddenFilter || !cm.isHiddenFromPublicList())
+                    .map(cm -> new CampaignRosterMemberResponse(
+                            cm.getUser().getId(),
+                            cm.getUser().getFullName(),
+                            cm.getUser().getAvatarUrl(),
+                            cm.getJoinedAt()))
+                    .toList();
+        } else {
+            totalVolunteers = campaignMemberRepo.countByCampaignIdAndRoleInCampaign(campaignId, CampaignMemberRole.VOLUNTEER);
+        }
+
+        return new CampaignRosterResponse(
+                visibility, totalVolunteers, membersVisible, members,
+                viewerIsAdmin, viewerIsMember, viewerHidden);
+    }
+
+    @Transactional @Override
+    public void updateRosterVisibility(Long campaignId, MemberListVisibility visibility, User admin) {
+        campaignAccessHelper.validateCampaignAdmin(campaignId, admin, ErrorCode.UNAUTHORIZED_CAMPAIGN_ACCESS);
+
+        Campaign campaign = campaignAccessHelper.findCampaignOrThrow(campaignId);
+        campaign.setMemberListVisibility(visibility);
+        campaignRepo.save(campaign);
+        eventPublisher.publishEvent(new CampaignRosterChangedEvent(campaignId));
+        log.info("Roster visibility updated: campaignId={}, visibility={}, updatedBy={}",
+                campaignId, visibility, admin.getId());
+    }
+
+    @Transactional @Override
+    public void updateOwnRosterVisibility(Long campaignId, boolean hidden, User user) {
+        CampaignMember member = campaignMemberRepo.findByCampaignIdAndUserId(campaignId, user.getId())
+                .orElseThrow(() -> new AppException(ErrorCode.CAMPAIGN_MEMBER_NOT_FOUND));
+
+        member.setHiddenFromPublicList(hidden);
+        campaignMemberRepo.save(member);
+        eventPublisher.publishEvent(new CampaignRosterChangedEvent(campaignId));
+        log.info("Member roster visibility updated: campaignId={}, userId={}, hidden={}",
+                campaignId, user.getId(), hidden);
     }
 }

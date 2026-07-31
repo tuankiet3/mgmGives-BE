@@ -11,6 +11,7 @@ import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.service.impl.CampaignMeetingServiceImpl;
+import com.mgmtp.gives.util.CampaignAccessHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +24,9 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -57,6 +61,9 @@ class CampaignMeetingServiceImplTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private CampaignAccessHelper campaignAccessHelper;
+
     @InjectMocks
     private CampaignMeetingServiceImpl campaignMeetingService;
 
@@ -81,9 +88,11 @@ class CampaignMeetingServiceImplTest {
 
     @Test
     void getMeetingRecipients_SystemAdminOfAnotherCampaign_ThrowsAppException() {
-        when(campaignMemberRepository.existsByCampaignIdAndUserIdAndRoleInCampaign(
-                campaign.getId(), systemAdmin.getId(), CampaignMemberRole.CAMPAIGN_ADMIN))
-                .thenReturn(false);
+        doThrow(new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE))
+                .when(campaignAccessHelper).validateCampaignAdmin(
+                        eq(campaign.getId()),
+                        eq(systemAdmin),
+                        eq(ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE));
 
         AppException exception = assertThrows(AppException.class,
                 () -> campaignMeetingService.getMeetingRecipients(campaign.getId(), systemAdmin));
@@ -94,8 +103,11 @@ class CampaignMeetingServiceImplTest {
 
     @Test
     void getMeetings_SystemAdminWithoutCampaignMembership_ThrowsAppException() {
-        when(campaignMemberRepository.existsByCampaignIdAndUserId(campaign.getId(), systemAdmin.getId()))
-                .thenReturn(false);
+        doThrow(new AppException(ErrorCode.UNAUTHORIZED_CAMPAIGN_ACCESS))
+                .when(campaignAccessHelper).validateCampaignMemberOrAdmin(
+                        eq(campaign.getId()),
+                        eq(systemAdmin),
+                        eq(ErrorCode.UNAUTHORIZED_CAMPAIGN_ACCESS));
 
         AppException exception = assertThrows(AppException.class,
                 () -> campaignMeetingService.getMeetings(campaign.getId(), "all", systemAdmin));

@@ -9,6 +9,7 @@ import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.Donation;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignStatus;
+import com.mgmtp.gives.enums.DonationMethod;
 import com.mgmtp.gives.enums.DonationStatus;
 import com.mgmtp.gives.enums.DonationType;
 import com.mgmtp.gives.enums.UserRole;
@@ -95,6 +96,7 @@ class DonationServiceImplTest {
         testCampaign.setId(1L);
         testCampaign.setTitle("Test Campaign");
         testCampaign.setStatus(CampaignStatus.IN_PROGRESS);
+        testCampaign.setDonationMethod(DonationMethod.PAYOS);
 
         testDonation = new Donation();
         testDonation.setId(10L);
@@ -230,7 +232,7 @@ class DonationServiceImplTest {
         DonationResponse response = donationService.cancelPayOSDonation(10L);
 
         assertNotNull(response);
-        assertEquals(DonationStatus.FAILED, testDonation.getStatus());
+        assertEquals(DonationStatus.CANCELLED, testDonation.getStatus());
         verify(notificationService).broadcastDashboardUpdate();
     }
 
@@ -368,7 +370,7 @@ class DonationServiceImplTest {
 
     @Test
     void editCampaignDonation_FailedToSuccessful_ClearsRejectReason() {
-        testDonation.setStatus(DonationStatus.FAILED);
+        testDonation.setStatus(DonationStatus.CANCELLED);
         testDonation.setRejectReason("Previous failure reason");
         EditDonationRequest request = new EditDonationRequest("Bank transfer receipt verified");
 

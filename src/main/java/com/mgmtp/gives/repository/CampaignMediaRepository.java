@@ -34,6 +34,8 @@ public interface CampaignMediaRepository extends JpaRepository<CampaignMedia, Lo
 
     boolean existsByCampaignIdAndDeletedAtIsNullAndIsCoverTrue(Long campaignId);
 
+    Optional<CampaignMedia> findByCampaignIdAndDeletedAtIsNullAndIsCoverTrue(Long campaignId);
+
     @Query("SELECT m FROM CampaignMedia m WHERE m.campaign.id IN :campaignIds AND m.deletedAt IS NULL AND m.isCover = true")
     List<CampaignMedia> findCoverImagesByCampaignIds(@Param("campaignIds") List<Long> campaignIds);
     Optional<CampaignMedia> findByUrl(String url);

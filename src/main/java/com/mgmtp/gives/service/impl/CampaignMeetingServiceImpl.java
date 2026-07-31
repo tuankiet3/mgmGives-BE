@@ -25,6 +25,7 @@ import com.mgmtp.gives.repository.CampaignMeetingRepository;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
+import com.mgmtp.gives.util.CampaignAccessHelper;
 import com.mgmtp.gives.service.CampaignMeetingClock;
 import com.mgmtp.gives.service.CampaignMeetingInvitationService;
 import com.mgmtp.gives.service.CampaignMeetingService;
@@ -57,6 +58,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
     private final UserWebexConnectionService userWebexConnectionService;
     private final ApplicationEventPublisher eventPublisher;
     private final CampaignMeetingClock campaignMeetingClock;
+    private final CampaignAccessHelper campaignAccessHelper;
 
     @Override
     @Transactional
@@ -652,46 +654,15 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
     }
 
     private void requireCampaignAdmin(Campaign campaign, User currentUser) {
-        if (currentUser == null) {
-            throw new AppException(ErrorCode.UNAUTHORIZED, "User must be authenticated");
-        }
-
-        if (canManageMeeting(campaign, currentUser)) {
-            return;
-        }
-
-        throw new AppException(
-                ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE,
-                "Only the campaign creator or a campaign admin can manage campaign meetings");
+        campaignAccessHelper.validateCampaignAdmin(campaign.getId(), currentUser, ErrorCode.UNAUTHORIZED_CAMPAIGN_UPDATE);
     }
 
     private boolean canManageMeeting(Campaign campaign, User currentUser) {
-        if (campaign == null || currentUser == null || currentUser.getId() == null) {
-            return false;
-        }
-        boolean isCreator = campaign.getUser() != null && campaign.getUser().getId().equals(currentUser.getId());
-        boolean isCampaignAdmin = campaignMemberRepository.existsByCampaignIdAndUserIdAndRoleInCampaign(
-                campaign.getId(),
-                currentUser.getId(),
-                CampaignMemberRole.CAMPAIGN_ADMIN);
-        return isCreator || isCampaignAdmin;
+        return campaignAccessHelper.isCampaignAdmin(campaign.getId(), currentUser);
     }
 
     private void requireMeetingViewer(Campaign campaign, User currentUser) {
-        if (currentUser == null) {
-            throw new AppException(ErrorCode.UNAUTHORIZED, "User must be authenticated");
-        }
-
-        boolean isCreator = campaign.getUser() != null && campaign.getUser().getId().equals(currentUser.getId());
-        boolean isMember = campaignMemberRepository.existsByCampaignIdAndUserId(
-                campaign.getId(),
-                currentUser.getId());
-
-        if (!isCreator && !isMember) {
-            throw new AppException(
-                    ErrorCode.UNAUTHORIZED_CAMPAIGN_ACCESS,
-                    "Only campaign members can view campaign meetings");
-        }
+        campaignAccessHelper.validateCampaignMemberOrAdmin(campaign.getId(), currentUser, ErrorCode.UNAUTHORIZED_CAMPAIGN_ACCESS);
     }
 
     private CampaignMeetingResponse toResponse(CampaignMeeting meeting, User currentUser) {

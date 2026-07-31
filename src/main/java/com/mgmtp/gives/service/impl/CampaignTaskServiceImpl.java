@@ -13,34 +13,35 @@ import com.mgmtp.gives.dto.campaign_task.UpdateCampaignTaskRequest;
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.*;
 import com.mgmtp.gives.enums.CampaignTaskActivityAction;
+import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.TaskStatus;
 import com.mgmtp.gives.enums.UserStatus;
+import com.mgmtp.gives.event.notification.TaskAssignedEvent;
+import com.mgmtp.gives.event.notification.TaskCreatedEmailEvent;
+import com.mgmtp.gives.event.notification.TaskDescriptionUpdatedEvent;
+import com.mgmtp.gives.event.notification.TaskStatusChangedEvent;
+import com.mgmtp.gives.event.notification.TaskUnassignedEvent;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
 import com.mgmtp.gives.event.task.CampaignTaskChangedEvent;
+import com.mgmtp.gives.event.task.CampaignTaskConflictEvent;
 import com.mgmtp.gives.repository.*;
 import com.mgmtp.gives.service.CampaignTaskService;
 import com.mgmtp.gives.service.MediaService;
 import com.mgmtp.gives.specification.CampaignTaskSpecifications;
 import com.mgmtp.gives.util.CampaignAccessHelper;
+import jakarta.persistence.OptimisticLockException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import com.mgmtp.gives.dto.notification.NotificationRecipient;
-import com.mgmtp.gives.event.notification.TaskAssignedEvent;
-import com.mgmtp.gives.event.notification.TaskStatusChangedEvent;
-import com.mgmtp.gives.event.notification.TaskDescriptionUpdatedEvent;
-import com.mgmtp.gives.event.notification.TaskUnassignedEvent;
-import com.mgmtp.gives.event.notification.TaskCreatedEmailEvent;
-import com.mgmtp.gives.enums.CampaignMemberRole;
-import org.springframework.context.ApplicationEventPublisher;
+
 import java.util.stream.Collectors;
 
 import java.time.LocalDate;
@@ -159,7 +160,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
             throw new AppException(ErrorCode.UNAUTHORIZED_TASK_ACCESS);
         }
         if (request.version() != null && !Objects.equals(request.version(), savedTask.getVersion())) {
-            throw new AppException(ErrorCode.RESOURCE_UPDATE_CONFLICT);
+            throwTaskUpdateConflict(savedTask, currentUser);
         }
         if (request.title() != null && request.title().isBlank()) {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Task title cannot be blank");
@@ -327,7 +328,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         validateCanReopenCompletedTask(task, request.status(), isAdmin);
 
         if (!Objects.equals(task.getVersion(), request.expectedVersion())) {
-            throw new AppException(ErrorCode.RESOURCE_UPDATE_CONFLICT, toResponse(task));
+            throwTaskUpdateConflict(task, currentUser);
         }
         TaskStatus previousStatus = task.getStatus();
         if (request.position() != null) {
@@ -340,7 +341,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                 taskId, request.status().name(), request.expectedVersion(), request.position(), updatedAt);
         if (updatedRows == 0) {
             CampaignTask currentTask = findTask(taskId);
-            throw new AppException(ErrorCode.RESOURCE_UPDATE_CONFLICT, toResponse(currentTask));
+            throwTaskUpdateConflict(currentTask, currentUser);
         }
 
         CampaignTask movedTask = findTask(taskId);
@@ -779,7 +780,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
 
         task.getAttachments().add(attachment);
         task.setUpdatedAt(LocalDateTime.now());
-        CampaignTask savedTask = saveTaskOrThrowConflict(task);
+        CampaignTask savedTask = saveTaskOrThrowConflict(task, currentUser);
         recordActivities(
                 savedTask,
                 currentUser,
@@ -814,7 +815,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         task.getAttachments().removeIf(item -> Objects.equals(item.getId(), attachmentId));
         mediaService.softDeleteTaskFile(attachment.getStoredFilename());
         task.setUpdatedAt(LocalDateTime.now());
-        CampaignTask savedTask = saveTaskOrThrowConflict(task);
+        CampaignTask savedTask = saveTaskOrThrowConflict(task, currentUser);
         recordActivities(
                 savedTask,
                 currentUser,
@@ -855,7 +856,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
             CampaignTaskChangeAction action,
             User currentUser,
             ActivityDraft... activities) {
-        CampaignTask savedTask = saveTaskOrThrowConflict(task);
+        CampaignTask savedTask = saveTaskOrThrowConflict(task, currentUser);
         recordActivities(savedTask, currentUser, Arrays.asList(activities));
         CampaignTaskResponse response = toResponse(savedTask);
         publishTaskChange(savedTask, response, action, currentUser);
@@ -1014,12 +1015,13 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
             Map<String, Object> details) {
     }
 
-    private CampaignTask saveTaskOrThrowConflict(CampaignTask task) {
+    private CampaignTask saveTaskOrThrowConflict(CampaignTask task, User currentUser) {
         try {
             CampaignTask savedTask = campaignTaskRepository.save(task);
             campaignTaskRepository.flush();
             return savedTask;
-        } catch (ObjectOptimisticLockingFailureException ex) {
+        } catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
+            eventPublisher.publishEvent(new CampaignTaskConflictEvent(task.getId(), currentUser, null));
             throw new AppException(ErrorCode.RESOURCE_UPDATE_CONFLICT);
         }
     }
@@ -1095,7 +1097,25 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
             CampaignTaskResponse response,
             CampaignTaskChangeAction action,
             User currentUser) {
-        CampaignTaskChangedPayload payload = new CampaignTaskChangedPayload(
+        CampaignTaskChangedPayload payload = taskChangedPayload(response, action, currentUser);
+        eventPublisher.publishEvent(new CampaignTaskChangedEvent(payload, resolveTaskUpdateRecipients(task)));
+    }
+
+    private void throwTaskUpdateConflict(CampaignTask task, User currentUser) {
+        CampaignTaskResponse response = toResponse(task);
+        CampaignTaskChangedPayload payload = taskChangedPayload(
+                response,
+                CampaignTaskChangeAction.UPDATED,
+                currentUser);
+        eventPublisher.publishEvent(new CampaignTaskConflictEvent(task.getId(), currentUser, payload));
+        throw new AppException(ErrorCode.RESOURCE_UPDATE_CONFLICT, response);
+    }
+
+    private CampaignTaskChangedPayload taskChangedPayload(
+            CampaignTaskResponse response,
+            CampaignTaskChangeAction action,
+            User currentUser) {
+        return new CampaignTaskChangedPayload(
                 "TASK_CHANGED",
                 action,
                 response.campaignId(),
@@ -1104,7 +1124,6 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                 response,
                 response.updatedAt(),
                 currentUser.getId());
-        eventPublisher.publishEvent(new CampaignTaskChangedEvent(payload, resolveTaskUpdateRecipients(task)));
     }
 
     private void publishTaskTombstone(

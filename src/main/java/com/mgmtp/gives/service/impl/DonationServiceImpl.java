@@ -135,6 +135,7 @@ public class DonationServiceImpl implements DonationService {
                 .transactionProofUrl(request.transactionProofUrl())
                 .message(messageText)
                 .isMessageHidden(false)
+                .isAmountHidden(true)
                 .goodsCondition(request.donationType() == DonationType.GOODS ? request.goodsCondition() : null)
                 .goodsCategory(request.donationType() == DonationType.GOODS ? request.goodsCategory() : null)
                 .deliveryMethod(request.donationType() == DonationType.GOODS ? request.deliveryMethod() : null)
@@ -143,7 +144,7 @@ public class DonationServiceImpl implements DonationService {
 
         Donation savedDonation = donationRepository.save(donation);
         if (isManualMoney) {
-            savedDonation.setTransactionDescription("mgmGives " + savedDonation.getId());
+            savedDonation.setTransactionDescription("Gives-" + savedDonation.getId());
             savedDonation = donationRepository.save(savedDonation);
         }
         campaignFollowerService.autoFollow(user.getId(), campaign.getId());
@@ -175,16 +176,24 @@ public class DonationServiceImpl implements DonationService {
                 hasType(type),
                 isAnonymous(anonymous),
                 matchesSearch(search));
-        return donationRepository.findAll(spec, pageable).map(this::toResponse);
+        return donationRepository.findAll(spec, pageable).map(d -> this.toResponse(d, false));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<DonationResponse> getPublicDonationsByCampaignId(Long campaignId) {
         List<Donation> donations = donationRepository.findByCampaignIdAndStatusNotInOrderByCreatedAtDesc(
-                campaignId, List.of(DonationStatus.FAILED, DonationStatus.REJECTED));
+                campaignId, List.of(DonationStatus.CANCELLED, DonationStatus.REJECTED));
 
-        return donations.stream().map(this::toResponse).toList();
+        boolean isCampaignManager = false;
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated() &&
+                authentication.getPrincipal() instanceof CustomUserDetails userDetails) {
+            isCampaignManager = campaignMemberService.canManageCampaign(campaignId, userDetails.getUser());
+        }
+
+        final boolean finalIsCampaignManager = isCampaignManager;
+        return donations.stream().map(d -> this.toResponse(d, finalIsCampaignManager)).toList();
     }
 
     @Override
@@ -261,12 +270,13 @@ public class DonationServiceImpl implements DonationService {
                 .status(DonationStatus.PENDING)
                 .message(messageText)
                 .isMessageHidden(false)
+                .isAmountHidden(true)
                 .build();
 
         donation = donationRepository.save(donation);
 
         try {
-            String description = "mgmGives " + donation.getId();
+            String description = "Gives-" + donation.getId();
             String cancelUrl = payOSCancelUrl + "/campaigns/" + campaign.getId()
                     + "/donate?paymentStatus=cancel&donationId=" + donation.getId();
             String returnUrl = payOSReturnUrl + "/campaigns/" + campaign.getId() + "?payment=success&donationId="
@@ -303,7 +313,7 @@ public class DonationServiceImpl implements DonationService {
         } catch (Exception e) {
             log.error("Failed to create PayOS payment link for donation ID: {}", donation.getId(), e);
             // Clean up the pending donation if PayOS fails
-            donation.setStatus(DonationStatus.FAILED);
+            donation.setStatus(DonationStatus.CANCELLED);
             donationRepository.save(donation);
             throw new AppException(ErrorCode.VALIDATION_ERROR,
                     "Failed to create PayOS payment link. Please ensure the campaign creator's PayOS integration credentials are valid and active.");
@@ -337,6 +347,33 @@ public class DonationServiceImpl implements DonationService {
 
     @Override
     @Transactional
+    public DonationResponse toggleDonationAmountVisibility(Long donationId, boolean hidden, User currentUser) {
+        log.info("User {} is setting amount visibility hidden status to {} for donation ID: {}",
+                currentUser.getEmail(), hidden, donationId);
+        Donation donation = donationRepository.findById(donationId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorCode.DONATE_NOT_FOUND,
+                        "Donation not found with ID: " + donationId));
+
+        boolean isAdmin = currentUser.getRole() == com.mgmtp.gives.enums.UserRole.ADMIN;
+        boolean isOwner = donation.getUser() != null && donation.getUser().getId().equals(currentUser.getId());
+
+        if (!isAdmin && !isOwner) {
+            throw new AppException(ErrorCode.UNAUTHORIZED,
+                    "You do not have permission to change visibility for this donation.");
+        }
+
+        donation.setAmountHidden(hidden);
+        donation.setUpdatedAt(LocalDateTime.now());
+        Donation saved = donationRepository.save(donation);
+
+        notificationService.broadcastDashboardUpdate();
+
+        return toResponse(saved);
+    }
+
+    @Override
+    @Transactional
     public DonationResponse cancelPayOSDonation(Long donationId) {
         log.info("Cancelling PayOS payment for donation ID: {}", donationId);
         Donation donation = donationRepository.findById(donationId)
@@ -345,7 +382,7 @@ public class DonationServiceImpl implements DonationService {
                         "Donation not found with ID: " + donationId));
         validateDonationOwnership(donation);
         if (donation.getStatus() == DonationStatus.PENDING) {
-            donation.setStatus(DonationStatus.FAILED);
+            donation.setStatus(DonationStatus.CANCELLED);
             donation.setUpdatedAt(LocalDateTime.now());
             donation = donationRepository.save(donation);
             notificationService.broadcastDashboardUpdate();
@@ -414,7 +451,7 @@ public class DonationServiceImpl implements DonationService {
                 } else if (vn.payos.model.v2.paymentRequests.PaymentLinkStatus.CANCELLED.equals(status) ||
                            vn.payos.model.v2.paymentRequests.PaymentLinkStatus.EXPIRED.equals(status) ||
                            vn.payos.model.v2.paymentRequests.PaymentLinkStatus.FAILED.equals(status)) {
-                    donation.setStatus(DonationStatus.FAILED);
+                    donation.setStatus(DonationStatus.CANCELLED);
                     donation.setUpdatedAt(LocalDateTime.now());
                     donationRepository.save(donation);
                     throw new AppException(ErrorCode.VALIDATION_ERROR, "This donation payment has been cancelled, expired or failed on PayOS.");
@@ -477,6 +514,7 @@ public class DonationServiceImpl implements DonationService {
                 .rejectReason(donation.getRejectReason())
                 .message(donation.getMessage())
                 .isMessageHidden(donation.isMessageHidden())
+                .isAmountHidden(donation.isAmountHidden())
                 .goodsCondition(donation.getGoodsCondition())
                 .goodsCategory(donation.getGoodsCategory())
                 .deliveryMethod(donation.getDeliveryMethod())
@@ -486,6 +524,10 @@ public class DonationServiceImpl implements DonationService {
     }
 
     private DonationResponse toResponse(Donation donation) {
+        return toResponse(donation, null);
+    }
+
+    private DonationResponse toResponse(Donation donation, Boolean isCampaignManager) {
         String donorName = donation.isAnonymous() ? "Anonymous" : donation.getUser().getFullName();
 
         boolean canSeeHidden = false;
@@ -497,8 +539,11 @@ public class DonationServiceImpl implements DonationService {
             boolean isCreator = donation.getCampaign().getUser() != null &&
                     donation.getCampaign().getUser().getId().equals(currentUser.getId());
             boolean isDonor = donation.getUser() != null && donation.getUser().getId().equals(currentUser.getId());
-            boolean isCampaignManager = campaignMemberService.canManageCampaign(donation.getCampaign().getId(), currentUser);
-            if (isAdmin || isCreator || isDonor || isCampaignManager) {
+
+            boolean hasManagerPrivilege = isCampaignManager != null ? isCampaignManager :
+                    campaignMemberService.canManageCampaign(donation.getCampaign().getId(), currentUser);
+
+            if (isAdmin || isCreator || isDonor || hasManagerPrivilege) {
                 canSeeHidden = true;
             }
         }
@@ -508,7 +553,8 @@ public class DonationServiceImpl implements DonationService {
             displayedMessage = null;
         }
 
-        Long amountVal = canSeeHidden ? donation.getAmount() : null;
+        boolean canSeeAmount = canSeeHidden || !donation.isAmountHidden();
+        Long amountVal = canSeeAmount ? donation.getAmount() : null;
         String donorEmail = donation.isAnonymous() && !canSeeHidden ? null : (donation.getUser() != null ? donation.getUser().getEmail() : null);
 
         return DonationResponse.builder()
@@ -528,6 +574,7 @@ public class DonationServiceImpl implements DonationService {
                 .rejectReason(donation.getRejectReason())
                 .message(displayedMessage)
                 .isMessageHidden(donation.isMessageHidden())
+                .isAmountHidden(donation.isAmountHidden())
                 .goodsCondition(donation.getGoodsCondition())
                 .goodsCategory(donation.getGoodsCategory())
                 .deliveryMethod(donation.getDeliveryMethod())
@@ -613,7 +660,7 @@ public class DonationServiceImpl implements DonationService {
                     "Only a Campaign Admin can edit donation details.");
         }
 
-        if (donation.getStatus() != DonationStatus.PENDING && donation.getStatus() != DonationStatus.FAILED) {
+        if (donation.getStatus() != DonationStatus.PENDING && donation.getStatus() != DonationStatus.CANCELLED) {
             throw new AppException(ErrorCode.VALIDATION_ERROR,
                     "Only pending or cancelled donations can be edited.");
         }
@@ -633,7 +680,7 @@ public class DonationServiceImpl implements DonationService {
             notificationService.broadcastDashboardUpdate();
             sendRejectionNotifications(saved, note.isEmpty() ? "Invalid transaction details" : note);
             return toResponse(saved);
-        } else { // DonationStatus.FAILED (Cancelled)
+        } else { // DonationStatus.CANCELLED (Cancelled)
             donation.setRejectReason(null);
             donation.setStatus(DonationStatus.SUCCESSFUL);
             donation.setConfirmedBy(currentUser);
@@ -737,7 +784,7 @@ public class DonationServiceImpl implements DonationService {
         List<Donation> donations = donationRepository.findByCampaignIdOrderByCreatedAtDesc(campaignId);
         return donations.stream()
                 .filter(d -> d.getType() == DonationType.MONEY && d.getOrderCode() == null)
-                .map(this::toResponse)
+                .map(d -> this.toResponse(d, true))
                 .toList();
     }
 
@@ -756,7 +803,7 @@ public class DonationServiceImpl implements DonationService {
         }
 
         if (donation.getStatus() != DonationStatus.PENDING) {
-            throw new AppException(ErrorCode.VALIDATION_ERROR, "Only pending donations can have proof submitted.");
+            throw new AppException(ErrorCode.DONATION_NOT_PENDING, "Only pending donations can have proof submitted.");
         }
 
         donation.setTransactionProofUrl(proofUrl);

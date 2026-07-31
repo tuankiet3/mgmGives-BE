@@ -15,12 +15,10 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 
-import com.mgmtp.gives.enums.CampaignStatus;
-
 public interface CampaignMemberRepository extends JpaRepository<CampaignMember, Long> {
         List<CampaignMember> findByCampaignId(Long campaignId);
         
-        long countByUserIdAndCampaignStatus(Long userId, CampaignStatus status);
+        long countByUserIdAndCampaignStatusAndRoleInCampaign(Long userId, CampaignStatus status, CampaignMemberRole role);
 
         @Query("""
                         SELECT DISTINCT new com.mgmtp.gives.dto.notification.NotificationRecipient(
@@ -118,5 +116,16 @@ public interface CampaignMemberRepository extends JpaRepository<CampaignMember, 
                         """)
         Page<CampaignMember> findByCampaignIdAndUnjoinRequestedAtIsNotNull(
                         @Param("campaignId") Long campaignId, Pageable pageable);
+
+        @Query("""
+                        SELECT cm
+                        FROM CampaignMember cm
+                        JOIN FETCH cm.user
+                        WHERE cm.campaign.id = :campaignId AND cm.roleInCampaign = :role
+                        ORDER BY cm.joinedAt ASC
+                        """)
+        List<CampaignMember> findByCampaignIdAndRoleWithUser(
+                        @Param("campaignId") Long campaignId,
+                        @Param("role") CampaignMemberRole role);
 
 }

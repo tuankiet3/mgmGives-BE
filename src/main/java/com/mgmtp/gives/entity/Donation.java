@@ -76,6 +76,10 @@ public class Donation extends BaseEntity {
     @Column(name = "is_message_hidden")
     private boolean isMessageHidden;
 
+    @Builder.Default
+    @Column(name = "is_amount_hidden")
+    private boolean isAmountHidden = true;
+
     @Column(name = "goods_condition")
     private String goodsCondition;
 

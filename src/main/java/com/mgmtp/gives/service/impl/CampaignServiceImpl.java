@@ -94,7 +94,7 @@ public class CampaignServiceImpl implements CampaignService {
         if (status == CampaignStatus.PENDING) {
             boolean money = request.acceptsMoney() != null ? request.acceptsMoney() : true;
             boolean goods = request.acceptsGoods() != null ? request.acceptsGoods() : true;
-            validatePendingCampaign(null, request, money, goods);
+            validatePendingCampaign(null, request, money, goods, currentUser);
         }
 
         Set<Category> categories = fetchAndValidateCategories(request.categories());
@@ -108,7 +108,7 @@ public class CampaignServiceImpl implements CampaignService {
                 .priority(request.priority() != null ? request.priority() : CampaignPriority.NORMAL)
                 .acceptsMoney(request.acceptsMoney() != null ? request.acceptsMoney() : true)
                 .acceptsGoods(request.acceptsGoods() != null ? request.acceptsGoods() : true)
-                .donationMethod(request.donationMethod() != null ? request.donationMethod() : DonationMethod.PAYOS)
+                .donationMethod(request.donationMethod() != null ? request.donationMethod() : DonationMethod.MANUAL_QR)
                 .bankName(request.bankName())
                 .bankCode(request.bankCode())
                 .bankBin(request.bankBin())
@@ -232,7 +232,7 @@ public class CampaignServiceImpl implements CampaignService {
         if (newStatus == CampaignStatus.PENDING) {
             boolean money = request.acceptsMoney() != null ? request.acceptsMoney() : campaign.isAcceptsMoney();
             boolean goods = request.acceptsGoods() != null ? request.acceptsGoods() : campaign.isAcceptsGoods();
-            validatePendingCampaign(campaign.getId(), request, money, goods);
+            validatePendingCampaign(campaign.getId(), request, money, goods, campaign.getUser());
         }
 
         validateDateRange(request);
@@ -385,7 +385,7 @@ public class CampaignServiceImpl implements CampaignService {
         }
     }
 
-    private void validatePendingCampaign(Long campaignId, CampaignRequest request, boolean money, boolean goods) {
+    private void validatePendingCampaign(Long campaignId, CampaignRequest request, boolean money, boolean goods, User owner) {
         if (request.description() == null || request.description().trim().isEmpty()) {
             log.warn("Pending campaign validation failed: description is empty");
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Description is required for submission");
@@ -407,7 +407,16 @@ public class CampaignServiceImpl implements CampaignService {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Target amount must be at least 500,000");
         }
         if (money) {
-            DonationMethod method = request.donationMethod() != null ? request.donationMethod() : DonationMethod.PAYOS;
+            DonationMethod method = request.donationMethod() != null ? request.donationMethod() : DonationMethod.MANUAL_QR;
+            if (method == DonationMethod.PAYOS || method == DonationMethod.HYBRID) {
+                if (owner != null) {
+                    boolean hasPayOS = userPayOSConnectionRepository.findByUserId(owner.getId()).isPresent();
+                    if (!hasPayOS) {
+                        throw new AppException(ErrorCode.VALIDATION_ERROR,
+                                "You must connect your PayOS account before submitting a campaign with PayOS or Hybrid payment methods.");
+                    }
+                }
+            }
             if (method == DonationMethod.MANUAL_QR || method == DonationMethod.HYBRID) {
                 if (request.bankName() == null || request.bankName().isBlank()) {
                     throw new AppException(ErrorCode.VALIDATION_ERROR,

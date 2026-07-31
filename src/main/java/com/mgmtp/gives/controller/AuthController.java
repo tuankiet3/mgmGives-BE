@@ -3,6 +3,7 @@ package com.mgmtp.gives.controller;
 import com.mgmtp.gives.common.ApiResponse;
 import com.mgmtp.gives.common.JwtProps;
 import com.mgmtp.gives.dto.auth.*;
+import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.security.CustomUserDetails;
 import com.mgmtp.gives.service.AuthService;
 import com.mgmtp.gives.service.RefreshTokenService;
@@ -59,8 +60,19 @@ public class AuthController {
 
     @PostMapping("/resend-activation")
     @Operation(summary = "Resend verification email", description = "Resends the activation link to the user's registered email address.")
-    public ApiResponse<?> resendActivationEmail(@AuthenticationPrincipal CustomUserDetails userDetails) {
-        service.resendActivationEmail(userDetails.getUsername());
+    public ApiResponse<?> resendActivationEmail(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestBody(required = false) ResendActivationRequest request
+    ) {
+        String email = (request != null && request.email() != null && !request.email().isBlank())
+                ? request.email()
+                : (userDetails != null ? userDetails.getUsername() : null);
+
+        if (email == null || email.isBlank()) {
+            throw new AppException(com.mgmtp.gives.common.ErrorCode.VALIDATION_ERROR, "Email is required");
+        }
+
+        service.resendActivationEmail(email);
         return ApiResponse.success(null, "PLEASE CHECK YOUR EMAIL TO VERIFY YOUR ACCOUNT");
     }
 

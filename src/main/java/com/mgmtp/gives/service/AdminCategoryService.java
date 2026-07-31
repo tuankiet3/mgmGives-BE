@@ -18,6 +18,8 @@ public interface AdminCategoryService {
 
     void deleteCategory(Long id);
 
+    void permanentDeleteCategory(Long id);
+
     AdminCategoryResponse restoreCategory(Long id);
 
     CategoryDeleteCheckResponse checkCategoryDeletion(Long id);

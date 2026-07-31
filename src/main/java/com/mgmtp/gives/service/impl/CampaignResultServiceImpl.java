@@ -10,6 +10,7 @@ import com.mgmtp.gives.dto.campaign.DonorNotificationInfo;
 import com.mgmtp.gives.dto.campaign.DonorThankYouContext;
 import com.mgmtp.gives.dto.campaign.CampaignMediaResponse;
 import com.mgmtp.gives.dto.campaign_spending.CampaignSpendingListResponse;
+import com.mgmtp.gives.dto.campaign_spending.CampaignSpendingResponse;
 import com.mgmtp.gives.dto.notification.CreateNotificationCommand;
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.Announcement;
@@ -257,11 +258,16 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                 .map(CampaignResultServiceImpl::describeTask)
                 .toList();
 
+        List<String> spendingDescriptions = campaignSpendingService
+                .getSpendingsByCampaign(campaignId, confirmedTotal).items().stream()
+                .map(CampaignResultServiceImpl::describeSpending)
+                .toList();
+
         return geminiService.generateCampaignResultDraft(campaign, new CampaignResultDraftContext(
                 confirmedTotal, donorCount, volunteerCount, goalPercent,
                 categories, durationDays, moneyDonationCount, goodsDonationCount,
                 announcements, goodsDescriptions, buildBiggestDonorDescription(donations),
-                taskCount, completedTaskCount, taskDescriptions));
+                taskCount, completedTaskCount, taskDescriptions, spendingDescriptions));
     }
 
     /**
@@ -335,6 +341,11 @@ public class CampaignResultServiceImpl implements CampaignResultService {
         return String.format("task title \"%s\" | description: %s | status: %s | assignee(s): %s",
                 stripDelimiter(task.getTitle()), stripDelimiter(description), statusLabel,
                 assignees.isBlank() ? "Unassigned" : assignees);
+    }
+
+    private static String describeSpending(CampaignSpendingResponse item) {
+        String date = item.spentAt() != null ? item.spentAt().format(ANNOUNCEMENT_DATE_FORMAT) : "date unknown";
+        return String.format("%,d VND - %s (%s)", item.amount(), item.description(), date);
     }
 
     private static String stripDelimiter(String value) {
@@ -624,11 +635,16 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                 campaign.getFinalVolunteerCount() != null ? campaign.getFinalVolunteerCount() : 0L);
         context.setVariable("goalPercent", String.format(Locale.US, "%.0f", goalPercent));
         context.setVariable("reportLink", buildReportLink(campaign.getId()));
-        context.setVariable("galleryMedia", buildGalleryMedia(campaign));
+        context.setVariable("coverImageUrl", buildCoverImageDataUri(campaign));
 
         CampaignSpendingListResponse spending =
                 campaignSpendingService.getSpendingsByCampaign(campaign.getId(), totalRaised);
-        context.setVariable("spendingItems", buildPdfSpendingItems(spending));
+        List<PdfSpendingItem> spendingItems = buildPdfSpendingItems(spending);
+        context.setVariable("spendingItems", spendingItems);
+        // Entries without a receipt photo are omitted from the PDF's itemized list entirely -
+        // this section exists as photographic proof of spend, not a general ledger.
+        context.setVariable("spendingItemsWithPhoto",
+                spendingItems.stream().filter(item -> item.photoUrl() != null).toList());
         context.setVariable("totalSpent", NumberFormat.getNumberInstance(Locale.US).format(spending.totalSpent()));
         context.setVariable("remainingFunds", NumberFormat.getNumberInstance(Locale.US).format(spending.remainingFunds()));
 
@@ -661,20 +677,15 @@ public class CampaignResultServiceImpl implements CampaignResultService {
     }
 
     /**
-     * Same non-cover media the public final report page shows (campaign.medias, minus the
-     * cover image). Images are embedded as downscaled JPEG data URIs rather than the original
-     * files - embedding full-resolution originals ballooned the PDF to several MB, which in
-     * turn made the emailed copy large enough that Gmail clips the message body. Videos can't
-     * play in a PDF, so they render as a placeholder card instead.
+     * Embedded as a downscaled JPEG data URI rather than the original file - embedding a
+     * full-resolution original ballooned the PDF the same way unbounded gallery images once
+     * did (see {@link #buildImageDataUri}).
      */
-    private List<PdfMediaItem> buildGalleryMedia(Campaign campaign) {
-        return campaignMediaRepository.findByCampaignIdAndDeletedAtIsNull(campaign.getId()).stream()
-                .filter(m -> !m.isCover())
-                .map(m -> new PdfMediaItem(
-                        "VIDEO".equalsIgnoreCase(m.getMediaType()) ? null : buildImageDataUri(m.getUrl()),
-                        "VIDEO".equalsIgnoreCase(m.getMediaType())))
-                .filter(item -> item.isVideo() || item.url() != null)
-                .toList();
+    private String buildCoverImageDataUri(Campaign campaign) {
+        return campaignMediaRepository
+                .findByCampaignIdAndDeletedAtIsNullAndIsCoverTrue(campaign.getId())
+                .map(cover -> buildImageDataUri(cover.getUrl()))
+                .orElse(null);
     }
 
     private String buildImageDataUri(String filename) {
@@ -743,8 +754,6 @@ public class CampaignResultServiceImpl implements CampaignResultService {
             writer.dispose();
         }
     }
-
-    private record PdfMediaItem(String url, boolean isVideo) {}
 
     private record PdfSpendingItem(String description, String amount, String spentAt, String photoUrl) {}
 

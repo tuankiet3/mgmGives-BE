@@ -150,4 +150,15 @@ public class NotificationEventListener {
                 notificationCommandFactory.campaignUnjoinRejected(event)
         );
     }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleAnnouncementReplyCreated(AnnouncementReplyCreatedEvent event) {
+        log.info("Handling announcement reply notification: announcementId={}, replyId={}",
+                event.announcementId(), event.replyId());
+
+        notificationCommandFactory.announcementReplyCreated(event).stream()
+                .filter(command -> !command.recipients().isEmpty())
+                .forEach(notificationService::createNotification);
+    }
 }

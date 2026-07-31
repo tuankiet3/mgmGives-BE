@@ -32,7 +32,10 @@ public class DonationResponse {
     
     @JsonProperty("isMessageHidden")
     private boolean isMessageHidden;
-    
+
+    @JsonProperty("isAmountHidden")
+    private boolean isAmountHidden;
+
     private String goodsCondition;
     private String goodsCategory;
     private String deliveryMethod;

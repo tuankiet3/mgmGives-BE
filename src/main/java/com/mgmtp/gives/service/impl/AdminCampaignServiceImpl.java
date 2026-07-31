@@ -11,6 +11,8 @@ import com.mgmtp.gives.enums.MediaContext;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
 import com.mgmtp.gives.notification.publisher.CampaignNotificationPublisher;
+import com.mgmtp.gives.enums.DonationMethod;
+import com.mgmtp.gives.repository.UserPayOSConnectionRepository;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
@@ -37,6 +39,7 @@ public class AdminCampaignServiceImpl implements AdminCampaignService {
     private final CampaignMediaRepository campaignMediaRepository;
     private final CampaignNotificationPublisher publisher;
     private final NotificationService notificationService;
+    private final UserPayOSConnectionRepository userPayOSConnectionRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -79,6 +82,15 @@ public class AdminCampaignServiceImpl implements AdminCampaignService {
             throw new AppException(
                     ErrorCode.INVALID_CAMPAIGN_STATUS_FOR_REVIEW,
                     "Only PENDING campaigns can be approved");
+        }
+
+        if (campaign.isAcceptsMoney() &&
+            (campaign.getDonationMethod() == DonationMethod.PAYOS || campaign.getDonationMethod() == DonationMethod.HYBRID)) {
+            boolean hasPayOS = userPayOSConnectionRepository.findByUserId(campaign.getUser().getId()).isPresent();
+            if (!hasPayOS) {
+                throw new AppException(ErrorCode.VALIDATION_ERROR,
+                        "Campaign creator must connect a PayOS account before this campaign can be approved.");
+            }
         }
         CampaignStatus oldStatus = campaign.getStatus();
         CampaignStatus newStatus = shouldStartImmediately(campaign)

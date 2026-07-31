@@ -298,4 +298,55 @@ class CategoryServiceImplTest {
         assertEquals(ErrorCode.CATEGORY_NAME_ALREADY_EXISTS, exception.getErrorCode());
         verify(categoryRepository, never()).save(any(Category.class));
     }
+
+    @Test
+    void permanentDeleteCategory_Success() {
+        testCategory.setDeletedAt(LocalDateTime.now());
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(testCategory));
+        when(campaignRepository.countCampaignsByCategoryId(1L)).thenReturn(0L);
+        doNothing().when(categoryRepository).delete(testCategory);
+
+        categoryService.permanentDeleteCategory(1L);
+
+        verify(categoryRepository, times(1)).delete(testCategory);
+    }
+
+    @Test
+    void permanentDeleteCategory_NotFound_ThrowsException() {
+        when(categoryRepository.findById(99L)).thenReturn(Optional.empty());
+
+        AppException exception = assertThrows(AppException.class, () ->
+                categoryService.permanentDeleteCategory(99L)
+        );
+
+        assertEquals(ErrorCode.CATEGORY_NOT_FOUND, exception.getErrorCode());
+        verify(categoryRepository, never()).delete(any(Category.class));
+    }
+
+    @Test
+    void permanentDeleteCategory_NotArchived_ThrowsException() {
+        testCategory.setDeletedAt(null);
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(testCategory));
+
+        AppException exception = assertThrows(AppException.class, () ->
+                categoryService.permanentDeleteCategory(1L)
+        );
+
+        assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
+        verify(categoryRepository, never()).delete(any(Category.class));
+    }
+
+    @Test
+    void permanentDeleteCategory_AssignedToCampaigns_ThrowsException() {
+        testCategory.setDeletedAt(LocalDateTime.now());
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(testCategory));
+        when(campaignRepository.countCampaignsByCategoryId(1L)).thenReturn(3L);
+
+        AppException exception = assertThrows(AppException.class, () ->
+                categoryService.permanentDeleteCategory(1L)
+        );
+
+        assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
+        verify(categoryRepository, never()).delete(any(Category.class));
+    }
 }
