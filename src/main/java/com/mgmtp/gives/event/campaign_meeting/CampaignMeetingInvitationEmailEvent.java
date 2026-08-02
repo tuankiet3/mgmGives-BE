@@ -1,15 +1,8 @@
 package com.mgmtp.gives.event.campaign_meeting;
 
+import com.mgmtp.gives.dto.campaign_meeting.CalendarMeetingEmailRequest;
+
 public record CampaignMeetingInvitationEmailEvent(
-        String toEmail,
-        String fullName,
-        String campaignName,
-        String meetingTitle,
-        String meetingDescription,
-        String createdByName,
-        String meetingUrl,
-        Long campaignId,
-        String startTime,
-        String endTime
+        CalendarMeetingEmailRequest request
 ) {
 }

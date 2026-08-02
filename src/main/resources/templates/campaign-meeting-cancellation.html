@@ -48,7 +48,7 @@
                                     <div style="color: #0f172a; font-size: 17px; font-weight: 700; margin-top: 5px;" th:text="${meetingTitle}">Meeting</div>
                                     <div th:if="${meetingDescription != null and !#strings.isEmpty(meetingDescription)}" style="margin-top: 14px; color: #475569; font-size: 14px; line-height: 1.6;">
                                         <strong style="color: #111827;">Description:</strong>
-                                        <span th:text="${meetingDescription}">Meeting description</span>
+                                        <div style="margin-top: 8px;" th:utext="${meetingDescription}">Meeting description</div>
                                     </div>
                                     <div style="margin-top: 14px; color: #475569; font-size: 14px;">
                                         <strong style="color: #111827;">Created by:</strong>
@@ -57,6 +57,10 @@
                                     <div style="margin-top: 14px; color: #475569; font-size: 14px;">
                                         <strong style="color: #111827;">Original time:</strong>
                                         <span th:text="${startTime}">Start</span> - <span th:text="${endTime}">End</span>
+                                    </div>
+                                    <div th:if="${location != null and !#strings.isEmpty(location)}" style="margin-top: 14px; color: #475569; font-size: 14px;">
+                                        <strong style="color: #111827;">Location:</strong>
+                                        <span th:text="${location}">Meeting location</span>
                                     </div>
                                 </td>
                             </tr>

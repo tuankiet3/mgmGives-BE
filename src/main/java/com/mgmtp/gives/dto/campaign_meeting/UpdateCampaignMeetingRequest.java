@@ -1,6 +1,7 @@
 package com.mgmtp.gives.dto.campaign_meeting;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.mgmtp.gives.enums.CampaignMeetingType;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
@@ -11,6 +12,11 @@ public record UpdateCampaignMeetingRequest(
         String title,
 
         String description,
+
+        CampaignMeetingType meetingType,
+
+        @Size(max = 1000, message = "Location must not exceed 1000 characters")
+        String location,
 
         LocalDateTime startTime,
 

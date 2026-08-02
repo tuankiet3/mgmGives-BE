@@ -1,5 +1,6 @@
 package com.mgmtp.gives.service;
 
+import com.mgmtp.gives.dto.campaign_meeting.CalendarMeetingEmailRequest;
 import com.mgmtp.gives.enums.TokenType;
 
 public interface EmailService {
@@ -15,6 +16,7 @@ public interface EmailService {
             String meetingDescription,
             String createdByName,
             String meetingUrl,
+            String location,
             Long campaignId,
             String startTime,
             String endTime
@@ -27,9 +29,12 @@ public interface EmailService {
             String meetingTitle,
             String meetingDescription,
             String createdByName,
+            String location,
             String startTime,
             String endTime
     );
+
+    void sendCampaignMeetingCalendarEmail(CalendarMeetingEmailRequest request);
 
     void executeSend(String toEmail, String content, TokenType type);
 

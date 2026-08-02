@@ -1,6 +1,7 @@
 package com.mgmtp.gives.entity;
 
 import com.mgmtp.gives.enums.CampaignMeetingStatus;
+import com.mgmtp.gives.enums.CampaignMeetingType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -38,6 +39,12 @@ public class CampaignMeeting extends BaseEntity {
     @Column(name = "webex_meeting_id")
     private String webexMeetingId;
 
+    @Column(name = "calendar_uid", unique = true, nullable = false)
+    private String calendarUid;
+
+    @Column(name = "calendar_sequence", nullable = false)
+    private Integer calendarSequence;
+
     private String title;
 
     @Column(columnDefinition = "TEXT")
@@ -45,6 +52,13 @@ public class CampaignMeeting extends BaseEntity {
 
     @Column(name = "meeting_url", columnDefinition = "TEXT")
     private String meetingUrl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "meeting_type")
+    private CampaignMeetingType meetingType;
+
+    @Column(columnDefinition = "TEXT")
+    private String location;
 
     @Column(name = "notify_all")
     private boolean notifyAll;

@@ -2,6 +2,7 @@ package com.mgmtp.gives.dto.campaign_meeting;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.mgmtp.gives.enums.CampaignMeetingStatus;
+import com.mgmtp.gives.enums.CampaignMeetingType;
 import lombok.Builder;
 
 import java.time.LocalDateTime;
@@ -17,6 +18,8 @@ public record CampaignMeetingResponse(
         String title,
         String description,
         String meetingUrl,
+        CampaignMeetingType meetingType,
+        String location,
         LocalDateTime startTime,
         LocalDateTime endTime,
         CampaignMeetingStatus status,

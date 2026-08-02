@@ -17,44 +17,24 @@ public class CampaignMeetingEmailEventListener {
     private final EmailService emailService;
 
     @Async("campaignMeetingTaskExecutor")
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleInvitation(CampaignMeetingInvitationEmailEvent event) {
         try {
-            emailService.sendCampaignMeetingInvitation(
-                    event.toEmail(),
-                    event.fullName(),
-                    event.campaignName(),
-                    event.meetingTitle(),
-                    event.meetingDescription(),
-                    event.createdByName(),
-                    event.meetingUrl(),
-                    event.campaignId(),
-                    event.startTime(),
-                    event.endTime()
-            );
+            emailService.sendCampaignMeetingCalendarEmail(event.request());
         } catch (Exception e) {
             log.error("Failed to send campaign meeting invitation email. to={}, meetingTitle={}",
-                    event.toEmail(), event.meetingTitle(), e);
+                    event.request().toEmail(), event.request().meetingTitle(), e);
         }
     }
 
     @Async("campaignMeetingTaskExecutor")
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleCancellation(CampaignMeetingCancellationEmailEvent event) {
         try {
-            emailService.sendCampaignMeetingCancellation(
-                    event.toEmail(),
-                    event.fullName(),
-                    event.campaignName(),
-                    event.meetingTitle(),
-                    event.meetingDescription(),
-                    event.createdByName(),
-                    event.startTime(),
-                    event.endTime()
-            );
+            emailService.sendCampaignMeetingCalendarEmail(event.request());
         } catch (Exception e) {
             log.error("Failed to send campaign meeting cancellation email. to={}, meetingTitle={}",
-                    event.toEmail(), event.meetingTitle(), e);
+                    event.request().toEmail(), event.request().meetingTitle(), e);
         }
     }
 }

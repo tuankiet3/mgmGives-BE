@@ -2,25 +2,37 @@ package com.mgmtp.gives.service.impl;
 
 import com.mgmtp.gives.common.ErrorCode;
 import com.mgmtp.gives.common.MailProps;
+import com.mgmtp.gives.dto.campaign_meeting.CalendarMeetingEmailRequest;
 import com.mgmtp.gives.enums.TokenType;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.service.EmailService;
+import com.mgmtp.gives.service.ICalendarService;
+import com.mgmtp.gives.util.HtmlSanitizerUtil;
+import jakarta.mail.BodyPart;
+import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
+import jakarta.mail.Part;
 import jakarta.mail.internet.InternetAddress;
+import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.internet.MimeMultipart;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jsoup.Jsoup;
+import org.jsoup.parser.Parser;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriComponentsBuilder;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
+import java.time.format.DateTimeFormatter;
 
 @Service
 @RequiredArgsConstructor
@@ -39,10 +51,13 @@ public class EmailServiceImpl implements EmailService {
     private static final String TEMPLATE_VAR_MEETING_DESCRIPTION = "meetingDescription";
     private static final String TEMPLATE_VAR_CREATED_BY_NAME = "createdByName";
     private static final String TEMPLATE_VAR_MEETING_URL = "meetingUrl";
+    private static final String TEMPLATE_VAR_LOCATION = "location";
     private static final String TEMPLATE_VAR_START_TIME = "startTime";
     private static final String TEMPLATE_VAR_END_TIME = "endTime";
     private static final String TEMPLATE_VAR_LINK_TO_CAMPAIGN = "linkToCampaign";
+    private static final DateTimeFormatter MEETING_DISPLAY_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private final TemplateEngine templateEngine;
+    private final ICalendarService iCalendarService;
 
     @Override
     @Async("notificationExecutor")
@@ -60,23 +75,53 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void sendCampaignMeetingInvitation(String toEmail, String fullName, String campaignName, String meetingTitle,
-            String meetingDescription, String createdByName, String meetingUrl, Long campaignId, String startTime,
-            String endTime) {
+            String meetingDescription, String createdByName, String meetingUrl, String location, Long campaignId,
+            String startTime, String endTime) {
 
         sendCampaignMeeting(toEmail, fullName, campaignName, meetingTitle, meetingDescription, createdByName, meetingUrl,
-                campaignId, startTime, endTime, "mgmGives meeting invitation: " + meetingTitle,
+                location, campaignId, startTime, endTime, "mgmGives meeting invitation: " + meetingTitle,
                 TEMPLATE_CAMPAIGN_MEETING_INVITATION
         );
     }
 
     @Override
     public void sendCampaignMeetingCancellation(String toEmail, String fullName, String campaignName, String meetingTitle,
-            String meetingDescription, String createdByName, String startTime, String endTime) {
+            String meetingDescription, String createdByName, String location, String startTime, String endTime) {
 
         sendCampaignMeeting(toEmail, fullName, campaignName, meetingTitle, meetingDescription, createdByName, null,
-                null, startTime, endTime, "mgmGives meeting cancelled: " + meetingTitle,
+                location, null, startTime, endTime, "mgmGives meeting cancelled: " + meetingTitle,
                 TEMPLATE_CAMPAIGN_MEETING_CANCELLATION
         );
+    }
+
+    @Override
+    public void sendCampaignMeetingCalendarEmail(CalendarMeetingEmailRequest request) {
+        String method = calendarMethod(request);
+        String subject = calendarSubject(request, method);
+        String template = "CANCEL".equals(method)
+                ? TEMPLATE_CAMPAIGN_MEETING_CANCELLATION
+                : TEMPLATE_CAMPAIGN_MEETING_INVITATION;
+        String link = buildCampaignLink(request.campaignId());
+        String startTime = formatMeetingTime(request.startTime());
+        String endTime = formatMeetingTime(request.endTime());
+        Context context = meetingContext(
+                request.fullName(),
+                request.campaignName(),
+                request.meetingTitle(),
+                request.meetingDescription(),
+                request.organizerName(),
+                startTime,
+                endTime,
+                link
+        );
+        context.setVariable(TEMPLATE_VAR_MEETING_URL, request.meetingUrl());
+        context.setVariable(TEMPLATE_VAR_LOCATION, request.location());
+
+        String htmlContent = templateEngine.process(template, context);
+        String plainText = plainCalendarText(request, method, startTime, endTime, link);
+        String calendarContent = iCalendarService.generate(request);
+
+        sendCalendarMimeEmail(request.toEmail(), subject, plainText, htmlContent, calendarContent, method);
     }
 
     @Async
@@ -194,8 +239,8 @@ public class EmailServiceImpl implements EmailService {
     }
 
     private void sendCampaignMeeting(String toEmail, String fullName, String campaignName, String meetingTitle,
-            String meetingDescription, String createdByName, String meetingUrl, Long campaignId, String startTime,
-            String endTime, String subject, String template) {
+            String meetingDescription, String createdByName, String meetingUrl, String location, Long campaignId,
+            String startTime, String endTime, String subject, String template) {
 
         String link = buildCampaignLink(campaignId);
 
@@ -203,6 +248,7 @@ public class EmailServiceImpl implements EmailService {
                 createdByName, startTime, endTime, link);
 
         context.setVariable(TEMPLATE_VAR_MEETING_URL, meetingUrl);
+        context.setVariable(TEMPLATE_VAR_LOCATION, location);
         sendTemplatedEmail(toEmail, subject, template, context);
     }
 
@@ -239,6 +285,107 @@ public class EmailServiceImpl implements EmailService {
         }
     }
 
+    private void sendCalendarMimeEmail(
+            String toEmail,
+            String subject,
+            String plainText,
+            String htmlContent,
+            String calendarContent,
+            String method
+    ) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            message.setFrom(new InternetAddress(mailProps.getFromMail(), SENDER_NAME));
+            message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(toEmail, false));
+            message.setSubject(subject, StandardCharsets.UTF_8.name());
+            message.setHeader("Content-Class", "urn:content-classes:calendarmessage");
+            message.setHeader("X-MS-OLK-FORCEINSPECTOROPEN", "TRUE");
+
+            MimeMultipart alternative = new MimeMultipart("alternative");
+            alternative.addBodyPart(textPart(plainText, "text/plain; charset=UTF-8"));
+            alternative.addBodyPart(textPart(htmlContent, "text/html; charset=UTF-8"));
+
+            MimeBodyPart calendarPart = new MimeBodyPart();
+            calendarPart.setContent(calendarContent, calendarContentType(method));
+            calendarPart.setHeader("Content-Class", "urn:content-classes:calendarmessage");
+            calendarPart.setHeader("Content-Transfer-Encoding", "8bit");
+            calendarPart.setDisposition(Part.INLINE);
+            calendarPart.setFileName("CANCEL".equals(method) ? "cancel.ics" : "invite.ics");
+            alternative.addBodyPart(calendarPart);
+
+            message.setContent(alternative);
+            message.saveChanges();
+            mailSender.send(message);
+            log.info("Campaign meeting calendar email sent successfully. to={}, subject={}, method={}",
+                    toEmail, subject, method);
+        } catch (MessagingException | UnsupportedEncodingException e) {
+            log.error("Failed to send campaign meeting calendar email. to={}, subject={}, method={}",
+                    toEmail, subject, method, e);
+            throw new AppException(ErrorCode.EMAIL_SENT_FAILURE, e.getMessage());
+        }
+    }
+
+    private BodyPart textPart(String content, String contentType) throws MessagingException {
+        MimeBodyPart part = new MimeBodyPart();
+        part.setContent(content == null ? "" : content, contentType);
+        part.setHeader("Content-Transfer-Encoding", "8bit");
+        return part;
+    }
+
+    private String calendarContentType(String method) {
+        return "text/calendar; method=" + method + "; component=VEVENT; charset=UTF-8";
+    }
+
+    private String calendarMethod(CalendarMeetingEmailRequest request) {
+        return "CANCEL".equalsIgnoreCase(request.method()) ? "CANCEL" : "REQUEST";
+    }
+
+    private String calendarSubject(CalendarMeetingEmailRequest request, String method) {
+        String prefix = "CANCEL".equals(method) ? "mgmGives meeting cancelled: " : "mgmGives meeting invitation: ";
+        return prefix + request.meetingTitle();
+    }
+
+    private String plainCalendarText(
+            CalendarMeetingEmailRequest request,
+            String method,
+            String startTime,
+            String endTime,
+            String campaignLink
+    ) {
+        StringBuilder builder = new StringBuilder();
+        if ("CANCEL".equals(method)) {
+            builder.append("This campaign meeting was cancelled.").append('\n');
+        } else {
+            builder.append("You are invited to a campaign meeting.").append('\n');
+        }
+        builder.append("Campaign: ").append(nullToEmpty(request.campaignName())).append('\n');
+        builder.append("Meeting: ").append(nullToEmpty(request.meetingTitle())).append('\n');
+        builder.append("Organizer: ").append(nullToEmpty(request.organizerName())).append('\n');
+        builder.append("Time: ").append(startTime).append(" - ").append(endTime).append('\n');
+        if (StringUtils.hasText(request.location())) {
+            builder.append("Location: ").append(request.location()).append('\n');
+        }
+        if (StringUtils.hasText(request.meetingUrl())) {
+            builder.append("Webex: ").append(request.meetingUrl()).append('\n');
+        }
+        String plainDescription = htmlToPlainText(request.meetingDescription());
+        if (StringUtils.hasText(plainDescription)) {
+            builder.append('\n').append("Message:").append('\n').append(plainDescription).append('\n');
+        }
+        if (StringUtils.hasText(campaignLink)) {
+            builder.append("Campaign page: ").append(campaignLink).append('\n');
+        }
+        return builder.toString();
+    }
+
+    private String formatMeetingTime(java.time.LocalDateTime value) {
+        return value == null ? "" : value.format(MEETING_DISPLAY_FORMATTER);
+    }
+
+    private String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
     private String displayName(String fullName) {
         return fullName == null || fullName.isBlank() ? "there" : fullName;
     }
@@ -257,12 +404,40 @@ public class EmailServiceImpl implements EmailService {
         context.setVariable(TEMPLATE_VAR_FULL_NAME, displayName(fullName));
         context.setVariable(TEMPLATE_VAR_CAMPAIGN_NAME, campaignName);
         context.setVariable(TEMPLATE_VAR_MEETING_TITLE, meetingTitle);
-        context.setVariable(TEMPLATE_VAR_MEETING_DESCRIPTION, meetingDescription);
+        context.setVariable(TEMPLATE_VAR_MEETING_DESCRIPTION, sanitizeHtml(meetingDescription));
         context.setVariable(TEMPLATE_VAR_CREATED_BY_NAME, displayName(createdByName));
         context.setVariable(TEMPLATE_VAR_START_TIME, startTime);
         context.setVariable(TEMPLATE_VAR_END_TIME, endTime);
         context.setVariable(TEMPLATE_VAR_LINK_TO_CAMPAIGN, linkToCampaign);
         return context;
+    }
+
+    private String sanitizeHtml(String html) {
+        return StringUtils.hasText(html) ? HtmlSanitizerUtil.sanitize(decodeHtmlEntities(html)) : null;
+    }
+
+    private String htmlToPlainText(String html) {
+        if (!StringUtils.hasText(html)) {
+            return null;
+        }
+
+        String htmlWithLineBreaks = decodeHtmlEntities(html)
+                .replaceAll("(?i)<br\\s*/?>", "\n")
+                .replaceAll("(?i)</p\\s*>", "\n")
+                .replaceAll("(?i)</div\\s*>", "\n")
+                .replaceAll("(?i)</li\\s*>", "\n");
+        String plainText = Jsoup.parse(htmlWithLineBreaks)
+                .wholeText()
+                .replace('\u00A0', ' ')
+                .replaceAll("[ \\t\\x0B\\f\\r]+", " ")
+                .replaceAll(" *\\n *", "\n")
+                .replaceAll("\\n{3,}", "\n\n")
+                .trim();
+        return plainText.isEmpty() ? null : plainText;
+    }
+
+    private String decodeHtmlEntities(String value) {
+        return Parser.unescapeEntities(value, false);
     }
 
     @Override

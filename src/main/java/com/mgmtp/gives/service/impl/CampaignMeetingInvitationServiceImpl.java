@@ -4,6 +4,8 @@ import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.CampaignMeeting;
 import com.mgmtp.gives.entity.CampaignMember;
 import com.mgmtp.gives.entity.User;
+import com.mgmtp.gives.dto.campaign_meeting.CalendarAttendee;
+import com.mgmtp.gives.dto.campaign_meeting.CalendarMeetingEmailRequest;
 import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.UserStatus;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
@@ -17,7 +19,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -28,8 +29,6 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 public class CampaignMeetingInvitationServiceImpl implements CampaignMeetingInvitationService {
-    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-
     private final CampaignMemberRepository campaignMemberRepository;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -54,19 +53,10 @@ public class CampaignMeetingInvitationServiceImpl implements CampaignMeetingInvi
             return;
         }
 
+        List<CalendarAttendee> attendees = attendees(recipients);
         for (User recipient : recipients) {
-            eventPublisher.publishEvent(new CampaignMeetingInvitationEmailEvent(
-                    recipient.getEmail(),
-                    recipient.getFullName(),
-                    campaign.getTitle(),
-                    meeting.getTitle(),
-                    meeting.getDescription(),
-                    getCreatedByName(meeting),
-                    meeting.getMeetingUrl(),
-                    campaign.getId(),
-                    format(meeting),
-                    formatEnd(meeting)
-            ));
+            eventPublisher.publishEvent(new CampaignMeetingInvitationEmailEvent(calendarRequest(
+                    "REQUEST", meeting, campaign, recipient, attendees)));
         }
         log.info("Campaign meeting invitation events published: meetingId={}, campaignId={}, recipients={}",
                 meeting.getId(), campaign.getId(), recipients.size());
@@ -85,17 +75,10 @@ public class CampaignMeetingInvitationServiceImpl implements CampaignMeetingInvi
                 .filter(user -> user != null && user.getStatus() == UserStatus.ACTIVE)
                 .filter(user -> StringUtils.hasText(user.getEmail()))
                 .toList();
+        List<CalendarAttendee> attendees = attendees(recipients);
         for (User recipient : recipients) {
-            eventPublisher.publishEvent(new CampaignMeetingCancellationEmailEvent(
-                    recipient.getEmail(),
-                    recipient.getFullName(),
-                    campaign.getTitle(),
-                    meeting.getTitle(),
-                    meeting.getDescription(),
-                    getCreatedByName(meeting),
-                    format(meeting),
-                    formatEnd(meeting)
-            ));
+            eventPublisher.publishEvent(new CampaignMeetingCancellationEmailEvent(calendarRequest(
+                    "CANCEL", meeting, campaign, recipient, attendees)));
         }
         log.info("Campaign meeting cancellation events published: meetingId={}, campaignId={}, recipients={}",
                 meeting.getId(), campaign.getId(), recipients.size());
@@ -142,14 +125,6 @@ public class CampaignMeetingInvitationServiceImpl implements CampaignMeetingInvi
         return ids;
     }
 
-    private String format(CampaignMeeting meeting) {
-        return meeting.getStartTime() == null ? "" : meeting.getStartTime().format(DATE_TIME_FORMATTER);
-    }
-
-    private String formatEnd(CampaignMeeting meeting) {
-        return meeting.getEndTime() == null ? "" : meeting.getEndTime().format(DATE_TIME_FORMATTER);
-    }
-
     private String getCreatedByName(CampaignMeeting meeting) {
         User createdBy = meeting.getCreatedBy();
         if (createdBy == null) {
@@ -162,5 +137,44 @@ public class CampaignMeetingInvitationServiceImpl implements CampaignMeetingInvi
             return createdBy.getEmail();
         }
         return "Campaign Admin";
+    }
+
+    private String getCreatedByEmail(CampaignMeeting meeting) {
+        User createdBy = meeting.getCreatedBy();
+        return createdBy != null && StringUtils.hasText(createdBy.getEmail()) ? createdBy.getEmail() : null;
+    }
+
+    private List<CalendarAttendee> attendees(List<User> recipients) {
+        return recipients.stream()
+                .filter(user -> user != null && StringUtils.hasText(user.getEmail()))
+                .map(user -> new CalendarAttendee(user.getEmail(), user.getFullName()))
+                .toList();
+    }
+
+    private CalendarMeetingEmailRequest calendarRequest(
+            String method,
+            CampaignMeeting meeting,
+            Campaign campaign,
+            User recipient,
+            List<CalendarAttendee> attendees
+    ) {
+        return new CalendarMeetingEmailRequest(
+                method,
+                recipient.getEmail(),
+                recipient.getFullName(),
+                campaign.getTitle(),
+                meeting.getTitle(),
+                meeting.getDescription(),
+                getCreatedByName(meeting),
+                getCreatedByEmail(meeting),
+                meeting.getMeetingUrl(),
+                meeting.getLocation(),
+                campaign.getId(),
+                meeting.getStartTime(),
+                meeting.getEndTime(),
+                meeting.getCalendarUid(),
+                meeting.getCalendarSequence() == null ? 0 : meeting.getCalendarSequence(),
+                attendees
+        );
     }
 }

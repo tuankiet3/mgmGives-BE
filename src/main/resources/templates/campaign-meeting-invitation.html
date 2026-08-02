@@ -45,7 +45,7 @@
                                     <div style="margin-top: 10px; color: #06122c; font-size: 18px; line-height: 1.35; font-weight: 800;" th:text="${meetingTitle}">Meeting</div>
                                     <div th:if="${meetingDescription != null and !#strings.isEmpty(meetingDescription)}" style="margin-top: 12px; color: #17233d; font-size: 15px; line-height: 1.6;">
                                         <strong style="color: #06122c;">Message:</strong>
-                                        <span th:text="${meetingDescription}">Meeting description</span>
+                                        <div style="margin-top: 8px;" th:utext="${meetingDescription}">Meeting description</div>
                                     </div>
                                 </td>
                             </tr>
@@ -88,12 +88,21 @@
                     </td>
                 </tr>
 
-                <tr>
+                <tr th:if="${meetingUrl != null and !#strings.isEmpty(meetingUrl)}">
                     <td style="padding: 0 32px 14px;">
                         <a th:href="${meetingUrl}" style="display: block; background-color: #2658e9; color: #ffffff; padding: 18px 24px; border-radius: 16px; text-align: center; text-decoration: none; font-weight: 900; font-size: 20px; box-shadow: 0 18px 30px rgba(37, 88, 233, 0.28);">
                             <span style="font-size: 16px;">&#128249;</span>
                             Join the Webex Meetup
                         </a>
+                    </td>
+                </tr>
+
+                <tr th:if="${location != null and !#strings.isEmpty(location)}">
+                    <td style="padding: 0 32px 14px;">
+                        <div style="background-color: #f7fbff; border: 1px solid #c8dcff; color: #06122c; padding: 18px 22px; border-radius: 16px; font-size: 15px; line-height: 1.6;">
+                            <div style="color: #1552d8; font-size: 13px; font-weight: 850;">LOCATION</div>
+                            <div style="margin-top: 8px; font-weight: 800;" th:text="${location}">Meeting location</div>
+                        </div>
                     </td>
                 </tr>
 
@@ -103,11 +112,13 @@
                     </td>
                 </tr>
 
-                <tr>
+                <tr th:if="${meetingUrl != null and !#strings.isEmpty(meetingUrl) or linkToCampaign != null and !#strings.isEmpty(linkToCampaign)}">
                     <td style="padding: 0 32px 28px;">
                         <div style="color: #7b8ba8; font-size: 12px; line-height: 1.8;">
-                            Button not working? Paste this link:
-                            <a th:href="${meetingUrl}" th:text="${meetingUrl}" style="color: #1552d8; word-break: break-all;">Meeting link</a>
+                            <span th:if="${meetingUrl != null and !#strings.isEmpty(meetingUrl)}">
+                                Button not working? Paste this link:
+                                <a th:href="${meetingUrl}" th:text="${meetingUrl}" style="color: #1552d8; word-break: break-all;">Meeting link</a>
+                            </span>
                             <span th:if="${linkToCampaign != null and !#strings.isEmpty(linkToCampaign)}">
                                 <br>
                                 Campaign page:
