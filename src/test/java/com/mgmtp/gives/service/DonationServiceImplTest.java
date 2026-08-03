@@ -13,6 +13,7 @@ import com.mgmtp.gives.enums.DonationStatus;
 import com.mgmtp.gives.enums.DonationType;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.exception.AppException;
+import com.mgmtp.gives.mapper.DonationResponseMapper;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.DonationRepository;
 import com.mgmtp.gives.security.CustomUserDetails;
@@ -71,6 +72,9 @@ class DonationServiceImplTest {
     @Mock
     private CampaignMemberService campaignMemberService;
 
+    @Mock
+    private DonationResponseMapper donationResponseMapper;
+
     @InjectMocks
     private DonationServiceImpl donationService;
 
@@ -82,6 +86,10 @@ class DonationServiceImplTest {
     void setUp() {
         lenient().when(applicationContext.getBean(DonationService.class)).thenReturn(donationService);
         lenient().when(payOSClientProvider.getClientForCampaign(any())).thenReturn(payOS);
+        lenient().when(donationResponseMapper.toResponse(any(Donation.class)))
+                .thenReturn(DonationResponse.builder().build());
+        lenient().when(donationResponseMapper.toAdminResponse(any(Donation.class)))
+                .thenReturn(com.mgmtp.gives.dto.donation.DonationAdminResponse.builder().build());
         ReflectionTestUtils.setField(donationService, "payOSCancelUrl", "http://localhost:5173/cancel");
         ReflectionTestUtils.setField(donationService, "payOSReturnUrl", "http://localhost:5173/return");
 
@@ -334,6 +342,7 @@ class DonationServiceImplTest {
         assertNotNull(response);
         assertEquals(DonationStatus.REJECTED, testDonation.getStatus());
         assertEquals("Invalid signature", testDonation.getRejectReason());
+        verify(publisher).publishRejected(testDonation, "Invalid signature");
         verify(notificationService).broadcastDashboardUpdate();
     }
 
@@ -363,6 +372,7 @@ class DonationServiceImplTest {
         assertNotNull(response);
         assertEquals(DonationStatus.REJECTED, testDonation.getStatus());
         assertEquals("Incorrect transaction code", testDonation.getRejectReason());
+        verify(publisher).publishRejected(testDonation, "Incorrect transaction code");
         verify(notificationService).broadcastDashboardUpdate();
     }
 
