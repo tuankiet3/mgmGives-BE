@@ -10,6 +10,7 @@ import com.mgmtp.gives.enums.DonationStatus;
 import com.mgmtp.gives.enums.DonationType;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
+import com.mgmtp.gives.mapper.DonationResponseMapper;
 import com.mgmtp.gives.notification.publisher.DonationNotificationPublisher;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.DonationRepository;
@@ -51,7 +52,7 @@ public class DonationServiceImpl implements DonationService {
     private final DonationNotificationPublisher publisher;
     private final NotificationService notificationService;
     private final CampaignMemberService campaignMemberService;
-    private final com.mgmtp.gives.repository.CampaignMemberRepository campaignMemberRepository;
+    private final DonationResponseMapper donationResponseMapper;
     private final com.mgmtp.gives.service.PayOSClientProvider payOSClientProvider;
     private final org.springframework.context.ApplicationContext applicationContext;
 
@@ -152,7 +153,7 @@ public class DonationServiceImpl implements DonationService {
             publisher.publishDonationConfirmedEvents(savedDonation);
             notificationService.broadcastDashboardUpdate();
         } else {
-            sendPendingApprovalNotification(savedDonation);
+            publisher.publishPendingApproval(savedDonation);
             notificationService.broadcastDashboardUpdate();
         }
 
@@ -456,85 +457,11 @@ public class DonationServiceImpl implements DonationService {
     }
 
     private DonationAdminResponse toAdminResponse(Donation donation) {
-        return DonationAdminResponse.builder()
-                .id(donation.getId())
-                .campaignId(donation.getCampaign().getId())
-                .campaignName(donation.getCampaign().getTitle())
-                .userId(donation.getUser().getId())
-                .userName(donation.getUser().getFullName())
-                .userEmail(donation.getUser().getEmail())
-                .type(donation.getType())
-                .amount(donation.getAmount())
-                .detail(donation.getDetail())
-                .isAnonymous(donation.isAnonymous())
-                .status(donation.getStatus())
-                .transactionId(donation.getTransactionId())
-                .transactionDescription(donation.getTransactionDescription())
-                .transactionProofUrl(donation.getTransactionProofUrl())
-                .confirmedById(donation.getConfirmedBy() != null ? donation.getConfirmedBy().getId() : null)
-                .confirmedByName(donation.getConfirmedBy() != null ? donation.getConfirmedBy().getFullName() : null)
-                .confirmedAt(donation.getConfirmedAt())
-                .rejectReason(donation.getRejectReason())
-                .message(donation.getMessage())
-                .isMessageHidden(donation.isMessageHidden())
-                .goodsCondition(donation.getGoodsCondition())
-                .goodsCategory(donation.getGoodsCategory())
-                .deliveryMethod(donation.getDeliveryMethod())
-                .createdAt(donation.getCreatedAt())
-                .updatedAt(donation.getUpdatedAt())
-                .build();
+        return donationResponseMapper.toAdminResponse(donation);
     }
 
     private DonationResponse toResponse(Donation donation) {
-        String donorName = donation.isAnonymous() ? "Anonymous" : donation.getUser().getFullName();
-
-        boolean canSeeHidden = false;
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.isAuthenticated() &&
-                authentication.getPrincipal() instanceof CustomUserDetails userDetails) {
-            User currentUser = userDetails.getUser();
-            boolean isAdmin = currentUser.getRole() == com.mgmtp.gives.enums.UserRole.ADMIN;
-            boolean isCreator = donation.getCampaign().getUser() != null &&
-                    donation.getCampaign().getUser().getId().equals(currentUser.getId());
-            boolean isDonor = donation.getUser() != null && donation.getUser().getId().equals(currentUser.getId());
-            boolean isCampaignManager = campaignMemberService.canManageCampaign(donation.getCampaign().getId(), currentUser);
-            if (isAdmin || isCreator || isDonor || isCampaignManager) {
-                canSeeHidden = true;
-            }
-        }
-
-        String displayedMessage = donation.getMessage();
-        if (donation.isMessageHidden() && !canSeeHidden) {
-            displayedMessage = null;
-        }
-
-        Long amountVal = canSeeHidden ? donation.getAmount() : null;
-        String donorEmail = donation.isAnonymous() && !canSeeHidden ? null : (donation.getUser() != null ? donation.getUser().getEmail() : null);
-
-        return DonationResponse.builder()
-                .id(donation.getId())
-                .campaignId(donation.getCampaign().getId())
-                .campaignName(donation.getCampaign().getTitle())
-                .donorName(donorName)
-                .donorEmail(donorEmail)
-                .type(donation.getType())
-                .amount(amountVal)
-                .detail(donation.getDetail())
-                .isAnonymous(donation.isAnonymous())
-                .status(donation.getStatus())
-                .transactionId(donation.getTransactionId())
-                .transactionDescription(donation.getTransactionDescription())
-                .transactionProofUrl(donation.getTransactionProofUrl())
-                .rejectReason(donation.getRejectReason())
-                .message(displayedMessage)
-                .isMessageHidden(donation.isMessageHidden())
-                .goodsCondition(donation.getGoodsCondition())
-                .goodsCategory(donation.getGoodsCategory())
-                .deliveryMethod(donation.getDeliveryMethod())
-                .confirmedAt(donation.getConfirmedAt())
-                .updatedAt(donation.getUpdatedAt())
-                .createdAt(donation.getCreatedAt())
-                .build();
+        return donationResponseMapper.toResponse(donation);
     }
 
     @Override
@@ -594,7 +521,7 @@ public class DonationServiceImpl implements DonationService {
         Donation savedDonation = donationRepository.save(donation);
 
         notificationService.broadcastDashboardUpdate();
-        sendRejectionNotifications(savedDonation, finalReason);
+        publisher.publishRejected(savedDonation, finalReason);
 
         return toResponse(savedDonation);
     }
@@ -631,7 +558,7 @@ public class DonationServiceImpl implements DonationService {
             donation.setUpdatedAt(LocalDateTime.now());
             Donation saved = donationRepository.save(donation);
             notificationService.broadcastDashboardUpdate();
-            sendRejectionNotifications(saved, note.isEmpty() ? "Invalid transaction details" : note);
+            publisher.publishRejected(saved, note.isEmpty() ? "Invalid transaction details" : note);
             return toResponse(saved);
         } else { // DonationStatus.FAILED (Cancelled)
             donation.setRejectReason(null);
@@ -643,73 +570,6 @@ public class DonationServiceImpl implements DonationService {
             publisher.publishDonationConfirmedEvents(saved);
             notificationService.broadcastDashboardUpdate();
             return toResponse(saved);
-        }
-    }
-
-    private void sendRejectionNotifications(Donation savedDonation, String reason) {
-        String amountStr = formatVnd(savedDonation.getAmount());
-        String campaignTitle = savedDonation.getCampaign().getTitle();
-        String linkUrl = "/campaigns/" + savedDonation.getCampaign().getId();
-
-        // Notify the donor
-        if (savedDonation.getUser() != null) {
-            sendNotification(
-                savedDonation.getUser(),
-                "Donation Rejected",
-                String.format("Your donation of %s VND for campaign '%s' was rejected by the campaign admin. Reason: %s", amountStr, campaignTitle, reason),
-                linkUrl + "?rejectedDonationId=" + savedDonation.getId()
-            );
-        }
-    }
-
-    private void sendPendingApprovalNotification(Donation savedDonation) {
-        String amountStr = formatVnd(savedDonation.getAmount());
-        String donorName = savedDonation.isAnonymous() ? "Anonymous" : (savedDonation.getUser() != null ? savedDonation.getUser().getFullName() : "Anonymous");
-        String campaignTitle = savedDonation.getCampaign().getTitle();
-        String linkUrl = "/campaigns/" + savedDonation.getCampaign().getId() + "/approvals";
-        String message = String.format("Donor '%s' has submitted a manual donation of %s VND for your campaign '%s' and is pending your approval.", donorName, amountStr, campaignTitle);
-
-        // Notify campaign creator
-        if (savedDonation.getCampaign().getUser() != null) {
-            sendNotification(
-                savedDonation.getCampaign().getUser(),
-                "New Pending Donation",
-                message,
-                linkUrl
-            );
-        }
-
-        // Also notify all CAMPAIGN_ADMIN members (avoiding double-notifying the creator)
-        Long creatorId = savedDonation.getCampaign().getUser() != null ? savedDonation.getCampaign().getUser().getId() : null;
-        java.util.List<com.mgmtp.gives.entity.User> campaignAdmins = campaignMemberRepository.findUsersByCampaignIdAndRole(
-                savedDonation.getCampaign().getId(), com.mgmtp.gives.enums.CampaignMemberRole.CAMPAIGN_ADMIN);
-        for (com.mgmtp.gives.entity.User admin : campaignAdmins) {
-            if (!admin.getId().equals(creatorId)) {
-                sendNotification(admin, "New Pending Donation", message, linkUrl);
-            }
-        }
-    }
-
-    private String formatVnd(Long amount) {
-        if (amount == null) return "0";
-        return java.text.NumberFormat.getNumberInstance(java.util.Locale.GERMANY).format(amount);
-    }
-
-    private void sendNotification(User recipientUser, String title, String message, String linkUrl) {
-        try {
-            com.mgmtp.gives.dto.notification.NotificationRecipient recipient =
-                    new com.mgmtp.gives.dto.notification.NotificationRecipient(recipientUser.getId(), recipientUser.getEmail());
-            com.mgmtp.gives.dto.notification.CreateNotificationCommand command =
-                    com.mgmtp.gives.dto.notification.CreateNotificationCommand.builder()
-                            .recipients(java.util.Set.of(recipient))
-                            .type(com.mgmtp.gives.enums.NotificationType.DONATION)
-                            .title(title)
-                            .message(message)
-                            .linkUrl(linkUrl)
-                            .build();
-            notificationService.createNotification(command);
-        } catch (Exception e) {
-            log.error("Failed to send notification to user: {}", recipientUser.getEmail(), e);
         }
     }
 
