@@ -11,6 +11,8 @@ import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.service.impl.CampaignMeetingServiceImpl;
+import com.mgmtp.gives.service.meeting.CampaignMeetingRecipientResolver;
+import com.mgmtp.gives.service.meeting.CampaignMeetingResponseMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,6 +58,15 @@ class CampaignMeetingServiceImplTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private CampaignMeetingClock campaignMeetingClock;
+
+    @Mock
+    private CampaignMeetingRecipientResolver recipientResolver;
+
+    @Mock
+    private CampaignMeetingResponseMapper responseMapper;
 
     @InjectMocks
     private CampaignMeetingServiceImpl campaignMeetingService;

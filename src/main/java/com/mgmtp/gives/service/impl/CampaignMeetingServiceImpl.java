@@ -15,7 +15,6 @@ import com.mgmtp.gives.dto.webex.WebexMeetingResult;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.CampaignMeeting;
 import com.mgmtp.gives.entity.CampaignMedia;
-import com.mgmtp.gives.entity.CampaignMember;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.*;
 import com.mgmtp.gives.event.campaign_meeting.CampaignMeetingWebexCancellationEvent;
@@ -31,6 +30,8 @@ import com.mgmtp.gives.service.CampaignMeetingService;
 import com.mgmtp.gives.service.MediaService;
 import com.mgmtp.gives.service.UserWebexConnectionService;
 import com.mgmtp.gives.service.WebexMeetingClient;
+import com.mgmtp.gives.service.meeting.CampaignMeetingRecipientResolver;
+import com.mgmtp.gives.service.meeting.CampaignMeetingResponseMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -41,7 +42,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -57,6 +57,8 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
     private final UserWebexConnectionService userWebexConnectionService;
     private final ApplicationEventPublisher eventPublisher;
     private final CampaignMeetingClock campaignMeetingClock;
+    private final CampaignMeetingRecipientResolver recipientResolver;
+    private final CampaignMeetingResponseMapper responseMapper;
 
     @Override
     @Transactional
@@ -69,7 +71,8 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         requireCampaignAdmin(campaign, currentUser);
         validateMeetingTimeConflict(campaign.getId(), null, request.startTime(), request.endTime());
         boolean notifyAll = request.notifyAllMembers() == null || request.notifyAllMembers();
-        List<User> recipients = resolveRecipients(campaign.getId(), notifyAll, request.recipientUserIds());
+        List<User> recipients = recipientResolver.resolveForCreation(
+                campaign.getId(), notifyAll, request.recipientUserIds());
         String accessToken = userWebexConnectionService.getValidAccessToken(currentUser);
 
         WebexMeetingResult webexMeeting = webexMeetingClient.createMeeting(new WebexCreateMeetingCommand(
@@ -86,7 +89,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
                 .description(request.description())
                 .meetingUrl(webexMeeting.webLink())
                 .notifyAll(notifyAll)
-                .invitedUserIds(serializeUserIds(recipients))
+                .invitedUserIds(recipientResolver.serializeUserIds(recipients))
                 .invitedCount(recipients.size())
                 .invitationsSentAt(campaignMeetingClock.now())
                 .startTime(request.startTime())
@@ -100,7 +103,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
                 saved.getId(), campaignId, currentUser.getId());
         campaignMeetingInvitationService.sendInvitations(saved, recipients);
 
-        return toResponse(saved, currentUser);
+        return responseMapper.toResponse(saved, currentUser);
     }
 
     @Override
@@ -114,7 +117,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
                 .stream()
                 .filter(meeting -> matchesView(meeting, view, now))
                 .sorted(meetingComparator(view))
-                .map(meeting -> toResponse(meeting, currentUser))
+                .map(meeting -> responseMapper.toResponse(meeting, currentUser))
                 .toList();
     }
 
@@ -123,7 +126,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
     public CampaignMeetingResponse getMeeting(Long campaignId, Long meetingId, User currentUser) {
         Campaign campaign = getCampaign(campaignId);
         requireMeetingViewer(campaign, currentUser);
-        return toResponse(getMeetingInCampaign(campaignId, meetingId), currentUser);
+        return responseMapper.toResponse(getMeetingInCampaign(campaignId, meetingId), currentUser);
     }
 
     @Override
@@ -169,7 +172,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         CampaignMeeting saved = campaignMeetingRepository.save(meeting);
         log.info("Campaign meeting updated: meetingId={}, campaignId={}, userId={}",
                 meetingId, campaignId, currentUser.getId());
-        return toResponse(saved, currentUser);
+        return responseMapper.toResponse(saved, currentUser);
     }
 
     @Override
@@ -201,7 +204,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
             campaignMeeting.setUpdatedBy(currentUser);
         }
 
-        return toResponse(campaignMeeting, currentUser);
+        return responseMapper.toResponse(campaignMeeting, currentUser);
     }
 
     @Override
@@ -210,15 +213,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         Campaign campaign = getCampaign(campaignId);
         requireCampaignAdmin(campaign, currentUser);
 
-        return resolveAllRecipients(campaignId)
-                .stream()
-                .filter(member -> !member.getRoleInCampaign().equals(CampaignMemberRole.CAMPAIGN_ADMIN))
-                .map(member -> new CampaignMeetingRecipientResponse(
-                        member.getUser().getId(),
-                        member.getUser().getFullName(),
-                        member.getUser().getEmail(),
-                        member.getRoleInCampaign()))
-                .toList();
+        return recipientResolver.listSelectableRecipients(campaignId);
     }
 
     @Override
@@ -228,15 +223,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         requireMeetingViewer(campaign, currentUser);
         CampaignMeeting meeting = getMeetingInCampaign(campaignId, meetingId);
 
-        List<CampaignMember> invitedMembers = resolveInvitedMembers(meeting);
-
-        return invitedMembers.stream()
-                .map(member -> new CampaignMeetingRecipientResponse(
-                        member.getUser().getId(),
-                        member.getUser().getFullName(),
-                        member.getUser().getEmail(),
-                        member.getRoleInCampaign()))
-                .toList();
+        return recipientResolver.listInvitedRecipients(meeting);
     }
 
     @Override
@@ -244,7 +231,8 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
     public MeetingNotesResponse getMeetingNotes(Long campaignId, Long meetingId, User currentUser) {
         Campaign campaign = getCampaign(campaignId);
         requireMeetingViewer(campaign, currentUser);
-        return toNotesResponse(getMeetingInCampaign(campaignId, meetingId), canManageMeeting(campaign, currentUser));
+        return responseMapper.toNotesResponse(
+                getMeetingInCampaign(campaignId, meetingId), canManageMeeting(campaign, currentUser));
     }
 
     @Override
@@ -265,7 +253,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         meeting.setUpdatedAt(now);
         meeting.setUpdatedBy(currentUser);
 
-        return toNotesResponse(campaignMeetingRepository.save(meeting), true);
+        return responseMapper.toNotesResponse(campaignMeetingRepository.save(meeting), true);
     }
 
     @Override
@@ -275,49 +263,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         requireMeetingViewer(campaign, currentUser);
         CampaignMeeting meeting = getMeetingInCampaign(campaignId, meetingId);
 
-        List<MeetingActivityResponse> activities = new ArrayList<>();
-        activities.add(new MeetingActivityResponse(
-                "CREATED",
-                "Meeting was created",
-                meeting.getCreatedBy() != null ? meeting.getCreatedBy().getId() : null,
-                actorName(meeting.getCreatedBy(), "System"),
-                meeting.getCreatedAt()));
-        if (meeting.getInvitationsSentAt() != null) {
-            activities.add(new MeetingActivityResponse(
-                    "INVITATIONS_SENT",
-                    "Invitations were sent to " + invitedCount(meeting) + " members",
-                    null,
-                    "System",
-                    meeting.getInvitationsSentAt()));
-        }
-        if (meeting.getUpdatedBy() != null && meeting.getUpdatedAt() != null) {
-            activities.add(new MeetingActivityResponse(
-                    "UPDATED",
-                    "Meeting was updated",
-                    meeting.getUpdatedBy().getId(),
-                    actorName(meeting.getUpdatedBy(), "Unknown"),
-                    meeting.getUpdatedAt()));
-        }
-        if (meeting.getCancelledAt() != null) {
-            activities.add(new MeetingActivityResponse(
-                    "CANCELLED",
-                    "Meeting was cancelled",
-                    meeting.getCancelledBy() != null ? meeting.getCancelledBy().getId() : null,
-                    actorName(meeting.getCancelledBy(), "Unknown"),
-                    meeting.getCancelledAt()));
-        }
-        if (meeting.getNotesUpdatedAt() != null) {
-            activities.add(new MeetingActivityResponse(
-                    "NOTES_UPDATED",
-                    "Meeting notes were updated",
-                    meeting.getNotesUpdatedBy() != null ? meeting.getNotesUpdatedBy().getId() : null,
-                    actorName(meeting.getNotesUpdatedBy(), "Unknown"),
-                    meeting.getNotesUpdatedAt()));
-        }
-        return activities.stream()
-                .filter(activity -> activity.timestamp() != null)
-                .sorted(Comparator.comparing(MeetingActivityResponse::timestamp))
-                .toList();
+        return responseMapper.toActivityResponses(meeting);
     }
 
     @Override
@@ -329,7 +275,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
 
         return campaignMediaRepository.findByCampaignIdAndMeetingIdAndDeletedAtIsNull(campaignId, meetingId)
                 .stream()
-                .map(this::toMediaResponse)
+                .map(responseMapper::toMediaResponse)
                 .toList();
     }
 
@@ -390,7 +336,7 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
                 hostUser != null ? hostUser.getId() : null));
         campaignMeetingInvitationService.sendCancellationNotice(saved);
 
-        return toResponse(saved, currentUser);
+        return responseMapper.toResponse(saved, currentUser);
     }
 
     private Campaign getCampaign(Long campaignId) {
@@ -471,122 +417,6 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
                     ErrorCode.VALIDATION_ERROR,
                     "Meeting recipients can only be selected when creating a meeting");
         }
-    }
-
-    private List<User> resolveRecipients(Long campaignId, boolean notifyAll, List<Long> recipientUserIds) {
-        if (notifyAll) {
-            return resolveAllRecipients(campaignId)
-                    .stream()
-                    .map(CampaignMember::getUser)
-                    .toList();
-        }
-
-        if (recipientUserIds == null || recipientUserIds.isEmpty()) {
-            throw new AppException(
-                    ErrorCode.VALIDATION_ERROR,
-                    "recipientUserIds is required when notifyAll is false");
-        }
-
-        Set<Long> selectedIds = new LinkedHashSet<>(recipientUserIds);
-        Map<Long, CampaignMember> membersByUserId = new LinkedHashMap<>();
-        for (CampaignMember member : campaignMemberRepository.findByCampaignId(campaignId)) {
-            if (member.getUser() != null && member.getUser().getId() != null) {
-                membersByUserId.put(member.getUser().getId(), member);
-            }
-        }
-
-        List<Long> invalidIds = selectedIds.stream()
-                .filter(userId -> !membersByUserId.containsKey(userId))
-                .toList();
-        if (!invalidIds.isEmpty()) {
-            throw new AppException(
-                    ErrorCode.VALIDATION_ERROR,
-                    "Selected recipients must be campaign members: " + invalidIds);
-        }
-
-        List<User> recipients = new ArrayList<>();
-        Set<String> seenEmails = new LinkedHashSet<>();
-        for (Long selectedId : selectedIds) {
-            User user = membersByUserId.get(selectedId).getUser();
-            if (isReceivableRecipient(user) && seenEmails.add(user.getEmail().toLowerCase())) {
-                recipients.add(user);
-            }
-        }
-        if (recipients.size() != selectedIds.size()) {
-            throw new AppException(
-                    ErrorCode.VALIDATION_ERROR,
-                    "Selected recipients must be active campaign members with email addresses");
-        }
-        return recipients;
-    }
-
-    private List<CampaignMember> resolveAllRecipients(Long campaignId) {
-        Set<String> seenEmails = new LinkedHashSet<>();
-        return campaignMemberRepository.findByCampaignId(campaignId)
-                .stream()
-                .filter(member -> !member.getRoleInCampaign().equals(CampaignMemberRole.CAMPAIGN_ADMIN))
-                .filter(member -> member.getUser() != null)
-                .filter(member -> isReceivableRecipient(member.getUser()))
-                .filter(member -> seenEmails.add(member.getUser().getEmail().toLowerCase()))
-                .toList();
-    }
-
-    private List<CampaignMember> resolveInvitedMembers(CampaignMeeting meeting) {
-        Long campaignId = meeting.getCampaign() != null ? meeting.getCampaign().getId() : null;
-        if (campaignId == null) {
-            return List.of();
-        }
-        Set<Long> invitedIds = parseUserIds(meeting.getInvitedUserIds());
-        if (meeting.isNotifyAll() || invitedIds.isEmpty()) {
-            return resolveAllRecipients(campaignId);
-        }
-        return resolveMembersByUserIds(campaignId, invitedIds);
-    }
-
-    private List<CampaignMember> resolveMembersByUserIds(Long campaignId, Set<Long> userIds) {
-        if (userIds == null || userIds.isEmpty()) {
-            return List.of();
-        }
-        Set<String> seenEmails = new LinkedHashSet<>();
-        return campaignMemberRepository.findByCampaignId(campaignId)
-                .stream()
-                .filter(member -> member.getUser() != null)
-                .filter(member -> userIds.contains(member.getUser().getId()))
-                .filter(member -> isReceivableRecipient(member.getUser()))
-                .filter(member -> seenEmails.add(member.getUser().getEmail().toLowerCase()))
-                .toList();
-    }
-
-    private boolean isReceivableRecipient(User user) {
-        return user != null
-                && user.getStatus() == UserStatus.ACTIVE
-                && StringUtils.hasText(user.getEmail());
-    }
-
-    private String serializeUserIds(List<User> users) {
-        if (users == null || users.isEmpty()) {
-            return null;
-        }
-        return users.stream()
-                .filter(user -> user != null && user.getId() != null)
-                .map(User::getId)
-                .distinct()
-                .map(String::valueOf)
-                .collect(Collectors.joining(","));
-    }
-
-    private Set<Long> parseUserIds(String userIds) {
-        if (!StringUtils.hasText(userIds)) {
-            return Set.of();
-        }
-        Set<Long> ids = new LinkedHashSet<>();
-        for (String value : userIds.split(",")) {
-            String trimmed = value.trim();
-            if (StringUtils.hasText(trimmed)) {
-                ids.add(Long.parseLong(trimmed));
-            }
-        }
-        return ids;
     }
 
     private boolean matchesView(CampaignMeeting meeting, String view, LocalDateTime now) {
@@ -694,76 +524,4 @@ public class CampaignMeetingServiceImpl implements CampaignMeetingService {
         }
     }
 
-    private CampaignMeetingResponse toResponse(CampaignMeeting meeting, User currentUser) {
-        boolean canManage = canManageMeeting(meeting.getCampaign(), currentUser);
-        boolean upcoming = isUpcoming(meeting, campaignMeetingClock.now());
-        return CampaignMeetingResponse.builder()
-                .id(meeting.getId())
-                .campaignId(meeting.getCampaign() != null ? meeting.getCampaign().getId() : null)
-                .createdById(meeting.getCreatedBy() != null ? meeting.getCreatedBy().getId() : null)
-                .createdByName(meeting.getCreatedBy() != null ? meeting.getCreatedBy().getFullName() : null)
-                .webexMeetingId(meeting.getWebexMeetingId())
-                .title(meeting.getTitle())
-                .description(meeting.getDescription())
-                .meetingUrl(meeting.getMeetingUrl())
-                .startTime(meeting.getStartTime())
-                .endTime(meeting.getEndTime())
-                .status(meeting.getStatus())
-                .notifyAllMembers(meeting.isNotifyAll())
-                .invitedCount(invitedCount(meeting))
-                .invitedUserIds(canManage ? invitedUserIdsForResponse(meeting) : null)
-                .displayStatus(meeting.getStatus().name())
-                .canManage(canManage)
-                .canUpdate(canManage && upcoming)
-                .canCancel(canManage && upcoming)
-                .canEditNotes(canManage)
-                .createdAt(meeting.getCreatedAt())
-                .updatedAt(meeting.getUpdatedAt())
-                .build();
-    }
-
-    private int invitedCount(CampaignMeeting meeting) {
-        if (meeting.getInvitedCount() != null) {
-            return meeting.getInvitedCount();
-        }
-        return resolveInvitedMembers(meeting).size();
-    }
-
-    private List<Long> invitedUserIdsForResponse(CampaignMeeting meeting) {
-        return resolveInvitedMembers(meeting)
-                .stream()
-                .map(CampaignMember::getUser)
-                .filter(user -> user != null && user.getId() != null)
-                .map(User::getId)
-                .toList();
-    }
-
-    private MeetingNotesResponse toNotesResponse(CampaignMeeting meeting, boolean canEdit) {
-        User updatedBy = meeting.getNotesUpdatedBy();
-        return new MeetingNotesResponse(
-                meeting.getId(),
-                meeting.getNotes(),
-                meeting.getNotesUpdatedAt(),
-                updatedBy != null ? updatedBy.getId() : null,
-                actorName(updatedBy, null),
-                canEdit);
-    }
-
-    private CampaignMediaResponse toMediaResponse(CampaignMedia media) {
-        return new CampaignMediaResponse(media.getId(), media.getUrl(), media.getMediaType(), media.isCover(),
-                media.getCaption(), media.getDisplayOrder(), media.getContext().name());
-    }
-
-    private String actorName(User user, String fallback) {
-        if (user == null) {
-            return fallback;
-        }
-        if (StringUtils.hasText(user.getFullName())) {
-            return user.getFullName();
-        }
-        if (StringUtils.hasText(user.getEmail())) {
-            return user.getEmail();
-        }
-        return fallback;
-    }
 }
