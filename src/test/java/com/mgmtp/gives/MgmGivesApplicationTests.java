@@ -20,7 +20,7 @@ class MgmGivesApplicationTests {
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
             .withDatabaseName("mgmgives_test")
             .withUsername("postgres")
-            .withPassword("123456");
+            .withPassword("test-only-password");
 
     @Test
     void contextLoads() {
