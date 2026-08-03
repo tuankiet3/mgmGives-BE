@@ -12,40 +12,42 @@ import com.mgmtp.gives.dto.campaign_task.TaskAssignableMemberResponse;
 import com.mgmtp.gives.dto.campaign_task.UpdateCampaignTaskRequest;
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.*;
+import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignTaskActivityAction;
 import com.mgmtp.gives.enums.TaskStatus;
 import com.mgmtp.gives.enums.UserStatus;
+import com.mgmtp.gives.event.notification.TaskAssignedEvent;
+import com.mgmtp.gives.event.notification.TaskCreatedEmailEvent;
+import com.mgmtp.gives.event.notification.TaskDescriptionUpdatedEvent;
+import com.mgmtp.gives.event.notification.TaskStatusChangedEvent;
+import com.mgmtp.gives.event.notification.TaskUnassignedEvent;
+import com.mgmtp.gives.event.task.CampaignTaskChangedEvent;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
-import com.mgmtp.gives.event.task.CampaignTaskChangedEvent;
+import com.mgmtp.gives.mapper.CampaignTaskMapper;
 import com.mgmtp.gives.repository.*;
 import com.mgmtp.gives.service.CampaignTaskService;
 import com.mgmtp.gives.service.MediaService;
+import com.mgmtp.gives.service.support.CampaignTaskActivityTracker;
+import com.mgmtp.gives.service.support.CampaignTaskActivityTracker.Draft;
+import com.mgmtp.gives.service.support.CampaignTaskActivityTracker.Snapshot;
 import com.mgmtp.gives.specification.CampaignTaskSpecifications;
 import com.mgmtp.gives.util.CampaignAccessHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import com.mgmtp.gives.dto.notification.NotificationRecipient;
-import com.mgmtp.gives.event.notification.TaskAssignedEvent;
-import com.mgmtp.gives.event.notification.TaskStatusChangedEvent;
-import com.mgmtp.gives.event.notification.TaskDescriptionUpdatedEvent;
-import com.mgmtp.gives.event.notification.TaskUnassignedEvent;
-import com.mgmtp.gives.event.notification.TaskCreatedEmailEvent;
-import com.mgmtp.gives.enums.CampaignMemberRole;
-import org.springframework.context.ApplicationEventPublisher;
-import java.util.stream.Collectors;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -60,6 +62,8 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
     private final TaskAssignmentRepository taskAssignmentRepository;
     private final TaskAttachmentRepository taskAttachmentRepository;
     private final CampaignTaskActivityRepository campaignTaskActivityRepository;
+    private final CampaignTaskMapper campaignTaskMapper;
+    private final CampaignTaskActivityTracker campaignTaskActivityTracker;
     private final CampaignAccessHelper campaignAccessHelper;
     private final MediaService mediaService;
     private final ApplicationEventPublisher eventPublisher;
@@ -138,7 +142,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                     assigneesRecipients));
         }
 
-        return toResponse(savedTask);
+        return campaignTaskMapper.toResponse(savedTask);
     }
 
     @Override
@@ -147,12 +151,8 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         CampaignTask savedTask = findTask(taskId);
         Long campaignId = savedTask.getCampaign().getId();
 
-        TaskStatus previousStatus = savedTask.getStatus();
-        String previousTitle = savedTask.getTitle();
-        String previousDescription = savedTask.getDescription();
-        LocalDateTime previousDueDate = savedTask.getDueDate();
-        Map<Long, String> previousAssignees = assignmentNames(savedTask);
-        Map<Long, String> previousLabels = labelNames(savedTask);
+        Snapshot previous = campaignTaskActivityTracker.snapshot(savedTask);
+        Map<Long, String> previousAssignees = previous.assignees();
 
         boolean isAdmin = validateCanModifyTask(savedTask, currentUser);
         if (!isAdmin && (request.assigneeIds() != null || request.labelIds() != null)) {
@@ -215,20 +215,13 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
             savedTask.getLabels().addAll(requestedLabels);
         }
 
-        List<ActivityDraft> activities = collectUpdateActivities(
-                savedTask,
-                previousStatus,
-                previousTitle,
-                previousDescription,
-                previousDueDate,
-                previousAssignees,
-                previousLabels);
+        List<Draft> activities = campaignTaskActivityTracker.collectChanges(previous, savedTask);
         savedTask.setUpdatedAt(LocalDateTime.now());
         CampaignTaskResponse response = saveAndPublish(
                 savedTask,
                 statusChanged ? CampaignTaskChangeAction.MOVED : CampaignTaskChangeAction.UPDATED,
                 currentUser,
-                activities.toArray(ActivityDraft[]::new));
+                activities.toArray(Draft[]::new));
 
         log.info("Task updated: taskId={}, userId={}", taskId, currentUser.getId());
 
@@ -327,7 +320,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         validateCanReopenCompletedTask(task, request.status(), isAdmin);
 
         if (!Objects.equals(task.getVersion(), request.expectedVersion())) {
-            throw new AppException(ErrorCode.RESOURCE_UPDATE_CONFLICT, toResponse(task));
+            throw new AppException(ErrorCode.RESOURCE_UPDATE_CONFLICT, campaignTaskMapper.toResponse(task));
         }
         TaskStatus previousStatus = task.getStatus();
         if (request.position() != null) {
@@ -340,11 +333,13 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                 taskId, request.status().name(), request.expectedVersion(), request.position(), updatedAt);
         if (updatedRows == 0) {
             CampaignTask currentTask = findTask(taskId);
-            throw new AppException(ErrorCode.RESOURCE_UPDATE_CONFLICT, toResponse(currentTask));
+            throw new AppException(
+                    ErrorCode.RESOURCE_UPDATE_CONFLICT,
+                    campaignTaskMapper.toResponse(currentTask));
         }
 
         CampaignTask movedTask = findTask(taskId);
-        CampaignTaskResponse response = toResponse(movedTask);
+        CampaignTaskResponse response = campaignTaskMapper.toResponse(movedTask);
         if (previousStatus != movedTask.getStatus()) {
             recordActivities(
                     movedTask,
@@ -407,7 +402,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         CampaignTask task = findTask(taskId);
         campaignAccessHelper.validateCampaignMemberOrAdmin(
                 task.getCampaign().getId(), currentUser, ErrorCode.UNAUTHORIZED_TASK_ACCESS);
-        return toResponse(task);
+        return campaignTaskMapper.toResponse(task);
     }
 
     @Override
@@ -420,7 +415,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         campaignAccessHelper.validateCampaignMemberOrAdmin(
                 task.getCampaign().getId(), currentUser, ErrorCode.UNAUTHORIZED_TASK_ACCESS);
         return campaignTaskActivityRepository.findByTaskId(taskId, pageable)
-                .map(this::toActivityResponse);
+                .map(campaignTaskMapper::toActivityResponse);
     }
 
     @Override
@@ -436,7 +431,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                     campaignId, currentUser, ErrorCode.UNAUTHORIZED_TASK_ACCESS);
         }
 
-        Specification<CampaignTask> spec = Specification.where(CampaignTaskSpecifications.hasCampaignId(campaignId))
+        Specification<CampaignTask> spec = CampaignTaskSpecifications.hasCampaignId(campaignId)
                 .and(CampaignTaskSpecifications.hasStatus(status))
                 .and(CampaignTaskSpecifications.hasAssigneeId(assigneeId));
 
@@ -447,7 +442,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                     .and(CampaignTaskSpecifications.isNotDeleted());
         }
 
-        return campaignTaskRepository.findAll(spec, pageable).map(this::toResponse);
+        return campaignTaskRepository.findAll(spec, pageable).map(campaignTaskMapper::toResponse);
     }
 
     @Override
@@ -587,7 +582,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                     recipients));
         }
 
-        return toResponse(savedTask);
+        return campaignTaskMapper.toResponse(savedTask);
     }
 
     @Override
@@ -629,7 +624,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                 savedTask.getTitle(),
                 new NotificationRecipient(unassignedUser.getId(), unassignedUser.getEmail())));
 
-        return toResponse(savedTask);
+        return campaignTaskMapper.toResponse(savedTask);
     }
 
     @Override
@@ -788,11 +783,11 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                         details(
                                 "attachmentId", attachment.getId(),
                                 "name", attachment.getOriginalFilename()))));
-        CampaignTaskResponse response = toResponse(savedTask);
+        CampaignTaskResponse response = campaignTaskMapper.toResponse(savedTask);
         publishTaskChange(savedTask, response, CampaignTaskChangeAction.UPDATED, currentUser);
         log.info("Attachment added: taskId={}, attachmentId={}, uploadedBy={}",
                 taskId, attachment.getId(), currentUser.getId());
-        return toAttachmentResponse(attachment);
+        return campaignTaskMapper.toAttachmentResponse(attachment);
     }
 
     @Override
@@ -823,7 +818,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                         details(
                                 "attachmentId", attachmentId,
                                 "name", attachment.getOriginalFilename()))));
-        CampaignTaskResponse response = toResponse(savedTask);
+        CampaignTaskResponse response = campaignTaskMapper.toResponse(savedTask);
         publishTaskChange(savedTask, response, CampaignTaskChangeAction.UPDATED, currentUser);
         log.info("Attachment removed: taskId={}, attachmentId={}, removedBy={}", taskId, attachmentId,
                 currentUser.getId());
@@ -854,164 +849,33 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
             CampaignTask task,
             CampaignTaskChangeAction action,
             User currentUser,
-            ActivityDraft... activities) {
+            Draft... activities) {
         CampaignTask savedTask = saveTaskOrThrowConflict(task);
         recordActivities(savedTask, currentUser, Arrays.asList(activities));
-        CampaignTaskResponse response = toResponse(savedTask);
+        CampaignTaskResponse response = campaignTaskMapper.toResponse(savedTask);
         publishTaskChange(savedTask, response, action, currentUser);
         return response;
-    }
-
-    private List<ActivityDraft> collectUpdateActivities(
-            CampaignTask task,
-            TaskStatus previousStatus,
-            String previousTitle,
-            String previousDescription,
-            LocalDateTime previousDueDate,
-            Map<Long, String> previousAssignees,
-            Map<Long, String> previousLabels) {
-        List<ActivityDraft> activities = new ArrayList<>();
-
-        if (previousStatus != task.getStatus()) {
-            activities.add(activity(
-                    CampaignTaskActivityAction.STATUS_CHANGED,
-                    details("fromStatus", previousStatus.name(), "toStatus", task.getStatus().name())));
-        }
-        if (!Objects.equals(previousTitle, task.getTitle())) {
-            activities.add(activity(
-                    CampaignTaskActivityAction.TITLE_UPDATED,
-                    details("fromTitle", previousTitle, "toTitle", task.getTitle())));
-        }
-        if (!Objects.equals(previousDescription, task.getDescription())) {
-            activities.add(activity(CampaignTaskActivityAction.DESCRIPTION_UPDATED, Map.of()));
-        }
-        if (!Objects.equals(previousDueDate, task.getDueDate())) {
-            activities.add(activity(
-                    CampaignTaskActivityAction.DUE_DATE_UPDATED,
-                    details(
-                            "fromDueDate", toActivityValue(previousDueDate),
-                            "toDueDate", toActivityValue(task.getDueDate()))));
-        }
-
-        Map<Long, String> currentAssignees = assignmentNames(task);
-        previousAssignees.forEach((userId, name) -> {
-            if (!currentAssignees.containsKey(userId)) {
-                activities.add(activity(
-                        CampaignTaskActivityAction.ASSIGNEE_REMOVED,
-                        details("userId", userId, "name", name)));
-            }
-        });
-        currentAssignees.forEach((userId, name) -> {
-            if (!previousAssignees.containsKey(userId)) {
-                activities.add(activity(
-                        CampaignTaskActivityAction.ASSIGNEE_ADDED,
-                        details("userId", userId, "name", name)));
-            }
-        });
-
-        Map<Long, String> currentLabels = labelNames(task);
-        previousLabels.forEach((labelId, name) -> {
-            if (!currentLabels.containsKey(labelId)) {
-                activities.add(activity(
-                        CampaignTaskActivityAction.LABEL_REMOVED,
-                        details("labelId", labelId, "name", name)));
-            }
-        });
-        currentLabels.forEach((labelId, name) -> {
-            if (!previousLabels.containsKey(labelId)) {
-                activities.add(activity(
-                        CampaignTaskActivityAction.LABEL_ADDED,
-                        details("labelId", labelId, "name", name)));
-            }
-        });
-
-        return activities;
     }
 
     private void recordActivities(
             CampaignTask task,
             User actor,
-            Collection<ActivityDraft> activities) {
-        List<CampaignTaskActivity> entities = new ArrayList<>();
-        for (ActivityDraft draft : activities) {
-            if (draft == null) {
-                continue;
-            }
-            entities.add(CampaignTaskActivity.builder()
-                    .task(task)
-                    .action(draft.action())
-                    .actor(actor)
-                    .actorName(displayName(actor))
-                    .details(draft.details())
-                    .build());
-        }
-        if (!entities.isEmpty()) {
-            campaignTaskActivityRepository.saveAll(entities);
-        }
-    }
-
-    private CampaignTaskActivityResponse toActivityResponse(CampaignTaskActivity activity) {
-        User actor = activity.getActor();
-        return new CampaignTaskActivityResponse(
-                activity.getId(),
-                activity.getAction(),
-                new CampaignTaskActivityResponse.ActorSummary(
-                        actor == null ? null : actor.getId(),
-                        activity.getActorName(),
-                        actor == null ? null : actor.getAvatarUrl()),
-                activity.getDetails(),
-                activity.getCreatedAt());
-    }
-
-    private Map<Long, String> assignmentNames(CampaignTask task) {
-        Map<Long, String> names = new LinkedHashMap<>();
-        task.getAssignments().stream()
-                .map(TaskAssignment::getUser)
-                .filter(Objects::nonNull)
-                .sorted(Comparator.comparing(User::getId))
-                .forEach(user -> names.put(user.getId(), displayName(user)));
-        return names;
-    }
-
-    private Map<Long, String> labelNames(CampaignTask task) {
-        Map<Long, String> names = new LinkedHashMap<>();
-        task.getLabels().stream()
-                .sorted(Comparator.comparing(CampaignTaskLabel::getId))
-                .forEach(label -> names.put(label.getId(), label.getName()));
-        return names;
+            Collection<Draft> activities) {
+        campaignTaskActivityTracker.record(task, actor, activities);
     }
 
     private String displayName(User user) {
-        if (user == null) {
-            return "Unknown user";
-        }
-        if (user.getFullName() != null && !user.getFullName().isBlank()) {
-            return user.getFullName();
-        }
-        return user.getEmail() == null || user.getEmail().isBlank() ? "Unknown user" : user.getEmail();
+        return campaignTaskActivityTracker.displayName(user);
     }
 
-    private String toActivityValue(LocalDateTime value) {
-        return value == null ? null : value.toString();
-    }
-
-    private ActivityDraft activity(
+    private Draft activity(
             CampaignTaskActivityAction action,
             Map<String, Object> details) {
-        return new ActivityDraft(action, details);
+        return campaignTaskActivityTracker.activity(action, details);
     }
 
     private Map<String, Object> details(Object... keyValues) {
-        Map<String, Object> details = new LinkedHashMap<>();
-        for (int index = 0; index < keyValues.length; index += 2) {
-            details.put((String) keyValues[index], keyValues[index + 1]);
-        }
-        return details;
-    }
-
-    private record ActivityDraft(
-            CampaignTaskActivityAction action,
-            Map<String, Object> details) {
+        return campaignTaskActivityTracker.details(keyValues);
     }
 
     private CampaignTask saveTaskOrThrowConflict(CampaignTask task) {
@@ -1022,53 +886,6 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
         } catch (ObjectOptimisticLockingFailureException ex) {
             throw new AppException(ErrorCode.RESOURCE_UPDATE_CONFLICT);
         }
-    }
-
-    private CampaignTaskResponse toResponse(CampaignTask task) {
-        User creator = task.getCreatedBy();
-        CampaignTaskResponse.UserSummary createdBy = creator == null ? null
-                : new CampaignTaskResponse.UserSummary(
-                        creator.getId(),
-                        creator.getFullName(),
-                        creator.getEmail(),
-                        creator.getAvatarUrl());
-
-        List<CampaignTaskResponse.AssigneeInfo> assignees = task.getAssignments().stream()
-                .map(a -> new CampaignTaskResponse.AssigneeInfo(
-                        a.getUser().getId(),
-                        a.getUser().getFullName(),
-                        a.getUser().getEmail(),
-                        a.getUser().getAvatarUrl()))
-                .toList();
-
-        List<CampaignTaskResponse.LabelInfo> labels = task.getLabels().stream()
-                .map(l -> new CampaignTaskResponse.LabelInfo(
-                        l.getId(),
-                        l.getName(),
-                        l.getColor()))
-                .toList();
-
-        List<TaskAttachmentResponse> attachments = task.getAttachments().stream()
-                .map(this::toAttachmentResponse)
-                .toList();
-
-        return new CampaignTaskResponse(
-                task.getId(),
-                task.getCampaign() != null ? task.getCampaign().getId() : null,
-                task.getTitle(),
-                task.getDescription(),
-                task.getStatus(),
-                task.getPosition(),
-                task.getDueDate(),
-                task.isArchived(),
-                createdBy,
-                assignees,
-                labels,
-                attachments,
-                task.getCreatedAt(),
-                task.getUpdatedAt(),
-                task.getDeletedAt(),
-                task.getVersion());
     }
 
     private long nextActivePosition(Long campaignId, TaskStatus status) {
@@ -1146,21 +963,4 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                 .forEach(task.getAssignments()::add);
     }
 
-    private TaskAttachmentResponse toAttachmentResponse(TaskAttachment attachment) {
-        User uploader = attachment.getUploadedBy();
-        TaskAttachmentResponse.UploadedByInfo uploadedBy = uploader == null ? null
-                : new TaskAttachmentResponse.UploadedByInfo(
-                        uploader.getId(),
-                        uploader.getFullName(),
-                        uploader.getEmail(),
-                        uploader.getAvatarUrl());
-        return new TaskAttachmentResponse(
-                attachment.getId(),
-                attachment.getOriginalFilename(),
-                attachment.getStoredFilename(),
-                attachment.getFileType(),
-                attachment.getFileSize(),
-                uploadedBy,
-                attachment.getUploadedAt());
-    }
 }

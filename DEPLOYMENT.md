@@ -1,6 +1,6 @@
 # Deploy backend on Render
 
-The repository contains a Render Blueprint in `render.yaml`. It builds the existing multi-stage Docker image, runs the service on Render's `PORT`, and checks the public database-backed `/api/categories` endpoint.
+The repository contains a Render Blueprint in `render.yaml`. The main CI/CD path builds release images with Paketo through Gradle's `bootBuildImage` task. Render temporarily uses the version-controlled Gradle multi-stage Dockerfile as a compatibility fallback, runs the service on Render's `PORT`, and checks the public database-backed `/api/categories` endpoint.
 
 ## Prerequisites
 
@@ -40,10 +40,11 @@ The Blueprint uses Brevo SMTP on port `2525`, sets the Google callback to
 ## Recommended deployment order
 
 1. Create the PostgreSQL database and copy its connection values.
-2. Deploy this repository from the `develop` branch as a Render Blueprint.
-3. Deploy the frontend and set `VITE_API_URL` and `VITE_WS_URL` there.
-4. Update `APP_ALLOWED_ORIGINS`, `FRONTEND_URL`, and provider callback URLs with the final public domains, then redeploy the backend.
-5. Verify `GET /actuator/health`, login, refresh-token flow, WebSocket notifications, OAuth callbacks, and payment webhooks.
+2. For a database previously managed by Flyway, complete the backup and V44 checks in [DATABASE_MIGRATION.md](DATABASE_MIGRATION.md).
+3. Deploy this repository from the `develop` branch as a Render Blueprint.
+4. Deploy the frontend and set `VITE_API_URL` and `VITE_WS_URL` there.
+5. Update `APP_ALLOWED_ORIGINS`, `FRONTEND_URL`, and provider callback URLs with the final public domains, then redeploy the backend.
+6. Verify `GET /actuator/health`, Liquibase's `DATABASECHANGELOG`, login, refresh-token flow, WebSocket notifications, OAuth callbacks, and payment webhooks.
 
 ## Free-tier limitation
 

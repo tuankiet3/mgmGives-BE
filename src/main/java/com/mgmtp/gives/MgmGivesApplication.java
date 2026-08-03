@@ -3,8 +3,6 @@ package com.mgmtp.gives;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
-import org.springframework.boot.autoconfigure.flyway.FlywayMigrationStrategy;
-import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
@@ -17,11 +15,4 @@ public class MgmGivesApplication {
         SpringApplication.run(MgmGivesApplication.class, args);
     }
 
-    @Bean
-    public FlywayMigrationStrategy flywayMigrationStrategy() {
-        return flyway -> {
-            flyway.repair();
-            flyway.migrate();
-        };
-    }
 }

@@ -16,12 +16,11 @@ spring:
       hibernate:
         format_sql: true
 
-  flyway:
+  liquibase:
     enabled: true
-    locations: classpath:db/migration
-    baseline-on-migrate: true
-    validate-on-migrate: true
-    out-of-order: true
+    change-log: classpath:db/changelog/db.changelog-master.xml
+    show-summary: summary
+    show-summary-output: log
 
   servlet:
     multipart:

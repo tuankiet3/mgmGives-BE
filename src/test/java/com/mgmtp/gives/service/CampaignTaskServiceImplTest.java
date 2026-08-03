@@ -7,6 +7,7 @@ import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.CampaignTask;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.TaskStatus;
+import com.mgmtp.gives.mapper.CampaignTaskMapper;
 import com.mgmtp.gives.repository.CampaignLabelRepository;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
@@ -16,13 +17,15 @@ import com.mgmtp.gives.repository.TaskAssignmentRepository;
 import com.mgmtp.gives.repository.TaskAttachmentRepository;
 import com.mgmtp.gives.repository.UserRepository;
 import com.mgmtp.gives.service.impl.CampaignTaskServiceImpl;
+import com.mgmtp.gives.service.support.CampaignTaskActivityTracker;
+import com.mgmtp.gives.service.support.CampaignTaskActivityTracker.Snapshot;
 import com.mgmtp.gives.util.CampaignAccessHelper;
 import jakarta.validation.Validation;
-import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageImpl;
@@ -34,8 +37,8 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -66,6 +69,10 @@ class CampaignTaskServiceImplTest {
         ApplicationEventPublisher eventPublisher;
         @Mock
         CampaignTaskActivityRepository campaignTaskActivityRepository;
+        @Mock
+        CampaignTaskActivityTracker campaignTaskActivityTracker;
+        @Spy
+        CampaignTaskMapper campaignTaskMapper = new CampaignTaskMapper();
 
         @InjectMocks
         CampaignTaskServiceImpl service;
@@ -114,6 +121,15 @@ class CampaignTaskServiceImplTest {
                 when(campaignTaskRepository.findMaxActivePositionByCampaignIdAndStatus(3L, TaskStatus.DONE))
                                 .thenReturn(6L);
                 when(campaignTaskRepository.save(task)).thenReturn(task);
+                Snapshot snapshot = new Snapshot(
+                                TaskStatus.TODO,
+                                "Move me",
+                                null,
+                                null,
+                                java.util.Map.of(),
+                                java.util.Map.of());
+                when(campaignTaskActivityTracker.snapshot(task)).thenReturn(snapshot);
+                when(campaignTaskActivityTracker.collectChanges(snapshot, task)).thenReturn(List.of());
 
                 CampaignTaskResponse result = service.updateTask(
                                 11L,

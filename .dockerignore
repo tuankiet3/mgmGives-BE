@@ -1,7 +1,10 @@
+.gradle
+build
 target
 .idea
 .git
 .gitignore
 *.iml
-.env
+.env*
+!.env.example
 README.md

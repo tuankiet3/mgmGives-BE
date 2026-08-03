@@ -8,11 +8,12 @@ import com.mgmtp.gives.enums.CampaignPriority;
 import com.mgmtp.gives.enums.CampaignStatus;
 import com.mgmtp.gives.enums.UserRole;
 import com.mgmtp.gives.enums.UserStatus;
+import com.mgmtp.gives.support.PostgreSqlTestContainerConfiguration;
 import jakarta.persistence.EntityManager;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
@@ -27,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
-@Disabled("Requires a PostgreSQL test database on localhost:5432; Jenkins PR builds do not provide one.")
+@Import(PostgreSqlTestContainerConfiguration.class)
 class CampaignFollowerRepositoryTest {
 
     @Autowired
@@ -39,9 +40,9 @@ class CampaignFollowerRepositoryTest {
     @Test
     void findAllByUserIdWithFilters_requiresCampaignToContainAllSelectedCategories() {
         User user = persistUser("filter-user@example.com");
-        Category disasterRelief = persistCategory("Disaster Relief");
-        Category education = persistCategory("Education");
-        Category healthcare = persistCategory("Healthcare");
+        Category disasterRelief = persistCategory("Repository Filter Disaster Relief");
+        Category education = persistCategory("Repository Filter Education");
+        Category healthcare = persistCategory("Repository Filter Healthcare");
 
         Campaign disasterAndEducation = persistCampaign(
                 "Disaster and Education",

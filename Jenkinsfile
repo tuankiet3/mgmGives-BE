@@ -7,8 +7,15 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '10'))
     }
 
+    parameters {
+        booleanParam(
+            name: 'CREATE_RELEASE_TAG',
+            defaultValue: false,
+            description: 'Create and push an Axion release tag (master or release/* only).'
+        )
+    }
+
     tools {
-        maven 'Maven3'
         jdk 'OpenJDK21'
     }
 
@@ -26,6 +33,7 @@ pipeline {
 
         // Credentials
         DOCKER_CREDENTIALS_ID = 'docker-registry-credentials'
+        RELEASE_GIT_CREDENTIALS_ID = 'github-release-token'
         SSH_CREDENTIALS_ID = 'deploy-ssh-key'
 
         // SSH Configuration
@@ -40,12 +48,42 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+                sh 'chmod +x gradlew'
             }
         }
 
         stage('Integration Test') {
             steps {
-                sh 'mvn clean verify -Dspring.profiles.active=test'
+                sh './gradlew clean check --no-daemon'
+            }
+        }
+
+        stage('Create Release Tag') {
+            when {
+                expression { return params.CREATE_RELEASE_TAG && isReleaseBranch() }
+            }
+
+            steps {
+                input message: 'Create and push the next Axion release tag?', ok: 'Release'
+                withCredentials([usernamePassword(
+                    credentialsId: env.RELEASE_GIT_CREDENTIALS_ID,
+                    usernameVariable: 'RELEASE_GIT_USER',
+                    passwordVariable: 'RELEASE_GIT_TOKEN'
+                )]) {
+                    sh './gradlew release --no-daemon'
+                }
+            }
+        }
+
+        stage('Resolve Version') {
+            steps {
+                script {
+                    env.APP_VERSION = sh(
+                        script: './gradlew printVersion --quiet --no-daemon',
+                        returnStdout: true
+                    ).trim()
+                    echo "Axion project version: ${env.APP_VERSION}"
+                }
             }
         }
 
@@ -56,14 +94,14 @@ pipeline {
 
             steps {
                 script {
-                    def safeBranchName = env.BRANCH_NAME.replace('/', '-')
                     def latestTagPrefix = getLatestTagPrefix()
 
-                    env.IMAGE_TAG = "${safeBranchName}-${env.BUILD_NUMBER}"
+                    env.IMAGE_TAG = "${env.APP_VERSION}-${env.BUILD_NUMBER}"
                     env.DOCKER_IMAGE = "${env.IMAGE_REPOSITORY}:${env.IMAGE_TAG}"
                     env.LATEST_TAG = "${env.IMAGE_REPOSITORY}:${latestTagPrefix}-latest"
 
-                    sh "docker build -f Dockerfile . -t ${env.DOCKER_IMAGE} -t ${env.LATEST_TAG}"
+                    sh "./gradlew bootBuildImage --imageName=${env.DOCKER_IMAGE} --no-daemon"
+                    sh "docker tag ${env.DOCKER_IMAGE} ${env.LATEST_TAG}"
                 }
             }
         }
@@ -171,6 +209,10 @@ def getDeployEnvironment() {
 
 def isProductionBranch() {
     return env.BRANCH_NAME == 'master'
+}
+
+def isReleaseBranch() {
+    return env.BRANCH_NAME == 'master' || env.BRANCH_NAME.startsWith('release/')
 }
 
 def getLatestTagPrefix() {
