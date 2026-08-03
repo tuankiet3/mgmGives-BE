@@ -5,6 +5,8 @@ import com.mgmtp.gives.common.JwtProps;
 import com.mgmtp.gives.dto.auth.TokenGenerationRequest;
 import com.mgmtp.gives.exception.AppException;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.RepeatedTest;
+import org.junit.jupiter.api.RepetitionInfo;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,15 +56,14 @@ class JwtServiceTest {
                         assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.EXPIRED_TOKEN));
     }
 
-    @Test
-    void modifiedSignatureMapsToInvalidTokenError() {
+    @RepeatedTest(32)
+    void modifiedSignatureMapsToInvalidTokenError(RepetitionInfo repetitionInfo) {
         String token = jwtService.generateAccessToken(new TokenGenerationRequest(
                 42L,
-                "member@example.test",
+                "member+" + repetitionInfo.getCurrentRepetition() + "@example.test",
                 "USER"
         ));
-        char replacement = token.endsWith("a") ? 'b' : 'a';
-        String modifiedToken = token.substring(0, token.length() - 1) + replacement;
+        String modifiedToken = tamperSignature(token);
 
         assertInvalidToken(modifiedToken);
     }
@@ -76,5 +77,15 @@ class JwtServiceTest {
         assertThatThrownBy(() -> jwtService.extractClaimsFromToken(token))
                 .isInstanceOfSatisfying(AppException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_TOKEN));
+    }
+
+    private String tamperSignature(String token) {
+        String[] segments = token.split("\\.", -1);
+        assertThat(segments).hasSize(3);
+        assertThat(segments[2]).isNotEmpty();
+
+        char replacement = segments[2].charAt(0) == 'A' ? 'B' : 'A';
+        segments[2] = replacement + segments[2].substring(1);
+        return String.join(".", segments);
     }
 }

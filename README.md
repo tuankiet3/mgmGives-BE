@@ -1,5 +1,7 @@
 # mgmGives Backend
 
+[![Backend CI](https://github.com/tuankiet3/mgmGives-BE/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/tuankiet3/mgmGives-BE/actions/workflows/ci.yml)
+
 Spring Boot backend for the mgmGives charity campaign management platform.
 
 ## Stack
