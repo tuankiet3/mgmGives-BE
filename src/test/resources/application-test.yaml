@@ -6,6 +6,34 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
     password: ${SPRING_DATASOURCE_PASSWORD:test-only-password}
     driver-class-name: org.postgresql.Driver
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: test-google-client-id
+            client-secret: test-google-client-secret
+
+app:
+  jwt:
+    secret: test-only-not-a-secret-test-only-not-a-secret-test-only-not-a-secret
+    access-token-expiration: 900000
+    refresh-token-expiration: 604800000
+  seed:
+    admin:
+      email: admin@example.test
+      password: test-admin-password
+      full-name: Test Admin
+  webex:
+    client-id: test-webex-client-id
+    client-secret: test-webex-client-secret
+    redirect-uri: http://localhost:8080/api/integrations/webex/oauth/callback
+    scopes: meeting:schedules_read
+
+payos:
+  client-id: test-payos-client-id
+  api-key: test-payos-api-key
+  checksum-key: test-payos-checksum-key
 
 logging:
   file:
