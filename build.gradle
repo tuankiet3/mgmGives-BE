@@ -49,7 +49,7 @@ repositories {
 
 ext {
     archUnitVersion = '1.4.2'
-    jacocoMinimumLineCoverage = 0.25
+    jacocoMinimumLineCoverage = 0.255
     jjwtVersion = '0.12.6'
     mapstructVersion = '1.6.3'
 }
