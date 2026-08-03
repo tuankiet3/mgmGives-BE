@@ -436,7 +436,7 @@ public class CampaignTaskServiceImpl implements CampaignTaskService {
                     campaignId, currentUser, ErrorCode.UNAUTHORIZED_TASK_ACCESS);
         }
 
-        Specification<CampaignTask> spec = Specification.where(CampaignTaskSpecifications.hasCampaignId(campaignId))
+        Specification<CampaignTask> spec = CampaignTaskSpecifications.hasCampaignId(campaignId)
                 .and(CampaignTaskSpecifications.hasStatus(status))
                 .and(CampaignTaskSpecifications.hasAssigneeId(assigneeId));
 

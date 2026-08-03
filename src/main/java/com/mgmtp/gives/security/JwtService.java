@@ -3,8 +3,13 @@ package com.mgmtp.gives.security;
 import com.mgmtp.gives.common.JwtProps;
 import com.mgmtp.gives.dto.auth.TokenGenerationRequest;
 import com.mgmtp.gives.exception.AppException;
-import io.jsonwebtoken.*;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.UnsupportedJwtException;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -32,7 +37,7 @@ public class JwtService {
                 .claims(claims)
                 .issuedAt(now)
                 .expiration(expiry)
-                .signWith(getSigningKey(), SignatureAlgorithm.HS512)
+                .signWith(getSigningKey(), Jwts.SIG.HS512)
                 .compact();
     }
 

@@ -25,6 +25,9 @@ public abstract class CampaignMemberMapper {
     @Mapping(target = "role", source = "roleInCampaign")
     @Mapping(target = "joinedAt", source = "joinedAt")
     @Mapping(target = "coverImageUrl", ignore = true)
+    @Mapping(target = "currentRaised", ignore = true)
+    @Mapping(target = "donorsCount", ignore = true)
+    @Mapping(target = "volunteersCount", ignore = true)
     @Mapping(target = "categories", source = "campaign.categories")
     @Mapping(target = "hasPendingUnjoinRequest",
             expression = "java(campaignMember.getUnjoinRequestedAt() != null)")
