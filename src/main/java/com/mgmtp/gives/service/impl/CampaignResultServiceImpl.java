@@ -813,8 +813,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
     private record TaskCounts(long total, long completed) {}
 
     private TaskCounts computeActiveTaskCounts(Long campaignId) {
-        Specification<CampaignTask> activeTaskSpec = Specification
-                .where(CampaignTaskSpecifications.hasCampaignId(campaignId))
+        Specification<CampaignTask> activeTaskSpec = CampaignTaskSpecifications.hasCampaignId(campaignId)
                 .and(CampaignTaskSpecifications.isNotDeleted())
                 .and(CampaignTaskSpecifications.hasIsArchived(false));
         long total = campaignTaskRepository.count(activeTaskSpec);
