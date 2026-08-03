@@ -1,0 +1,739 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <!--
+        Transition contract:
+        - a fresh database has no Flyway history and executes V1-V44;
+        - an existing database must have a successful Flyway V44 entry;
+        - a partial Flyway database halts before any Liquibase changes are applied.
+    -->
+    <changeSet id="flyway-to-liquibase-transition-guard" author="mgmgives">
+        <preConditions onFail="HALT" onError="HALT">
+            <or>
+                <not>
+                    <tableExists schemaName="public" tableName="flyway_schema_history"/>
+                </not>
+                <and>
+                    <tableExists schemaName="public" tableName="flyway_schema_history"/>
+                    <sqlCheck expectedResult="1"><![CDATA[
+                        SELECT CASE WHEN EXISTS (
+                            SELECT 1
+                            FROM public.flyway_schema_history
+                            WHERE version = '44' AND success = TRUE
+                        ) THEN 1 ELSE 0 END
+                    ]]></sqlCheck>
+                </and>
+            </or>
+        </preConditions>
+        <comment>Reject partially migrated Flyway databases before adopting Liquibase.</comment>
+        <sql>SELECT 1</sql>
+    </changeSet>
+
+    <changeSet id="legacy-v1" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V1: create users and auth tables</comment>
+        <sqlFile
+                path="V1__create_users_and_auth_tables.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v2" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V2: create campaign and category tables</comment>
+        <sqlFile
+                path="V2__create_campaign_and_category_tables.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v3" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V3: create donations and notifications tables</comment>
+        <sqlFile
+                path="V3__create_donations_and_notifications_tables.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v4" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V4: create tasks and members tables</comment>
+        <sqlFile
+                path="V4__create_tasks_and_members_tables.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v5" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V5: update user for login security</comment>
+        <sqlFile
+                path="V5__update_user_for_login_security.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v6" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V6: categories  add status and constraints to categories</comment>
+        <sqlFile
+                path="V6__categories__add_status_and_constraints_to_categories.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v7" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V7: categories add trigram idx</comment>
+        <sqlFile
+                path="V7__categories_add_trigram_idx.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v8" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V8: add missing category indexes</comment>
+        <sqlFile
+                path="V8__add_missing_category_indexes.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v9" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V9: add deleted at to campaign medias</comment>
+        <sqlFile
+                path="V9__add_deleted_at_to_campaign_medias.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v10" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V10: alter donations make confirmed by nullable</comment>
+        <sqlFile
+                path="V10__alter_donations_make_confirmed_by_nullable.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v11" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V11: add approved by to campaigns</comment>
+        <sqlFile
+                path="V11__add_approved_by_to_campaigns.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v12" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V12: add draft status and acceptance flags</comment>
+        <sqlFile
+                path="V12__add_draft_status_and_acceptance_flags.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v13" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V13: add message and goods details to donations</comment>
+        <sqlFile
+                path="V13__add_message_and_goods_details_to_donations.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v14" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V14: add unique constraint to campaign members</comment>
+        <sqlFile
+                path="V14__add_unique_constraint_to_campaign_members.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v15" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V15: remove donor role and create campaign followers</comment>
+        <sqlFile
+                path="V15__remove_donor_role_and_create_campaign_followers.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v16" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V16: add is cover to campaign medias</comment>
+        <sqlFile
+                path="V16__add_is_cover_to_campaign_medias.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v17" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V17: add campaign result fields</comment>
+        <sqlFile
+                path="V17__add_campaign_result_fields.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v18" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V18: make category status optional and add deleted at</comment>
+        <sqlFile
+                path="V18__make_category_status_optional_and_add_deleted_at.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v19" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V19: create campaign meetings table</comment>
+        <sqlFile
+                path="V19__create_campaign_meetings_table.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v20" author="mgmgives" runInTransaction="false">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V20: change donation status to successful and failed</comment>
+        <sqlFile
+                path="V20__change_donation_status_to_successful_and_failed.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v21" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V21: add final counts to campaigns</comment>
+        <sqlFile
+                path="V21__add_final_counts_to_campaigns.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v22" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V22: add order code to donations</comment>
+        <sqlFile
+                path="V22__add_order_code_to_donations.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v23" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V23: add donation indexes</comment>
+        <sqlFile
+                path="V23__add_donation_indexes.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v24" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V24: create user payos connections</comment>
+        <sqlFile
+                path="V24__create_user_payos_connections.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v25" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V25: add donation config to campaigns</comment>
+        <sqlFile
+                path="V25__add_donation_config_to_campaigns.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v26" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V26: alter campaign medias add announcement id</comment>
+        <sqlFile
+                path="V26__alter_campaign_medias_add_announcement_id.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v27" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V27: create announcement engagement tables</comment>
+        <sqlFile
+                path="V27__create_announcement_engagement_tables.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="false"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v28" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V28: create labels attachments and update task status</comment>
+        <sqlFile
+                path="V28__create_labels_attachments_and_update_task_status.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v29" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V29: add bank info to campaigns</comment>
+        <sqlFile
+                path="V29__add_bank_info_to_campaigns.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v30" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V30: add transaction description and proof image to donations</comment>
+        <sqlFile
+                path="V30__add_transaction_description_and_proof_image_to_donations.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v31" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V31: campaign medias final report context backfill</comment>
+        <sqlFile
+                path="V31__campaign_medias_final_report_context_backfill.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v32" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V32: add return to and update campaign meeting status enum</comment>
+        <sqlFile
+                path="V32__add_return_to_and_update_campaign_meeting_status_enum.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v33" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V33: add campaign task position</comment>
+        <sqlFile
+                path="V33__add_campaign_task_position.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v34" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V34: add task summary to campaigns</comment>
+        <sqlFile
+                path="V34__add_task_summary_to_campaigns.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v35" author="mgmgives" runInTransaction="false">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V35: add rejected donation status</comment>
+        <sqlFile
+                path="V35__add_rejected_donation_status.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v36" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V36: populate default categories</comment>
+        <sqlFile
+                path="V36__populate_default_categories.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v37" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V37: add version to campaign tasks</comment>
+        <sqlFile
+                path="V37__add_version_to_campaign_tasks.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v38" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V38: create campaign spendings table</comment>
+        <sqlFile
+                path="V38__create_campaign_spendings_table.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v39" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V39: add unjoin requested at to campaign members</comment>
+        <sqlFile
+                path="V39__add_unjoin_requested_at_to_campaign_members.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v40" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V40: add campaign task concurrency and position sequence</comment>
+        <sqlFile
+                path="V40__add_campaign_task_concurrency_and_position_sequence.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v41" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V41: create campaign task activities</comment>
+        <sqlFile
+                path="V41__create_campaign_task_activities.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v42" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V42: add idempotency to donations</comment>
+        <sqlFile
+                path="V42__add_idempotency_to_donations.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v43" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V43: add in reply to to announcement replies</comment>
+        <sqlFile
+                path="V43__add_in_reply_to_to_announcement_replies.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="legacy-v44" author="mgmgives">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists schemaName="public" tableName="flyway_schema_history"/>
+            </not>
+        </preConditions>
+        <comment>Flyway V44: populate portfolio demo data</comment>
+        <sqlFile
+                path="V44__populate_portfolio_demo_data.sql"
+                relativeToChangelogFile="true"
+                dbms="postgresql"
+                encoding="UTF-8"
+                splitStatements="true"
+                stripComments="false"/>
+    </changeSet>
+
+</databaseChangeLog>
