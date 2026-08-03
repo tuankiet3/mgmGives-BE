@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  mgm-gives-be-development:
+    image: registry.example.com/portfolio/mgm-gives-be:develop-latest
+    container_name: mgm-gives-be-development
+    restart: always
+    ports:
+      - "8082:8080"
+    env_file:
+      - .env.development
+    environment:
+      - APP_MEDIA_UPLOAD_DIR=/app/media
+    volumes:
+      - /opt/mgm-gives/logs/development:/app/logs
+      - /opt/mgm-gives/media/development:/app/media
+    profiles:
+      - development
+
+  mgm-gives-be-staging:
+    image: registry.example.com/portfolio/mgm-gives-be:staging-latest
+    container_name: mgm-gives-be-staging
+    restart: always
+    ports:
+      - "8081:8080"
+    env_file:
+      - .env.staging
+    environment:
+      - APP_MEDIA_UPLOAD_DIR=/app/media
+    volumes:
+      - /opt/mgm-gives/logs/staging:/app/logs
+      - /opt/mgm-gives/media/staging:/app/media
+    profiles:
+      - staging
+
+  mgm-gives-be-production:
+    image: registry.example.com/portfolio/mgm-gives-be:master-latest
+    container_name: mgm-gives-be-production
+    restart: always
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env.production
+    environment:
+      - APP_MEDIA_UPLOAD_DIR=/app/media
+    volumes:
+      - /opt/mgm-gives/logs/production:/app/logs
+      - /opt/mgm-gives/media/production:/app/media
+    profiles:
+      - production
+
+networks:
+  default:
+    name: mgm-gives-network
+    external: true

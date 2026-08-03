@@ -1,0 +1,33 @@
+name: mgm-gives
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: mgmgives
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+    ports:
+      - "5432:5432"
+    volumes:
+      - mgm-gives-db-data:/var/lib/postgresql/data
+
+  be:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/mgmgives
+      - APP_MEDIA_UPLOAD_DIR=/app/media
+    ports:
+      - "8080:8080"
+    volumes:
+      - mgm-gives-media:/app/media
+
+volumes:
+  mgm-gives-db-data:
+  mgm-gives-media:

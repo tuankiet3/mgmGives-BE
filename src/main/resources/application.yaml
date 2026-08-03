@@ -1,0 +1,117 @@
+spring:
+  application:
+    name: mgm-gives
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/mgmgives}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+    out-of-order: true
+
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 200MB
+
+  mail:
+    host: ${MAIL_HOST:smtp-relay.brevo.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          connectiontimeout: ${MAIL_CONNECTION_TIMEOUT:10000}
+          timeout: ${MAIL_READ_TIMEOUT:10000}
+          writetimeout: ${MAIL_WRITE_TIMEOUT:10000}
+          starttls:
+            enable: true
+            required: true
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            redirect-uri: ${GOOGLE_REDIRECT_URI:{baseUrl}/login/oauth2/code/{registrationId}}
+            scope:
+              - openid
+              - profile
+              - email
+
+app:
+  cors:
+    allowed-origins: ${APP_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-expiration: ${JWT_ACCESS_EXPIRATION:900000}
+    refresh-token-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+  mail:
+    from-mail: ${FROM_MAIL:noreply@example.com}
+    frontend-url: ${FRONTEND_URL:http://localhost:3000}
+    brevo-api-key: ${BREVO_API_KEY:}
+    verify-expiration: ${MAIL_VERIFY_EXPIRATION:864000000}
+    reset-expiration: ${MAIL_RESET_EXPIRATION:864000000}
+  media:
+    upload-dir: ${APP_MEDIA_UPLOAD_DIR:/app/media}
+  gemini:
+    api-key: ${GEMINI_API_KEY:}
+    models: ${GEMINI_MODELS:gemini-flash-latest,gemini-3.6-flash}
+    donor-batch-size: ${GEMINI_DONOR_BATCH_SIZE:20}
+  seed:
+    admin:
+      email: ${SEED_ADMIN_EMAIL}
+      password: ${SEED_ADMIN_PASSWORD}
+      full-name: ${SEED_ADMIN_FULL_NAME:Admin}
+  webex:
+    client-id: ${WEBEX_CLIENT_ID}
+    client-secret: ${WEBEX_CLIENT_SECRET}
+    api-base-url: ${WEBEX_API_BASE_URL:https://webexapis.com/v1}
+    redirect-uri: ${WEBEX_REDIRECT_URI:http://localhost:8080/api/integrations/webex/oauth/callback}
+    scopes: ${WEBEX_SCOPES:meeting:schedules_read meeting:schedules_write spark:people_read spark:rooms_read}
+    time-zone: ${WEBEX_TIME_ZONE:Asia/Bangkok}
+server:
+  port: ${PORT:${SERVER_PORT:8080}}
+  forward-headers-strategy: framework
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+logging:
+  file:
+    path: ${LOGGING_FILE_PATH:/app/logs}
+
+payos:
+  client-id: ${PAYOS_CLIENT_ID}
+  api-key: ${PAYOS_API_KEY}
+  checksum-key: ${PAYOS_CHECKSUM_KEY}
+  cancel-url: ${PAYOS_CANCEL_URL:http://localhost:3000/donation/cancel}
+  return-url: ${PAYOS_RETURN_URL:http://localhost:3000/donation/success}
+  webhook-url: ${PAYOS_WEBHOOK_URL:https://api.example.com/api/donations/payos/webhook}

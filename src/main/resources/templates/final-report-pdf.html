@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Final Report</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2.2cm 2cm;
+        }
+        body {
+            font-family: 'Noto Sans', 'Helvetica', 'Arial', sans-serif;
+            color: #1f2937;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        h1 {
+            font-size: 22px;
+            color: #111827;
+            margin: 0 0 4px;
+        }
+        .subtitle {
+            color: #6b7280;
+            font-size: 11px;
+            margin-bottom: 20px;
+        }
+        .stats-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 22px;
+        }
+        .stats-table td {
+            width: 20%;
+            padding: 12px 10px;
+            border: 1px solid #e5e7eb;
+            text-align: center;
+        }
+        .stats-value {
+            font-size: 17px;
+            font-weight: bold;
+            color: #111827;
+            display: block;
+        }
+        .stats-label {
+            font-size: 10px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        h2.section-title {
+            font-size: 15px;
+            color: #111827;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 6px;
+            margin: 22px 0 10px;
+        }
+        .content-block p {
+            margin: 0 0 10px;
+        }
+        .content-block ul, .content-block ol {
+            margin: 0 0 10px;
+            padding-left: 18px;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 12px;
+            border-top: 1px solid #e5e7eb;
+            color: #9ca3af;
+            font-size: 10px;
+        }
+        .gallery {
+            width: 100%;
+        }
+        .gallery::after {
+            content: "";
+            display: block;
+            clear: both;
+        }
+        .gallery-item {
+            float: left;
+            width: 31.33%;
+            margin: 0 1% 12px;
+            height: 110px;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            background-color: #f3f4f6;
+        }
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+        }
+        .gallery-item.video-placeholder {
+            display: block;
+            text-align: center;
+            color: #6b7280;
+            font-size: 10px;
+            padding-top: 44px;
+        }
+        .spending-stats {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 14px;
+        }
+        .spending-stats td {
+            width: 50%;
+            padding: 12px 10px;
+            border: 1px solid #e5e7eb;
+            text-align: center;
+        }
+        .spending-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .spending-table tr {
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .spending-photo {
+            width: 60px;
+            padding: 8px 10px 8px 0;
+            vertical-align: top;
+        }
+        .spending-photo img {
+            width: 56px;
+            height: 56px;
+            border-radius: 4px;
+            border: 1px solid #e5e7eb;
+        }
+        .spending-info {
+            padding: 8px 0;
+            vertical-align: top;
+        }
+        .spending-desc {
+            color: #1f2937;
+        }
+        .spending-meta {
+            color: #6b7280;
+            font-size: 10px;
+            margin-top: 2px;
+        }
+    </style>
+</head>
+<body>
+
+<h1 th:text="${campaignName}">Campaign Name</h1>
+<div class="subtitle">
+    Final Report
+    <th:block th:if="${publishedAt != null}"> &#183; Published <span th:text="${publishedAt}"></span></th:block>
+    <th:block th:if="${publishedByName != null}"> by <span th:text="${publishedByName}"></span></th:block>
+</div>
+
+<table class="stats-table">
+    <tr>
+        <td>
+            <span class="stats-value" th:text="${totalRaised} + ' VND'">0 VND</span>
+            <span class="stats-label">Total Raised</span>
+        </td>
+        <td>
+            <span class="stats-value" th:text="${goalPercent} + '%'">0%</span>
+            <span class="stats-label">Of Goal</span>
+        </td>
+        <td>
+            <span class="stats-value" th:text="${donorCount}">0</span>
+            <span class="stats-label">Donors</span>
+        </td>
+        <td>
+            <span class="stats-value" th:text="${volunteerCount}">0</span>
+            <span class="stats-label">Volunteers</span>
+        </td>
+        <td th:if="${taskCount != null and taskCount &gt; 0}">
+            <span class="stats-value" th:text="${completedTaskCount} + '/' + ${taskCount}">0/0</span>
+            <span class="stats-label">Tasks Completed</span>
+        </td>
+    </tr>
+</table>
+
+<div th:if="${resultSummary != null and !#strings.isEmpty(resultSummary)}">
+    <h2 class="section-title">Summary</h2>
+    <div class="content-block" th:utext="${resultSummary}"></div>
+</div>
+
+<div th:if="${itemsSummary != null and !#strings.isEmpty(itemsSummary)}">
+    <h2 class="section-title">Goods &amp; Items</h2>
+    <div class="content-block"><p th:text="${itemsSummary}"></p></div>
+</div>
+
+<div th:if="${acknowledgements != null and !#strings.isEmpty(acknowledgements)}">
+    <h2 class="section-title">Acknowledgements</h2>
+    <div class="content-block"><p th:text="${acknowledgements}"></p></div>
+</div>
+
+<div th:if="${taskSummary != null and !#strings.isEmpty(taskSummary)}">
+    <h2 class="section-title">Task &amp; Volunteer Work</h2>
+    <div class="content-block"><p th:text="${taskSummary}"></p></div>
+</div>
+
+<div th:if="${spendingItems != null and !spendingItems.isEmpty()}">
+    <h2 class="section-title">Fund Usage</h2>
+    <table class="spending-stats">
+        <tr>
+            <td>
+                <span class="stats-value" th:text="${totalSpent} + ' VND'">0 VND</span>
+                <span class="stats-label">Total Spent</span>
+            </td>
+            <td>
+                <span class="stats-value" th:text="${remainingFunds} + ' VND'">0 VND</span>
+                <span class="stats-label">Remaining Funds</span>
+            </td>
+        </tr>
+    </table>
+    <table class="spending-table">
+        <tr th:each="item : ${spendingItems}">
+            <td class="spending-photo">
+                <img th:if="${item.photoUrl != null}" th:src="${item.photoUrl}" alt="Spending photo"/>
+            </td>
+            <td class="spending-info">
+                <div class="spending-desc" th:text="${item.description}"></div>
+                <div class="spending-meta">
+                    <span th:text="${item.spentAt}"></span> &#183; <span th:text="${item.amount} + ' VND'"></span>
+                </div>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div th:if="${galleryMedia != null and !galleryMedia.isEmpty()}">
+    <h2 class="section-title">Moments from the field</h2>
+    <div class="gallery">
+        <div th:each="media : ${galleryMedia}"
+             th:class="${media.video} ? 'gallery-item video-placeholder' : 'gallery-item'">
+            <img th:if="${!media.video}" th:src="${media.url}" alt="Campaign moment"/>
+            <span th:if="${media.video}">Video attachment &#8212; view online</span>
+        </div>
+    </div>
+</div>
+
+<div class="footer">
+    Generated by mgmGives &#183; <span th:text="${reportLink}"></span>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,76 @@
+services:
+  - type: web
+    name: mgm-gives-api
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: develop
+    autoDeployTrigger: commit
+    healthCheckPath: /api/categories
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: JAVA_TOOL_OPTIONS
+        value: -XX:MaxRAMPercentage=75.0 -XX:+UseSerialGC
+      - key: LOGGING_FILE_PATH
+        value: /tmp/mgm-gives-logs
+      - key: APP_MEDIA_UPLOAD_DIR
+        value: /tmp/mgm-gives-media
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: APP_ALLOWED_ORIGINS
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: SEED_ADMIN_EMAIL
+        sync: false
+      - key: SEED_ADMIN_PASSWORD
+        sync: false
+      - key: SEED_ADMIN_FULL_NAME
+        value: Admin
+      - key: FROM_MAIL
+        sync: false
+      - key: MAIL_HOST
+        value: smtp-relay.brevo.com
+      - key: MAIL_PORT
+        value: 2525
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        value: https://mgm-gives-api.onrender.com/login/oauth2/code/google
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODELS
+        value: gemini-flash-latest,gemini-3.6-flash
+      - key: WEBEX_CLIENT_ID
+        sync: false
+      - key: WEBEX_CLIENT_SECRET
+        sync: false
+      - key: WEBEX_REDIRECT_URI
+        sync: false
+      - key: PAYOS_CLIENT_ID
+        sync: false
+      - key: PAYOS_API_KEY
+        sync: false
+      - key: PAYOS_CHECKSUM_KEY
+        sync: false
+      - key: PAYOS_CANCEL_URL
+        sync: false
+      - key: PAYOS_RETURN_URL
+        sync: false
+      - key: PAYOS_WEBHOOK_URL
+        sync: false
