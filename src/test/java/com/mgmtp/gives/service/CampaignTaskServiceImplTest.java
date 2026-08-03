@@ -17,6 +17,8 @@ import com.mgmtp.gives.repository.TaskAssignmentRepository;
 import com.mgmtp.gives.repository.TaskAttachmentRepository;
 import com.mgmtp.gives.repository.UserRepository;
 import com.mgmtp.gives.service.impl.CampaignTaskServiceImpl;
+import com.mgmtp.gives.service.support.CampaignTaskActivityTracker;
+import com.mgmtp.gives.service.support.CampaignTaskActivityTracker.Snapshot;
 import com.mgmtp.gives.util.CampaignAccessHelper;
 import jakarta.validation.Validation;
 import org.junit.jupiter.api.Test;
@@ -67,6 +69,8 @@ class CampaignTaskServiceImplTest {
         ApplicationEventPublisher eventPublisher;
         @Mock
         CampaignTaskActivityRepository campaignTaskActivityRepository;
+        @Mock
+        CampaignTaskActivityTracker campaignTaskActivityTracker;
         @Spy
         CampaignTaskMapper campaignTaskMapper = new CampaignTaskMapper();
 
@@ -117,6 +121,15 @@ class CampaignTaskServiceImplTest {
                 when(campaignTaskRepository.findMaxActivePositionByCampaignIdAndStatus(3L, TaskStatus.DONE))
                                 .thenReturn(6L);
                 when(campaignTaskRepository.save(task)).thenReturn(task);
+                Snapshot snapshot = new Snapshot(
+                                TaskStatus.TODO,
+                                "Move me",
+                                null,
+                                null,
+                                java.util.Map.of(),
+                                java.util.Map.of());
+                when(campaignTaskActivityTracker.snapshot(task)).thenReturn(snapshot);
+                when(campaignTaskActivityTracker.collectChanges(snapshot, task)).thenReturn(List.of());
 
                 CampaignTaskResponse result = service.updateTask(
                                 11L,
