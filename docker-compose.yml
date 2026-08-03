@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: mgmgives
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 123456
+      POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?Set SPRING_DATASOURCE_PASSWORD in your local .env file}
     ports:
       - "5432:5432"
     volumes:

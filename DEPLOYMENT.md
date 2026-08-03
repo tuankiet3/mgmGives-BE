@@ -1,6 +1,6 @@
 # Deploy backend on Render
 
-The repository contains a Render Blueprint in `render.yaml`. It builds the existing multi-stage Docker image, runs the service on Render's `PORT`, and checks the public database-backed `/api/categories` endpoint.
+The repository contains a Render Blueprint in `render.yaml`. The main CI/CD path builds release images with Paketo through Gradle's `bootBuildImage` task. Render temporarily uses the version-controlled Gradle multi-stage Dockerfile as a compatibility fallback, runs the service on Render's `PORT`, and checks the public database-backed `/api/categories` endpoint.
 
 ## Prerequisites
 

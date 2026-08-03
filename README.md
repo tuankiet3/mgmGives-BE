@@ -1,79 +1,63 @@
-# mgm-gives-be
+# mgmGives Backend
 
-Backend project for MGM Gives.
+Spring Boot backend for the mgmGives charity campaign management platform.
 
-## Tech Stack
+## Stack
 
-- Java 21
-- Spring Boot 3.5.x
-- Maven 3.9.x
-- Docker
+- Java 21 and Spring Boot 3.5
+- PostgreSQL and Flyway (Liquibase migration is tracked as the next refactor phase)
+- Gradle 8.14 with the Gradle Wrapper
+- Axion Release Plugin for Git-tag-derived semantic versions
+- Paketo Buildpacks for OCI images
+- JUnit, Testcontainers, ArchUnit, and JaCoCo
 
----
-
-## Run Locally
-
-### Build project
+## Build and test
 
 ```bash
-./mvnw clean package
+./gradlew clean check
 ```
 
 Windows:
 
-```bash
-mvnw.cmd clean package
+```powershell
+.\gradlew.bat clean check
 ```
 
-### Run project
+The `check` lifecycle runs unit/integration tests, architecture rules, and the JaCoCo coverage gate. Test execution uses the `test` Spring profile by default.
+
+## Version and release
+
+The project version comes from Git tags and the current commit through [Axion Release Plugin](https://axion-release-plugin.readthedocs.io/).
 
 ```bash
-./mvnw spring-boot:run
+./gradlew currentVersion
+./gradlew release
 ```
 
-The application runs at:
+Release tags use the `v<major>.<minor>.<patch>` format. Creating releases is restricted to `master` and `release/*` branches. CI releases require credentials supplied at runtime; no token is stored in this repository.
+
+## Build a Paketo image
+
+Docker must be running:
 
 ```bash
-http://localhost:8080
+./gradlew bootBuildImage --imageName=mgm-gives-be:local
+docker run --rm -p 8080:8080 --env-file .env mgm-gives-be:local
 ```
 
----
+The image is created by the Paketo Ubuntu Noble builder with Java 21. Paketo supplies a non-root runtime, JVM memory configuration, layered caching, and SBOM metadata.
 
-## Run With Docker
+## Run locally with PostgreSQL
 
-### Build Docker image
+Copy `.env.example` to `.env`, replace every placeholder, and then run:
 
 ```bash
-docker build -t mgm-gives-be .
+docker compose up -d db
+./gradlew bootRun
 ```
 
-### Run container
+`SPRING_DATASOURCE_PASSWORD` is mandatory for Docker Compose; the stack fails closed when it is absent.
 
-```bash
-docker run -p 8080:8080 mgm-gives-be
-```
+## Deployment
 
-The application runs at:
-
-```bash
-http://localhost:8080
-```
-
----
-
-## Notes
-
-If port `8080` is already in use, run the app with another port:
-
-```bash
-docker run -p 8081:8080 mgm-gives-be
-```
-
-Then open:
-
-```bash
-http://localhost:8081
-```
-
----
-
+The Jenkins pipeline validates the Gradle build, resolves the Axion version, creates the release image with Paketo, and publishes it to the configured registry. See [DEPLOYMENT.md](DEPLOYMENT.md) for the separate Render demo deployment.
