@@ -1,17 +1,12 @@
 package com.mgmtp.gives.service.impl;
 
 import com.mgmtp.gives.common.ErrorCode;
-import com.mgmtp.gives.common.MailProps;
 import com.mgmtp.gives.dto.campaign.CampaignResultDraftContext;
 import com.mgmtp.gives.dto.campaign.CampaignResultGenerateResponse;
 import com.mgmtp.gives.dto.campaign.CampaignResultRequest;
 import com.mgmtp.gives.dto.campaign.CampaignResultResponse;
-import com.mgmtp.gives.dto.campaign.DonorNotificationInfo;
-import com.mgmtp.gives.dto.campaign.DonorThankYouContext;
 import com.mgmtp.gives.dto.campaign.CampaignMediaResponse;
 import com.mgmtp.gives.dto.campaign_spending.CampaignSpendingListResponse;
-import com.mgmtp.gives.dto.notification.CreateNotificationCommand;
-import com.mgmtp.gives.dto.notification.NotificationRecipient;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.CampaignMedia;
 import com.mgmtp.gives.entity.CampaignTask;
@@ -19,28 +14,24 @@ import com.mgmtp.gives.entity.Donation;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignStatus;
-import com.mgmtp.gives.enums.DonationType;
 import com.mgmtp.gives.enums.MediaContext;
-import com.mgmtp.gives.enums.NotificationType;
 import com.mgmtp.gives.enums.TaskStatus;
 import com.mgmtp.gives.exception.AppException;
 import com.mgmtp.gives.exception.ResourceNotFoundException;
 import com.mgmtp.gives.mapper.CampaignMediaMapper;
 import com.mgmtp.gives.repository.AnnouncementRepository;
-import com.mgmtp.gives.repository.CampaignFollowerRepository;
 import com.mgmtp.gives.repository.CampaignMediaRepository;
 import com.mgmtp.gives.repository.CampaignMemberRepository;
 import com.mgmtp.gives.repository.CampaignRepository;
 import com.mgmtp.gives.repository.CampaignTaskRepository;
 import com.mgmtp.gives.repository.DonationRepository;
+import com.mgmtp.gives.notification.publisher.CampaignResultNotificationPublisher;
 import com.mgmtp.gives.specification.CampaignTaskSpecifications;
 import com.mgmtp.gives.service.CampaignMemberService;
 import com.mgmtp.gives.service.CampaignResultService;
 import com.mgmtp.gives.service.CampaignSpendingService;
-import com.mgmtp.gives.service.EmailService;
 import com.mgmtp.gives.service.GeminiService;
 import com.mgmtp.gives.service.MediaService;
-import com.mgmtp.gives.service.NotificationService;
 import com.mgmtp.gives.service.support.CampaignResultDraftContextFactory;
 import com.mgmtp.gives.service.support.CampaignResultMetrics;
 import com.mgmtp.gives.service.support.CampaignResultPdfRenderer;
@@ -51,28 +42,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.web.util.UriComponentsBuilder;
-import org.thymeleaf.TemplateEngine;
-import org.thymeleaf.context.Context;
 
 import com.mgmtp.gives.enums.DonationStatus;
 
-import java.text.NumberFormat;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class CampaignResultServiceImpl implements CampaignResultService {
-
-    private static final String RESULT_EMAIL_SUBJECT_PREFIX = "Campaign Results: ";
 
     private final CampaignRepository campaignRepository;
     private final CampaignMemberRepository campaignMemberRepository;
@@ -80,18 +59,14 @@ public class CampaignResultServiceImpl implements CampaignResultService {
     private final DonationRepository donationRepository;
     private final AnnouncementRepository announcementRepository;
     private final GeminiService geminiService;
-    private final NotificationService notificationService;
-    private final EmailService emailService;
-    private final CampaignFollowerRepository campaignFollowerRepository;
-    private final TemplateEngine templateEngine;
     private final CampaignMediaRepository campaignMediaRepository;
     private final CampaignMediaMapper campaignMediaMapper;
     private final CampaignTaskRepository campaignTaskRepository;
     private final MediaService mediaService;
-    private final MailProps mailProps;
     private final CampaignSpendingService campaignSpendingService;
     private final CampaignResultDraftContextFactory draftContextFactory;
     private final CampaignResultPdfRenderer pdfRenderer;
+    private final CampaignResultNotificationPublisher resultNotificationPublisher;
 
     @Override
     @Transactional
@@ -127,7 +102,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
             @Override
             public void afterCommit() {
                 try {
-                    sendResultNotifications(campaign);
+                    resultNotificationPublisher.publish(campaign);
                 } catch (Exception ex) {
                     log.error("Failed to send result notifications for campaignId={}: {}", campaignId, ex.getMessage(), ex);
                 }
@@ -233,173 +208,6 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                 });
     }
 
-    private void sendResultNotifications(Campaign campaign) {
-        String campaignName = campaign.getTitle() != null ? campaign.getTitle() : "this campaign";
-        String linkUrl = "/campaigns/" + campaign.getId() + "/result";
-        String reportLink = buildReportLink(campaign.getId());
-        byte[] reportPdf = tryRenderResultPdf(campaign);
-        String reportPdfFilename = "final-report-" + campaign.getId() + ".pdf";
-
-        Map<Long, ResultRecipient> recipients = collectResultRecipients(campaign);
-        boolean hasDonors = recipients.values().stream().anyMatch(r -> r.donor);
-        Map<Long, String> aiThankYouMessages = hasDonors ? generateDonorThankYouMessages(campaign) : Map.of();
-
-        for (ResultRecipient recipient : recipients.values()) {
-            notificationService.createNotification(CreateNotificationCommand.builder()
-                    .recipients(Set.of(new NotificationRecipient(recipient.userId, recipient.email)))
-                    .type(NotificationType.CAMPAIGN_RESULT_POSTED)
-                    .title("Campaign Results Published")
-                    .message(buildResultNotificationMessage(campaignName, recipient))
-                    .linkUrl(linkUrl)
-                    .build());
-
-            String subject = RESULT_EMAIL_SUBJECT_PREFIX + campaignName;
-            String body = buildResultEmailBody(recipient, campaignName,
-                    aiThankYouMessages.get(recipient.userId),
-                    recipient.receivesReport() ? reportLink : null);
-            if (reportPdf != null && recipient.receivesReport()) {
-                emailService.sendHtmlEmailWithAttachment(
-                        recipient.email, subject, body, reportPdf, reportPdfFilename, "application/pdf");
-            } else {
-                emailService.sendHtmlEmail(recipient.email, subject, body);
-            }
-        }
-    }
-
-    /**
-     * Merged view of one user's roles in a campaign. A user can be a follower, volunteer and
-     * donor at once (donating or volunteering auto-follows the campaign), so recipients are
-     * merged by user id to guarantee exactly one email and one notification per user.
-     */
-    private static final class ResultRecipient {
-        private final Long userId;
-        private final String email;
-        private final String fullName;
-        private boolean follower;
-        private boolean volunteer;
-        private boolean donor;
-        private String formattedDonationAmount;
-
-        private ResultRecipient(Long userId, String email, String fullName) {
-            this.userId = userId;
-            this.email = email;
-            this.fullName = fullName;
-        }
-
-        /** Following is implied for volunteers and donors, so it is only thanked on its own. */
-        private boolean isFollowerOnly() {
-            return follower && !volunteer && !donor;
-        }
-
-        private boolean receivesReport() {
-            return volunteer || donor;
-        }
-    }
-
-    private Map<Long, ResultRecipient> collectResultRecipients(Campaign campaign) {
-        Map<Long, ResultRecipient> recipients = new LinkedHashMap<>();
-        for (User user : campaignFollowerRepository.findFollowerUsersByCampaignId(campaign.getId())) {
-            recipientFor(recipients, user.getId(), user.getEmail(), user.getFullName()).follower = true;
-        }
-        for (User user : campaignMemberRepository.findUsersByCampaignIdAndRole(
-                campaign.getId(), CampaignMemberRole.VOLUNTEER)) {
-            recipientFor(recipients, user.getId(), user.getEmail(), user.getFullName()).volunteer = true;
-        }
-        for (DonorNotificationInfo donor : donationRepository.findDonorNotificationInfoByCampaignId(
-                campaign.getId(), DonationStatus.SUCCESSFUL)) {
-            ResultRecipient recipient = recipientFor(recipients, donor.userId(), donor.email(), donor.fullName());
-            recipient.donor = true;
-            // totalAmount is null for donors who only gave goods (GOODS donations carry no amount)
-            recipient.formattedDonationAmount = donor.totalAmount() != null && donor.totalAmount() > 0
-                    ? NumberFormat.getNumberInstance(Locale.US).format(donor.totalAmount())
-                    : null;
-        }
-        return recipients;
-    }
-
-    private static ResultRecipient recipientFor(
-            Map<Long, ResultRecipient> recipients, Long userId, String email, String fullName) {
-        return recipients.computeIfAbsent(userId, id -> new ResultRecipient(id, email, fullName));
-    }
-
-    private String buildResultNotificationMessage(String campaignName, ResultRecipient recipient) {
-        StringBuilder message = new StringBuilder(
-                "The final results for \"" + campaignName + "\" are now available.");
-        if (recipient.volunteer) {
-            message.append(" Thank you for your dedication and hard work — your contribution made a real difference!");
-        }
-        if (recipient.donor) {
-            message.append(' ').append(recipient.formattedDonationAmount != null
-                    ? "Thank you for your generous donation of " + recipient.formattedDonationAmount
-                            + " VND — together, we made it happen!"
-                    : "Thank you for your generous contribution — together, we made it happen!");
-        }
-        if (recipient.isFollowerOnly()) {
-            message.append(" Thank you for following and supporting this campaign — your interest truly mattered to us!");
-        }
-        return message.toString();
-    }
-
-    /**
-     * Builds per-donor contribution data from the database and asks the AI for personalized
-     * thank-you messages. Returns an empty map on any failure so emails fall back to the
-     * static template.
-     */
-    private Map<Long, String> generateDonorThankYouMessages(Campaign campaign) {
-        if (!geminiService.isConfigured()) {
-            return Map.of();
-        }
-        try {
-            List<Donation> donations =
-                    donationRepository.findByCampaignIdAndStatus(campaign.getId(), DonationStatus.SUCCESSFUL);
-            Map<Long, List<Donation>> byUser = donations.stream()
-                    .filter(d -> d.getUser() != null)
-                    .collect(Collectors.groupingBy(d -> d.getUser().getId(), LinkedHashMap::new, Collectors.toList()));
-
-            List<DonorThankYouContext> contexts = new ArrayList<>();
-            for (Map.Entry<Long, List<Donation>> entry : byUser.entrySet()) {
-                List<Donation> userDonations = entry.getValue();
-                long totalMoney = userDonations.stream()
-                        .filter(d -> d.getType() == DonationType.MONEY && d.getAmount() != null)
-                        .mapToLong(Donation::getAmount)
-                        .sum();
-                List<String> goodsItems = userDonations.stream()
-                        .filter(d -> d.getType() == DonationType.GOODS)
-                        .map(CampaignResultDraftContextFactory::describeGoods)
-                        .filter(s -> !s.isBlank())
-                        .toList();
-                contexts.add(new DonorThankYouContext(
-                        entry.getKey(),
-                        userDonations.get(0).getUser().getFullName(),
-                        totalMoney,
-                        userDonations.size(),
-                        goodsItems));
-            }
-
-            return geminiService.generateDonorThankYouMessages(campaign, contexts);
-        } catch (Exception e) {
-            log.warn("Falling back to static donor emails, AI generation failed: campaignId={}, error={}",
-                    campaign.getId(), e.getMessage());
-            return Map.of();
-        }
-    }
-
-    private String buildResultEmailBody(ResultRecipient recipient, String campaignName, String aiMessage,
-            String reportLink) {
-        Context context = new Context();
-
-        context.setVariable("fullName", recipient.fullName);
-        context.setVariable("campaignName", campaignName);
-        context.setVariable("isVolunteer", recipient.volunteer);
-        context.setVariable("isDonor", recipient.donor);
-        context.setVariable("isFollowerOnly", recipient.isFollowerOnly());
-        context.setVariable("formattedAmount", recipient.formattedDonationAmount);
-        context.setVariable("aiMessage", aiMessage);
-        context.setVariable("reportLink", reportLink);
-
-        return templateEngine.process("campaign-result-notification", context);
-    }
-
     private Campaign findAndValidateCampaign(Long campaignId) {
         Campaign campaign = campaignRepository.findById(campaignId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CAMPAIGN_NOT_FOUND));
@@ -426,27 +234,6 @@ public class CampaignResultServiceImpl implements CampaignResultService {
             throw new AppException(ErrorCode.CAMPAIGN_RESULT_NOT_FOUND);
         }
         return pdfRenderer.render(campaign);
-    }
-
-    /**
-     * Swallows rendering failures, returning null instead
-     * of throwing - used when sending result notification emails so a PDF rendering bug never
-     * blocks the emails themselves from going out.
-     */
-    private byte[] tryRenderResultPdf(Campaign campaign) {
-        try {
-            return pdfRenderer.render(campaign);
-        } catch (Exception e) {
-            log.error("Failed to render final report PDF for notification email: campaignId={}", campaign.getId(), e);
-            return null;
-        }
-    }
-
-    private String buildReportLink(Long campaignId) {
-        return UriComponentsBuilder
-                .fromUriString(mailProps.getFrontendUrl())
-                .pathSegment("campaigns", campaignId.toString(), "result")
-                .toUriString();
     }
 
     private CampaignResultResponse buildResponse(Campaign campaign, long confirmedTotal) {
