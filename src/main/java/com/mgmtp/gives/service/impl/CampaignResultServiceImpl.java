@@ -12,13 +12,10 @@ import com.mgmtp.gives.dto.campaign.CampaignMediaResponse;
 import com.mgmtp.gives.dto.campaign_spending.CampaignSpendingListResponse;
 import com.mgmtp.gives.dto.notification.CreateNotificationCommand;
 import com.mgmtp.gives.dto.notification.NotificationRecipient;
-import com.mgmtp.gives.entity.Announcement;
 import com.mgmtp.gives.entity.Campaign;
 import com.mgmtp.gives.entity.CampaignMedia;
 import com.mgmtp.gives.entity.CampaignTask;
-import com.mgmtp.gives.entity.Category;
 import com.mgmtp.gives.entity.Donation;
-import com.mgmtp.gives.entity.TaskAssignment;
 import com.mgmtp.gives.entity.User;
 import com.mgmtp.gives.enums.CampaignMemberRole;
 import com.mgmtp.gives.enums.CampaignStatus;
@@ -44,9 +41,11 @@ import com.mgmtp.gives.service.EmailService;
 import com.mgmtp.gives.service.GeminiService;
 import com.mgmtp.gives.service.MediaService;
 import com.mgmtp.gives.service.NotificationService;
+import com.mgmtp.gives.service.support.CampaignResultDraftContextFactory;
+import com.mgmtp.gives.service.support.CampaignResultMetrics;
+import com.mgmtp.gives.service.support.CampaignResultPdfRenderer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,36 +56,16 @@ import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import com.mgmtp.gives.enums.DonationStatus;
-import com.openhtmltopdf.outputdevice.helper.BaseRendererBuilder;
-import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.Image;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Paths;
 import java.text.NumberFormat;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Base64;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import javax.imageio.IIOImage;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageWriteParam;
-import javax.imageio.ImageWriter;
-import javax.imageio.stream.ImageOutputStream;
 
 @Slf4j
 @Service
@@ -94,14 +73,6 @@ import javax.imageio.stream.ImageOutputStream;
 public class CampaignResultServiceImpl implements CampaignResultService {
 
     private static final String RESULT_EMAIL_SUBJECT_PREFIX = "Campaign Results: ";
-    private static final DateTimeFormatter ANNOUNCEMENT_DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy");
-    private static final String PDF_FONT_FAMILY = "Noto Sans";
-    private static final int PDF_IMAGE_MAX_DIMENSION = 640;
-    private static final float PDF_IMAGE_JPEG_QUALITY = 0.7f;
-    // Task descriptions can be up to 5000 chars (CreateCampaignTaskRequest), far larger than
-    // any reasonable per-task prompt budget — truncated here, at the source, so a long
-    // description can never crowd out this task's own status/assignee fields downstream.
-    private static final int MAX_TASK_DESCRIPTION_LENGTH = 250;
 
     private final CampaignRepository campaignRepository;
     private final CampaignMemberRepository campaignMemberRepository;
@@ -119,9 +90,8 @@ public class CampaignResultServiceImpl implements CampaignResultService {
     private final MediaService mediaService;
     private final MailProps mailProps;
     private final CampaignSpendingService campaignSpendingService;
-
-    @Value("${app.media.upload-dir}")
-    private String uploadDir;
+    private final CampaignResultDraftContextFactory draftContextFactory;
+    private final CampaignResultPdfRenderer pdfRenderer;
 
     @Override
     @Transactional
@@ -221,47 +191,20 @@ public class CampaignResultServiceImpl implements CampaignResultService {
         long donorCount = donationRepository.countDistinctDonorsByCampaignId(campaignId);
         long volunteerCount = campaignMemberRepository.countByCampaignIdAndRoleInCampaign(
                 campaignId, CampaignMemberRole.VOLUNTEER);
-        double goalPercent = calculateGoalPercent(campaign.getTarget(), confirmedTotal);
 
         List<Donation> donations = donationRepository.findByCampaignIdAndStatus(campaignId, DonationStatus.SUCCESSFUL);
-
-        List<String> goodsDescriptions = donations.stream()
-                .filter(d -> d.getType() == DonationType.GOODS)
-                .map(CampaignResultServiceImpl::describeGoods)
-                .filter(s -> !s.isBlank())
-                .distinct()
-                .toList();
-
-        long moneyDonationCount = donations.stream().filter(d -> d.getType() == DonationType.MONEY).count();
-        long goodsDonationCount = donations.stream().filter(d -> d.getType() == DonationType.GOODS).count();
-
-        List<String> categories = campaign.getCategories().stream()
-                .map(Category::getName)
-                .filter(name -> name != null && !name.isBlank())
-                .toList();
-
-        Integer durationDays = campaign.getStartDate() != null && campaign.getEndDate() != null
-                ? (int) ChronoUnit.DAYS.between(campaign.getStartDate().toLocalDate(), campaign.getEndDate().toLocalDate())
-                : null;
-
-        List<String> announcements = announcementRepository
-                .findByCampaignIdOrderByPublishedAtAsc(campaignId)
-                .stream()
-                .map(CampaignResultServiceImpl::describeAnnouncement)
-                .toList();
-
+        var announcements = announcementRepository.findByCampaignIdOrderByPublishedAtAsc(campaignId);
         List<CampaignTask> tasks = campaignTaskRepository.findActiveTasksWithAssignments(campaignId);
-        long taskCount = tasks.size();
-        long completedTaskCount = tasks.stream().filter(t -> t.getStatus() == TaskStatus.DONE).count();
-        List<String> taskDescriptions = tasks.stream()
-                .map(CampaignResultServiceImpl::describeTask)
-                .toList();
 
-        return geminiService.generateCampaignResultDraft(campaign, new CampaignResultDraftContext(
-                confirmedTotal, donorCount, volunteerCount, goalPercent,
-                categories, durationDays, moneyDonationCount, goodsDonationCount,
-                announcements, goodsDescriptions, buildBiggestDonorDescription(donations),
-                taskCount, completedTaskCount, taskDescriptions));
+        CampaignResultDraftContext draftContext = draftContextFactory.create(
+                campaign,
+                confirmedTotal,
+                donorCount,
+                volunteerCount,
+                donations,
+                announcements,
+                tasks);
+        return geminiService.generateCampaignResultDraft(campaign, draftContext);
     }
 
     /**
@@ -288,96 +231,6 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                     }
                     media.setContext(MediaContext.FINAL_REPORT);
                 });
-    }
-
-    /**
-     * Intentionally uncapped: campaigns can be overfunded, and every reader of this value
-     * (web report, PDF, AI prompt) must show the true percent rather than silently hiding
-     * overfunding at 100%. Only visual elements with a fixed-width track (e.g. a progress bar)
-     * should clamp for display — clamp there, not here.
-     */
-    private static double calculateGoalPercent(Long target, long amount) {
-        return target != null && target > 0 ? (amount * 100.0) / target : 0.0;
-    }
-
-    private static String describeAnnouncement(Announcement announcement) {
-        String date = announcement.getPublishedAt() != null
-                ? announcement.getPublishedAt().format(ANNOUNCEMENT_DATE_FORMAT)
-                : "date unknown";
-        return String.format("%s (%s)", announcement.getTitle(), date);
-    }
-
-    private static String describeTask(CampaignTask task) {
-        // Dedup by user id, not name — two different volunteers can share a display name,
-        // and deduping on the string would silently drop one of them from the credit.
-        String assignees = task.getAssignments().stream()
-                .map(TaskAssignment::getUser)
-                .filter(u -> u != null && u.getId() != null)
-                .collect(Collectors.toMap(User::getId, User::getFullName, (a, b) -> a, LinkedHashMap::new))
-                .values()
-                .stream()
-                .filter(name -> name != null && !name.isBlank())
-                .collect(Collectors.joining(", "));
-        String statusLabel = switch (task.getStatus()) {
-            case null -> "Unknown";
-            case TODO -> "To Do";
-            case IN_PROGRESS -> "In Progress";
-            case DONE -> "Done";
-        };
-        String description = task.getDescription() != null && !task.getDescription().isBlank()
-                ? truncate(task.getDescription(), MAX_TASK_DESCRIPTION_LENGTH)
-                : "No description";
-        // Uses " | " (not "; ") as the internal separator: joinForPrompt joins multiple task
-        // facts with "; ", so reusing it here would make the boundary between one task's
-        // assignee list and the next task's title ambiguous to the model. Free-text title/
-        // description could itself contain "|" (or the field-label words below), which would
-        // forge a fake field boundary, so both are stripped of the delimiter before assembly.
-        return String.format("task title \"%s\" | description: %s | status: %s | assignee(s): %s",
-                stripDelimiter(task.getTitle()), stripDelimiter(description), statusLabel,
-                assignees.isBlank() ? "Unassigned" : assignees);
-    }
-
-    private static String stripDelimiter(String value) {
-        return value == null ? "" : value.replace("|", "/");
-    }
-
-    private static String truncate(String value, int maxLength) {
-        return value.length() > maxLength ? value.substring(0, maxLength) + "…" : value;
-    }
-
-    /**
-     * Honors the single non-anonymous donor who gave the most money. If that donor also
-     * donated goods, those are included so they are credited for everything they gave.
-     * Goods-only donors (no money) are never named here.
-     *
-     * @return a display string, or null if there is no eligible donor
-     */
-    private static String buildBiggestDonorDescription(List<Donation> donations) {
-        record Contributor(String name, long moneyTotal, List<String> goodsItems) {}
-
-        Map<Long, List<Donation>> byUser = donations.stream()
-                .filter(d -> d.getUser() != null && !d.isAnonymous())
-                .collect(Collectors.groupingBy(d -> d.getUser().getId(), LinkedHashMap::new, Collectors.toList()));
-
-        return byUser.values().stream()
-                .map(userDonations -> new Contributor(
-                        userDonations.get(0).getUser().getFullName(),
-                        userDonations.stream()
-                                .filter(d -> d.getType() == DonationType.MONEY && d.getAmount() != null)
-                                .mapToLong(Donation::getAmount)
-                                .sum(),
-                        userDonations.stream()
-                                .filter(d -> d.getType() == DonationType.GOODS)
-                                .map(CampaignResultServiceImpl::describeGoods)
-                                .filter(s -> !s.isBlank())
-                                .distinct()
-                                .toList()))
-                .filter(c -> c.moneyTotal() > 0)
-                .max(Comparator.comparingLong(Contributor::moneyTotal))
-                .map(c -> c.goodsItems().isEmpty()
-                        ? String.format("%s (%,d VND)", c.name(), c.moneyTotal())
-                        : String.format("%s (%,d VND; goods: %s)", c.name(), c.moneyTotal(), String.join(", ", c.goodsItems())))
-                .orElse(null);
     }
 
     private void sendResultNotifications(Campaign campaign) {
@@ -512,7 +365,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                         .sum();
                 List<String> goodsItems = userDonations.stream()
                         .filter(d -> d.getType() == DonationType.GOODS)
-                        .map(CampaignResultServiceImpl::describeGoods)
+                        .map(CampaignResultDraftContextFactory::describeGoods)
                         .filter(s -> !s.isBlank())
                         .toList();
                 contexts.add(new DonorThankYouContext(
@@ -529,18 +382,6 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                     campaign.getId(), e.getMessage());
             return Map.of();
         }
-    }
-
-    private static String describeGoods(Donation donation) {
-        StringBuilder sb = new StringBuilder();
-        if (donation.getGoodsCategory() != null && !donation.getGoodsCategory().isBlank()) {
-            sb.append(donation.getGoodsCategory());
-        }
-        if (donation.getDetail() != null && !donation.getDetail().isBlank()) {
-            if (sb.length() > 0) sb.append(" - ");
-            sb.append(donation.getDetail());
-        }
-        return sb.toString();
     }
 
     private String buildResultEmailBody(ResultRecipient recipient, String campaignName, String aiMessage,
@@ -584,72 +425,20 @@ public class CampaignResultServiceImpl implements CampaignResultService {
         if (!campaign.isResultPosted()) {
             throw new AppException(ErrorCode.CAMPAIGN_RESULT_NOT_FOUND);
         }
-        return renderResultPdf(campaign);
+        return pdfRenderer.render(campaign);
     }
 
     /**
-     * Same as {@link #renderResultPdf} but swallows rendering failures, returning null instead
+     * Swallows rendering failures, returning null instead
      * of throwing - used when sending result notification emails so a PDF rendering bug never
      * blocks the emails themselves from going out.
      */
     private byte[] tryRenderResultPdf(Campaign campaign) {
         try {
-            return renderResultPdf(campaign);
+            return pdfRenderer.render(campaign);
         } catch (Exception e) {
             log.error("Failed to render final report PDF for notification email: campaignId={}", campaign.getId(), e);
             return null;
-        }
-    }
-
-    private byte[] renderResultPdf(Campaign campaign) {
-        long totalRaised = campaign.getFinalAmountRaised() != null ? campaign.getFinalAmountRaised() : 0L;
-        double goalPercent = calculateGoalPercent(campaign.getTarget(), totalRaised);
-        TaskCounts taskCounts = computeActiveTaskCounts(campaign.getId());
-
-        Context context = new Context();
-        context.setVariable("campaignName", campaign.getTitle());
-        context.setVariable("resultSummary", campaign.getResultSummary());
-        context.setVariable("itemsSummary", campaign.getItemsSummary());
-        context.setVariable("acknowledgements", campaign.getAcknowledgements());
-        context.setVariable("taskSummary", campaign.getTaskSummary());
-        context.setVariable("taskCount", taskCounts.total());
-        context.setVariable("completedTaskCount", taskCounts.completed());
-        context.setVariable("publishedByName", campaign.getResultPublishedBy() != null
-                ? campaign.getResultPublishedBy().getFullName() : null);
-        context.setVariable("publishedAt", campaign.getResultPublishedAt() != null
-                ? campaign.getResultPublishedAt().format(ANNOUNCEMENT_DATE_FORMAT) : null);
-        context.setVariable("totalRaised", NumberFormat.getNumberInstance(Locale.US).format(totalRaised));
-        context.setVariable("donorCount", campaign.getFinalDonorCount() != null ? campaign.getFinalDonorCount() : 0L);
-        context.setVariable("volunteerCount",
-                campaign.getFinalVolunteerCount() != null ? campaign.getFinalVolunteerCount() : 0L);
-        context.setVariable("goalPercent", String.format(Locale.US, "%.0f", goalPercent));
-        context.setVariable("reportLink", buildReportLink(campaign.getId()));
-        context.setVariable("galleryMedia", buildGalleryMedia(campaign));
-
-        CampaignSpendingListResponse spending =
-                campaignSpendingService.getSpendingsByCampaign(campaign.getId(), totalRaised);
-        context.setVariable("spendingItems", buildPdfSpendingItems(spending));
-        context.setVariable("totalSpent", NumberFormat.getNumberInstance(Locale.US).format(spending.totalSpent()));
-        context.setVariable("remainingFunds", NumberFormat.getNumberInstance(Locale.US).format(spending.remainingFunds()));
-
-        String html = templateEngine.process("final-report-pdf", context);
-
-        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-            PdfRendererBuilder builder = new PdfRendererBuilder();
-            builder.useFastMode();
-            // The base PDF fonts have no Vietnamese glyph coverage, so campaign/report text
-            // with diacritics would render as tofu boxes without an embedded Unicode font.
-            builder.useFont(() -> getClass().getResourceAsStream("/fonts/NotoSans-Regular.ttf"),
-                    PDF_FONT_FAMILY, 400, BaseRendererBuilder.FontStyle.NORMAL, true);
-            builder.useFont(() -> getClass().getResourceAsStream("/fonts/NotoSans-Bold.ttf"),
-                    PDF_FONT_FAMILY, 700, BaseRendererBuilder.FontStyle.NORMAL, true);
-            builder.withHtmlContent(html, null);
-            builder.toStream(outputStream);
-            builder.run();
-            return outputStream.toByteArray();
-        } catch (IOException e) {
-            log.error("Failed to render final report PDF: campaignId={}", campaign.getId(), e);
-            throw new AppException(ErrorCode.UNCATEGORIZED_ERROR, "Failed to generate final report PDF");
         }
     }
 
@@ -658,109 +447,6 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                 .fromUriString(mailProps.getFrontendUrl())
                 .pathSegment("campaigns", campaignId.toString(), "result")
                 .toUriString();
-    }
-
-    /**
-     * Same non-cover media the public final report page shows (campaign.medias, minus the
-     * cover image). Images are embedded as downscaled JPEG data URIs rather than the original
-     * files - embedding full-resolution originals ballooned the PDF to several MB, which in
-     * turn made the emailed copy large enough that Gmail clips the message body. Videos can't
-     * play in a PDF, so they render as a placeholder card instead.
-     */
-    private List<PdfMediaItem> buildGalleryMedia(Campaign campaign) {
-        return campaignMediaRepository.findByCampaignIdAndDeletedAtIsNull(campaign.getId()).stream()
-                .filter(m -> !m.isCover())
-                .map(m -> new PdfMediaItem(
-                        "VIDEO".equalsIgnoreCase(m.getMediaType()) ? null : buildImageDataUri(m.getUrl()),
-                        "VIDEO".equalsIgnoreCase(m.getMediaType())))
-                .filter(item -> item.isVideo() || item.url() != null)
-                .toList();
-    }
-
-    private String buildImageDataUri(String filename) {
-        if (filename == null || filename.isBlank()) {
-            return null;
-        }
-        File file = Paths.get(uploadDir).resolve(filename).toFile();
-        if (!file.exists()) {
-            return null;
-        }
-        try {
-            BufferedImage original = ImageIO.read(file);
-            if (original == null) {
-                return null;
-            }
-            BufferedImage resized = resizeToMaxDimension(original, PDF_IMAGE_MAX_DIMENSION);
-            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-            writeJpeg(resized, buffer, PDF_IMAGE_JPEG_QUALITY);
-            return "data:image/jpeg;base64," + Base64.getEncoder().encodeToString(buffer.toByteArray());
-        } catch (IOException e) {
-            log.warn("Failed to load gallery image for final report PDF: file={}", filename, e);
-            return null;
-        }
-    }
-
-    private static BufferedImage resizeToMaxDimension(BufferedImage original, int maxDimension) {
-        int width = original.getWidth();
-        int height = original.getHeight();
-        if (Math.max(width, height) <= maxDimension) {
-            return toOpaqueRgb(original);
-        }
-        double scale = (double) maxDimension / Math.max(width, height);
-        int newWidth = Math.max(1, (int) Math.round(width * scale));
-        int newHeight = Math.max(1, (int) Math.round(height * scale));
-        Image scaledImage = original.getScaledInstance(newWidth, newHeight, Image.SCALE_SMOOTH);
-        BufferedImage resized = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = resized.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        g.drawImage(scaledImage, 0, 0, Color.WHITE, null);
-        g.dispose();
-        return resized;
-    }
-
-    // JPEG has no alpha channel - flatten onto a white background so transparent PNGs don't
-    // come out with garbled colors.
-    private static BufferedImage toOpaqueRgb(BufferedImage original) {
-        if (original.getType() == BufferedImage.TYPE_INT_RGB) {
-            return original;
-        }
-        BufferedImage rgb = new BufferedImage(original.getWidth(), original.getHeight(), BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = rgb.createGraphics();
-        g.drawImage(original, 0, 0, Color.WHITE, null);
-        g.dispose();
-        return rgb;
-    }
-
-    private static void writeJpeg(BufferedImage image, ByteArrayOutputStream output, float quality) throws IOException {
-        ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
-        ImageWriteParam param = writer.getDefaultWriteParam();
-        param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-        param.setCompressionQuality(quality);
-        try (ImageOutputStream ios = ImageIO.createImageOutputStream(output)) {
-            writer.setOutput(ios);
-            writer.write(null, new IIOImage(image, null, null), param);
-        } finally {
-            writer.dispose();
-        }
-    }
-
-    private record PdfMediaItem(String url, boolean isVideo) {}
-
-    private record PdfSpendingItem(String description, String amount, String spentAt, String photoUrl) {}
-
-    /**
-     * Only the first photo per entry is embedded (same downscaled-data-URI approach as
-     * {@link #buildGalleryMedia}) - embedding every receipt photo at full resolution for every
-     * spending row would balloon the PDF the same way unbounded gallery images once did.
-     */
-    private List<PdfSpendingItem> buildPdfSpendingItems(CampaignSpendingListResponse spending) {
-        return spending.items().stream()
-                .map(item -> new PdfSpendingItem(
-                        item.description(),
-                        NumberFormat.getNumberInstance(Locale.US).format(item.amount()),
-                        item.spentAt().format(ANNOUNCEMENT_DATE_FORMAT),
-                        item.photos().isEmpty() ? null : buildImageDataUri(item.photos().get(0).getUrl())))
-                .toList();
     }
 
     private CampaignResultResponse buildResponse(Campaign campaign, long confirmedTotal) {
@@ -778,7 +464,7 @@ public class CampaignResultServiceImpl implements CampaignResultService {
                 : campaignMemberRepository.countByCampaignIdAndRoleInCampaign(campaign.getId(), CampaignMemberRole.VOLUNTEER);
 
         long amountForGoal = campaign.getFinalAmountRaised() != null ? campaign.getFinalAmountRaised() : confirmedTotal;
-        double goalPercent = calculateGoalPercent(campaign.getTarget(), amountForGoal);
+        double goalPercent = CampaignResultMetrics.calculateGoalPercent(campaign.getTarget(), amountForGoal);
 
         TaskCounts taskCounts = computeActiveTaskCounts(campaign.getId());
 
